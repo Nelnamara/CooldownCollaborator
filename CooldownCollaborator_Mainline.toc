@@ -1,0 +1,12 @@
+## Interface: 120005
+## Title: |cFF54a3ffCooldownCollaborator|r
+## Notes: Group and raid cooldown coordinator — shows all members' major CDs on a shared timeline, auto-switches between party and raid layout.
+## Author: Nelnamara
+## Version: 1.0.0
+## SavedVariables: CooldownCollaboratorDB
+## X-Curse-Project-ID:
+## X-Wago-ID:
+## X-Website: https://github.com/Nelnamara/CooldownCollaborator
+## X-License: All Rights Reserved
+
+CooldownCollaborator.lua

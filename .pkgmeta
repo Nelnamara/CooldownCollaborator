@@ -1,0 +1,6 @@
+package-as: CooldownCollaborator
+ignore:
+  - .pkgmeta
+  - .gitignore
+  - .github
+  - README.md
