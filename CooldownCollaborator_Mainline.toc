@@ -1,4 +1,4 @@
-## Interface: 120005
+## Interface: 120007
 ## Title: |cFF54a3ffCooldownCollaborator|r
 ## Notes: Group and raid cooldown coordinator — shows all members' major CDs on a shared timeline, auto-switches between party and raid layout.
 ## Author: Nelnamara
