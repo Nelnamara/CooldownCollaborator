@@ -24,6 +24,7 @@ local DEFAULTS = {
     minimapAngle   = 225,
     minimapHide    = false,
     customSpells   = {},    -- [spellID] = { name, duration, icon }
+    disabledSpells = {},    -- [spellID] = true when user unchecks a default spell
 }
 
 function CC:Init()
@@ -110,6 +111,7 @@ function CC:RecordCooldown(unitToken, spellID)
     local data = CC.SpellData[spellID]
     if not data then return end
     if data.duration < (self.db.minDuration or 60) then return end
+    if self.db.disabledSpells and self.db.disabledSpells[spellID] then return end
 
     local name = UnitName(unitToken)
     if not name or name == "" then return end

@@ -157,7 +157,8 @@ function CC:BuildRowData()
         if entry then
             for spellID, usedAt in pairs(entry.spells) do
                 local data = CC.SpellData[spellID]
-                if data and data.duration >= minDur then
+                if data and data.duration >= minDur
+                    and not (CC.db.disabledSpells and CC.db.disabledSpells[spellID]) then
                     local remaining = (usedAt + data.duration) - now
                     if remaining < 0 then remaining = 0 end
                     if remaining > 0 or self.db.showReady then
