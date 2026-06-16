@@ -1,6 +1,8 @@
 -- Addon messaging — sync CD state with other CooldownCollaborator users.
--- Blocked during boss/M+ encounters; broadcasts state to party/raid after ENCOUNTER_END.
--- Message format: "spellID:usedAt:playerName:classTag"
+-- Blocked during boss/M+ encounters AND briefly around death/resurrect; queues
+-- and retries rather than dropping. Message format: "spellID:usedAt:playerName:classTag"
+
+CC.pendingSyncs = CC.pendingSyncs or {}
 
 function CC:SendCooldownSync(spellID, playerName, usedAt)
     -- Rely solely on the real-time restriction check, not a flag toggled by
@@ -9,7 +11,11 @@ function CC:SendCooldownSync(spellID, playerName, usedAt)
     -- disconnect mid-fight) that flag gets stuck true and silently blocks every
     -- send for the rest of the session with zero error output.
     if C_ChatInfo.AreOutgoingAddonChatMessagesRestricted() then
-        if CC.verbose then print("|cFF54a3ffCDC|r sync skipped: addon messages restricted") end
+        -- Restriction also fires briefly around death/resurrect, not just
+        -- encounters - e.g. a Battle Rez cast on someone who just died. Queue
+        -- it instead of dropping; a ticker retries once restriction clears.
+        table.insert(CC.pendingSyncs, { spellID = spellID, playerName = playerName, usedAt = usedAt })
+        if CC.verbose then print("|cFF54a3ffCDC|r sync queued (restricted): " .. tostring(spellID)) end
         return
     end
 
@@ -51,3 +57,16 @@ function CC:OnAddonMessage(prefix, message, _, sender)
 
     self:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
 end
+
+-- Retry anything queued while addon messages were restricted (death/resurrect,
+-- boss encounters, etc.) as soon as the restriction clears.
+C_Timer.NewTicker(2, function()
+    if #CC.pendingSyncs == 0 then return end
+    if C_ChatInfo.AreOutgoingAddonChatMessagesRestricted() then return end
+
+    local queue = CC.pendingSyncs
+    CC.pendingSyncs = {}
+    for _, item in ipairs(queue) do
+        CC:SendCooldownSync(item.spellID, item.playerName, item.usedAt)
+    end
+end)
