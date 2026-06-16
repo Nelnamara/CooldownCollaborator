@@ -5,20 +5,11 @@
 CC.pendingSyncs = CC.pendingSyncs or {}
 
 function CC:SendCooldownSync(spellID, playerName, usedAt)
-    -- Rely solely on the real-time restriction check, not a flag toggled by
-    -- ENCOUNTER_START/END. self.inEncounter previously gated this too, but if
-    -- ENCOUNTER_END ever fails to fire cleanly (wipe edge case, zone transition,
-    -- disconnect mid-fight) that flag gets stuck true and silently blocks every
-    -- send for the rest of the session with zero error output.
-    if C_ChatInfo.AreOutgoingAddonChatMessagesRestricted() then
-        -- Restriction also fires briefly around death/resurrect, not just
-        -- encounters - e.g. a Battle Rez cast on someone who just died. Queue
-        -- it instead of dropping; a ticker retries once restriction clears.
-        table.insert(CC.pendingSyncs, { spellID = spellID, playerName = playerName, usedAt = usedAt })
-        if CC.verbose then print("|cFF54a3ffCDC|r sync queued (restricted): " .. tostring(spellID)) end
-        return
-    end
-
+    -- AreOutgoingAddonChatMessagesRestricted() was firing true far more often
+    -- than expected (outside any encounter or death window), blocking every
+    -- send before it was even attempted. Stop trusting that predictive check
+    -- and just attempt the real send - SendAddonMessage's own return code is
+    -- the authoritative signal, and is what we now act on.
     local chatType
     if IsInRaid() then
         chatType = "RAID"
@@ -36,10 +27,15 @@ function CC:SendCooldownSync(spellID, playerName, usedAt)
 
     local result = C_ChatInfo.SendAddonMessage(self.PREFIX, msg, chatType)
     if CC.verbose then
-        print(string.format("|cFF54a3ffCDC|r sync sent: %s via %s (result=%s)",
-            msg, chatType, tostring(result)))
+        print(string.format("|cFF54a3ffCDC|r sync send attempt: %s via %s (result=%s, restrictedCheck=%s)",
+            msg, chatType, tostring(result), tostring(C_ChatInfo.AreOutgoingAddonChatMessagesRestricted())))
     end
-    -- result == 3: throttled; result == 11: lockdown — both are transient, ignore
+
+    -- nil/0 == success. Anything else (3 = throttled, 11 = lockdown, etc.)
+    -- means it didn't go out - queue for retry instead of dropping it.
+    if result then
+        table.insert(CC.pendingSyncs, { spellID = spellID, playerName = playerName, usedAt = usedAt })
+    end
 end
 
 function CC:OnAddonMessage(prefix, message, _, sender)
@@ -58,11 +54,10 @@ function CC:OnAddonMessage(prefix, message, _, sender)
     self:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
 end
 
--- Retry anything queued while addon messages were restricted (death/resurrect,
--- boss encounters, etc.) as soon as the restriction clears.
+-- Retry anything that failed to send (throttled, lockdown, etc.). SendCooldownSync
+-- itself re-queues on failure, so this just periodically drains the queue.
 C_Timer.NewTicker(2, function()
     if #CC.pendingSyncs == 0 then return end
-    if C_ChatInfo.AreOutgoingAddonChatMessagesRestricted() then return end
 
     local queue = CC.pendingSyncs
     CC.pendingSyncs = {}
