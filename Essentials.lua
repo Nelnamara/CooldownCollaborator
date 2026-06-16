@@ -95,6 +95,21 @@ function CC:BuildEssentialsBar()
         self.essentialsRows[i] = row
     end
 
+    local rezBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    rezBtn:SetSize(50, 16)
+    rezBtn:SetText("Rez")
+    rezBtn:GetFontString():SetFontObject("GameFontHighlightSmall")
+    rezBtn:SetScript("OnClick", function() CC:RequestRez() end)
+    rezBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Target a dead player, then click to announce")
+        GameTooltip:AddLine("which Battle Rez provider should rez them.")
+        GameTooltip:Show()
+    end)
+    rezBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    rezBtn:Hide()
+    self.essentialsRezBtn = rezBtn
+
     f:Hide()
     self.essentialsFrame = f
     self:UpdateEssentialsLock()
@@ -116,6 +131,7 @@ function CC:RefreshEssentials()
     local rows = self.essentialsRows
     local idx = 0
     local any = false
+    local rezHeaderRow = nil
 
     for _, capKey in ipairs(CC.CAPABILITY_ORDER) do
         local cap = CC.CAPABILITIES[capKey]
@@ -134,6 +150,8 @@ function CC:RefreshEssentials()
             hdrRow.timeText:Hide()
             hdrRow.classBar:Hide()
             hdrRow:Show()
+
+            if capKey == "BATTLEREZ" then rezHeaderRow = hdrRow end
 
             for _, entry in ipairs(status) do
                 idx = idx + 1
@@ -178,6 +196,14 @@ function CC:RefreshEssentials()
         y = y + ROW_HEIGHT
     end
     self.essentialsFrame:SetHeight(math.max(y, HEADER_HEIGHT + ROW_HEIGHT))
+
+    if rezHeaderRow and CC:CanRequestRez() then
+        self.essentialsRezBtn:ClearAllPoints()
+        self.essentialsRezBtn:SetPoint("LEFT", rezHeaderRow.headerText, "RIGHT", 6, 0)
+        self.essentialsRezBtn:Show()
+    else
+        self.essentialsRezBtn:Hide()
+    end
 
     if IsInGroup() and self.db.essentialsEnabled then
         self.essentialsFrame:Show()

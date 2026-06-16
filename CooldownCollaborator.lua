@@ -161,6 +161,52 @@ function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
     end
 end
 
+-- Raid lead / assist only: target a dead player and announce who should
+-- rez them, naming the specific provider whose Battle Rez is ready right
+-- now rather than a generic "someone rez" callout.
+function CC:CanRequestRez()
+    if IsInRaid() then
+        return IsRaidLeader() or IsRaidOfficer()
+    elseif IsInGroup() then
+        return UnitIsGroupLeader("player")
+    end
+    return false
+end
+
+function CC:RequestRez()
+    if not self:CanRequestRez() then
+        print("|cFF54a3ffCDC|r Only the raid leader/assist (or party leader) can request a rez.")
+        return
+    end
+    if not UnitExists("target") or not UnitIsDeadOrGhost("target") then
+        print("|cFF54a3ffCDC|r Target a dead player first.")
+        return
+    end
+
+    local targetName = UnitName("target")
+    local status = CC:GetCapabilityStatus("BATTLEREZ")
+    local provider = nil
+    for _, entry in ipairs(status) do
+        if entry.ready then provider = entry; break end
+    end
+
+    if not provider then
+        print("|cFF54a3ffCDC|r No Battle Rez available right now.")
+        return
+    end
+
+    local data = CC.SpellData[provider.spellID]
+    local spellName = data and data.name or "Battle Rez"
+    local msg = string.format("%s, please %s %s!", provider.name, spellName, targetName)
+
+    if IsInRaid() then
+        SendChatMessage(msg, "RAID")
+        SendChatMessage(msg, "RAID_WARNING")
+    else
+        SendChatMessage(msg, "PARTY")
+    end
+end
+
 function CC:RefreshAllViews()
     self:RefreshRows()
     if CC.RefreshEssentials then CC:RefreshEssentials() end
@@ -249,6 +295,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         CC.db.laneEnabled = not CC.db.laneEnabled
         CC:RefreshLanes()
         print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF"))
+    elseif cmd == "rez" then
+        CC:RequestRez()
     elseif cmd == "consumable" then
         -- /cdc consumable <spellID> <duration> <name...>
         local rest = msg:match("^%S+%s+(.*)$") or ""
