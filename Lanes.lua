@@ -108,6 +108,13 @@ function CC:RefreshLanes()
         -- rightmost without fighting for the same slot as others mid-slide.
         table.sort(status, function(a, b) return a.remaining > b.remaining end)
 
+        -- Greedy bin-pack into vertical levels: for each icon, find the
+        -- lowest level where it doesn't x-overlap anything already placed
+        -- there. A simple "offset if it overlaps the previous icon" approach
+        -- breaks for non-transitive chains (A overlaps B, B overlaps C, but
+        -- A and C don't overlap each other) - this does not.
+        local levelOccupants = {}  -- level -> { xPos, xPos, ... }
+
         for i, icon in ipairs(lane.icons) do
             local entry = status[i]
             if not entry then
@@ -121,18 +128,24 @@ function CC:RefreshLanes()
 
                 local xPos = progress * (LANE_WIDTH - ICON_SIZE)
 
-                -- Simple stacking: nudge vertically if another visible icon's
-                -- x position is within one icon-width of this one.
-                local yOffset = 0
-                for j = 1, i - 1 do
-                    local other = lane.icons[j]
-                    if other:IsShown() then
-                        local ox = select(4, other:GetPoint())
-                        if ox and math.abs(ox - xPos) < ICON_SIZE then
-                            yOffset = yOffset - (ICON_SIZE - 4)
+                local level = 0
+                while true do
+                    local occupants = levelOccupants[level]
+                    local fits = true
+                    if occupants then
+                        for _, ox in ipairs(occupants) do
+                            if math.abs(ox - xPos) < ICON_SIZE then
+                                fits = false
+                                break
+                            end
                         end
                     end
+                    if fits then break end
+                    level = level + 1
                 end
+                levelOccupants[level] = levelOccupants[level] or {}
+                table.insert(levelOccupants[level], xPos)
+                local yOffset = -level * (ICON_SIZE - 4)
 
                 icon:ClearAllPoints()
                 icon:SetPoint("LEFT", lane, "LEFT", xPos, yOffset)
