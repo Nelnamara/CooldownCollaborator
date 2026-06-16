@@ -6,36 +6,56 @@ CooldownCollaborator gives your group a live shared view of every major defensiv
 
 ## Features
 
-- **Unified CD panel** — all 28 tracked spells across 13 classes in a single draggable list
+- **Unified CD panel** — 29 tracked spells across 13 classes in a single draggable list
+- **Roster capability scan** — knows who *can* provide Bloodlust/Heroism/Time Warp/Fury of the Aspects or a Battle Rez before anyone has cast anything, based on class
+- **Essentials Bar** — slim always-visible view of just those high-value raid-wide resources, separate from the full list
+- **Lane View** — alternate visual: icons slide along a bar from "just used" to "ready" instead of a text countdown
+- **Request Rez** — raid leader/assist (or party leader) targets a dead player and announces which Battle Rez provider is ready, by name
+- **Cauldron/Feast tracking** — register a consumable buff by spell ID once (`/cdc consumable`) and it's tracked like any other shared resource
 - **Live countdowns** — 0.5-second refresh with green/yellow/red status coloring
 - **Class color coding** — per-class stripe and name coloring so you know the owner at a glance
 - **Party and raid support** — automatically tracks `party1`–`party4` in 5-mans and `raid1`–`raid40` in raids
-- **Addon sync** — broadcasts observed casts to other CooldownCollaborator users after each encounter via `C_ChatInfo.SendAddonMessage` (encounter lockdown safe)
+- **Addon sync** — broadcasts each client's own observed casts to other CooldownCollaborator users via `C_ChatInfo.SendAddonMessage`, with automatic retry if a send fails (death/resurrect windows, encounter lockdown, throttling)
+- **Standalone settings window** — not registered through Blizzard's Settings panel, so it never blocks your spellbook (a known issue with the in-game AddOns settings tab)
 - **Draggable and lockable** — position and scale saved between sessions
+
+## Requires the addon on both ends
+
+Cross-client visibility only works between players who both have CooldownCollaborator installed. Each client tracks its own cast and broadcasts it; there is no way to read another player's spell cast directly (Blizzard's secret-value protections block it categorically), so a player without the addon is invisible to it.
 
 ## Tracked Cooldowns
 
-Rallying Cry · Aura Mastery · Lay on Hands · Blessing of Protection · Guardian Spirit · Pain Suppression · Power Word: Barrier · Leap of Faith · Anti-Magic Zone · Raise Ally · Heroism · Bloodlust · Spirit Link Totem · Ancestral Protection Totem · Healing Tide Totem · Time Warp · Ice Block · Demonic Gateway · Revival · Life Cocoon · Tranquility · Rebirth · Innervate · Darkness · Rewind · Rescue · Zephyr · Time Dilation
+Rallying Cry · Aura Mastery · Lay on Hands · Blessing of Protection · Guardian Spirit · Pain Suppression · Power Word: Barrier · Leap of Faith · Anti-Magic Zone · Raise Ally · Heroism · Bloodlust · Spirit Link Totem · Ancestral Protection Totem · Healing Tide Totem · Time Warp · Ice Block · Demonic Gateway · Revival · Life Cocoon · Tranquility · Rebirth · Innervate · Darkness · Rewind · Rescue · Zephyr · Time Dilation · Fury of the Aspects
+
+Plus any custom spell or consumable buff you register in-game.
 
 ## Slash Commands
 
 | Command | Effect |
 |---|---|
-| `/cdc` | Toggle panel visibility |
+| `/cdc` | Toggle main panel visibility |
 | `/cdc lock` / `/cdc unlock` | Lock or unlock frame position |
 | `/cdc reset` | Reset to default position |
-| `/cdc debug` | Print all tracked cooldowns and remaining times |
-| `/cdc settings` | Open the options panel |
+| `/cdc settings` | Open the settings window |
+| `/cdc essentials` | Toggle the Essentials Bar |
+| `/cdc lanes` | Toggle the Lane View |
+| `/cdc roster` | Print the current roster capability scan |
+| `/cdc rez` | Request Rez on your current (dead) target — leader/assist only |
+| `/cdc consumable <spellID> <durationSeconds> <name>` | Register a Cauldron/Feast-style shared buff for tracking |
+| `/cdc verbose` | Toggle detailed cast/sync logging, for diagnosing tracking issues |
+| `/cdc debug` | Print all tracked cooldowns, remaining times, and group/encounter state |
 
 ## Compatibility
 
 - WoW Midnight 12.0.7+
 - No library dependencies
-- Fully Midnight-safe: detection uses `UNIT_SPELLCAST_SUCCEEDED` on party/raid unit tokens (non-secret spellIDs), not combat log
+- Detects your own casts via `UNIT_SPELLCAST_SUCCEEDED` on the `player` unit token only — `spellID` is a secret value on `party`/`raid` tokens (confirmed by live testing) and cannot be read directly for any other unit. Other players' cooldowns are only ever populated via the addon-message sync, never by reading their cast event.
 
 ## Design Notes
 
 In Midnight, `C_Spell.GetSpellCooldown()` timing fields are secret values — you cannot read them to know how long a CD has left. CooldownCollaborator works around this entirely: it detects the cast event and starts a local countdown based on known base durations. This means it works correctly for every player in your group regardless of talent reductions, which are not considered.
+
+Sync messages carry elapsed time since cast, not an absolute timestamp — `GetTime()` is seconds since each client's own process started, not a shared clock, so comparing one client's raw timestamp against another's produces nonsense. Each client re-anchors incoming sync data to its own clock on arrival.
 
 ## Author
 
