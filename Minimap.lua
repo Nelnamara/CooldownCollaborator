@@ -55,8 +55,8 @@ function CC:BuildMinimapButton()
     -- Click
     btn:SetScript("OnClick", function(self, button)
         if button == "RightButton" then
-            if CC.optionsCategory then
-                Settings.OpenToCategory(CC.optionsCategory:GetID())
+            if CC.optionsCategoryID then
+                Settings.OpenToCategory(CC.optionsCategoryID)
             end
         else
             if CC.frame then

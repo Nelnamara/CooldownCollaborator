@@ -74,25 +74,54 @@ end
 
 local function MakeTabs(panel, labels, anchor, oy, onSwitch)
     local btns = {}
-    panel.numTabs = #labels
+    local activeTab = 1
+
+    local function UpdateVisual()
+        for i, btn in ipairs(btns) do
+            if i == activeTab then
+                btn:SetBackdropColor(0.20, 0.20, 0.30, 1.0)
+                btn:SetBackdropBorderColor(0.55, 0.55, 0.75, 1.0)
+                btn.label:SetTextColor(1, 1, 1)
+            else
+                btn:SetBackdropColor(0.10, 0.10, 0.15, 0.9)
+                btn:SetBackdropBorderColor(0.30, 0.30, 0.45, 0.8)
+                btn.label:SetTextColor(0.7, 0.7, 0.7)
+            end
+        end
+    end
+
     for i, text in ipairs(labels) do
-        local t = CreateFrame("Button", "CCOptTab"..i, panel, "TabButtonTemplate")
-        t:SetText(text)
-        t:SetID(i)
-        PanelTemplates_TabResize(t, 4)
+        local t = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+        t:SetSize(120, 24)
+        t:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 10,
+            insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        })
         if i == 1 then
             t:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -4)
         else
-            t:SetPoint("LEFT", btns[i-1], "RIGHT", -14, 0)
+            t:SetPoint("LEFT", btns[i-1], "RIGHT", 4, 0)
         end
-        t:SetScript("OnClick", function()
-            PanelTemplates_SetTab(panel, i)
-            onSwitch(i)
+
+        local lbl = t:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        lbl:SetPoint("CENTER")
+        lbl:SetText(text)
+        t.label = lbl
+
+        t:EnableMouse(true)
+        local idx = i
+        t:SetScript("OnMouseDown", function()
+            activeTab = idx
+            UpdateVisual()
+            onSwitch(idx)
         end)
+
         btns[i] = t
     end
-    PanelTemplates_SetNumTabs(panel, #labels)
-    PanelTemplates_SetTab(panel, 1)
+
+    UpdateVisual()
     return btns
 end
 
@@ -442,4 +471,5 @@ function CC:BuildOptionsPanel()
     local category = Settings.RegisterCanvasLayoutCategory(panel, "CooldownCollaborator")
     Settings.RegisterAddOnCategory(category)
     self.optionsCategory = category
+    self.optionsCategoryID = category.ID
 end

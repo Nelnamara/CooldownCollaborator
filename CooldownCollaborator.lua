@@ -201,7 +201,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         CC.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
         print("|cFF54a3ffCooldownCollaborator|r position reset.")
     elseif cmd == "settings" then
-        Settings.OpenToCategory(CC.optionsCategory:GetID())
+        Settings.OpenToCategory(CC.optionsCategoryID)
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
         print("  In encounter:", tostring(CC.inEncounter))
