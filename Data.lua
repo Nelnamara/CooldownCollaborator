@@ -50,6 +50,7 @@ CC.SpellData = {
     [370665] = { name = "Rescue",                    duration = 60,  icon = 4638349, class = "EVOKER"      },
     [374227] = { name = "Zephyr",                    duration = 120, icon = 4643463, class = "EVOKER"      },
     [357170] = { name = "Time Dilation",             duration = 90,  icon = 4622460, class = "EVOKER"      },
+    [391215] = { name = "Fury of the Aspects",       duration = 300, icon = 3578226, class = "EVOKER"      },
 }
 
 -- Class display colors (r, g, b) matching Blizzard's RAID_CLASS_COLORS

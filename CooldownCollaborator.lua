@@ -23,8 +23,21 @@ local DEFAULTS = {
     alpha          = 0.9,
     minimapAngle   = 225,
     minimapHide    = false,
-    customSpells   = {},    -- [spellID] = { name, duration, icon }
-    disabledSpells = {},    -- [spellID] = true when user unchecks a default spell
+    customSpells     = {},    -- [spellID] = { name, duration, icon }
+    disabledSpells   = {},    -- [spellID] = true when user unchecks a default spell
+    consumableBuffs  = {},    -- [spellID] = { name, duration, icon } -- Cauldron/Feast etc
+
+    essentialsEnabled = true,
+    essentialsX       = 220,
+    essentialsY        = 200,
+    essentialsScale   = 1.0,
+    essentialsLocked  = false,
+
+    laneEnabled = false,
+    laneX       = 0,
+    laneY       = -200,
+    laneScale   = 1.0,
+    laneLocked  = false,
 }
 
 function CC:Init()
@@ -38,12 +51,16 @@ function CC:Init()
 
     -- Merge user's custom spells into the live SpellData table
     self:LoadCustomSpells()
+    self:LoadConsumableBuffs()
 
     C_ChatInfo.RegisterAddonMessagePrefix(self.PREFIX)
     self:RegisterGroupEvents()
     self:BuildOptionsPanel()
     self:BuildMinimapButton()
     self:BuildUI()
+    self:BuildEssentialsBar()
+    self:BuildLaneView()
+    self:ScanRoster()
 end
 
 function CC:LoadCustomSpells()
@@ -127,7 +144,7 @@ function CC:RecordCooldown(unitToken, spellID)
     self.state[name].spells[spellID] = GetTime()
 
     self:SendCooldownSync(spellID, name, GetTime())
-    self:RefreshRows()
+    self:RefreshAllViews()
 end
 
 function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
@@ -140,8 +157,14 @@ function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
     local cur = self.state[playerName].spells[spellID]
     if not cur or usedAt > cur then
         self.state[playerName].spells[spellID] = usedAt
-        self:RefreshRows()
+        self:RefreshAllViews()
     end
+end
+
+function CC:RefreshAllViews()
+    self:RefreshRows()
+    if CC.RefreshEssentials then CC:RefreshEssentials() end
+    if CC.RefreshLanes then CC:RefreshLanes() end
 end
 
 function CC:GetRemaining(playerName, spellID)
@@ -173,6 +196,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
     elseif event == "GROUP_ROSTER_UPDATE" then
         CC:PruneState()
         CC:RefreshRows()
+        CC:ScanRoster()
     elseif event == "ENCOUNTER_START" then
         CC.inEncounter = true
     elseif event == "ENCOUNTER_END" then
@@ -217,6 +241,34 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     elseif cmd == "verbose" then
         CC.verbose = not CC.verbose
         print("|cFF54a3ffCooldownCollaborator|r verbose cast logging: " .. (CC.verbose and "ON" or "OFF"))
+    elseif cmd == "essentials" then
+        CC.db.essentialsEnabled = not CC.db.essentialsEnabled
+        CC:RefreshEssentials()
+        print("|cFF54a3ffCooldownCollaborator|r Essentials bar: " .. (CC.db.essentialsEnabled and "ON" or "OFF"))
+    elseif cmd == "lanes" then
+        CC.db.laneEnabled = not CC.db.laneEnabled
+        CC:RefreshLanes()
+        print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF"))
+    elseif cmd == "consumable" then
+        -- /cdc consumable <spellID> <duration> <name...>
+        local rest = msg:match("^%S+%s+(.*)$") or ""
+        local spellIDStr, durStr, name = rest:match("^(%S+)%s+(%S+)%s*(.*)$")
+        local spellID = tonumber(spellIDStr)
+        local dur = tonumber(durStr)
+        if not spellID or not dur then
+            print("|cFF54a3ffCooldownCollaborator|r usage: /cdc consumable <spellID> <durationSeconds> <name>")
+        else
+            CC:AddConsumableBuff(spellID, dur, name ~= "" and name or nil)
+        end
+    elseif cmd == "roster" then
+        CC:ScanRoster()
+        print("|cFF54a3ffCooldownCollaborator|r roster:")
+        for name, info in pairs(CC.roster or {}) do
+            local caps = {}
+            for key in pairs(info.capabilities) do caps[#caps + 1] = key end
+            print(string.format("    %s [%s] capabilities: %s",
+                name, info.class, #caps > 0 and table.concat(caps, ", ") or "none"))
+        end
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
         print("  In group:", tostring(IsInGroup()), " In raid:", tostring(IsInRaid()))

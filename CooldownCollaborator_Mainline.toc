@@ -13,5 +13,9 @@ Data.lua
 Events.lua
 Comms.lua
 UI.lua
+Roster.lua
+Essentials.lua
+Lanes.lua
+Consumables.lua
 Minimap.lua
 Options.lua

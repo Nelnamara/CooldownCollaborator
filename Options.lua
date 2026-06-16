@@ -83,7 +83,7 @@ function CC:RefreshDefaultSpellList()
 
     local byClass = {}
     for spellID, data in pairs(CC.SpellData) do
-        if not data.custom then
+        if not data.custom and not data.consumable then
             local cls = data.class or "UNKNOWN"
             if not byClass[cls] then byClass[cls] = {} end
             byClass[cls][#byClass[cls]+1] = { id = spellID, data = data }
