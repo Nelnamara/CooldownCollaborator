@@ -1,9 +1,10 @@
--- Options panel — registered with Blizzard Settings (Escape → Interface → AddOns)
--- Tab 1: Default Spells  — built-in spell list with per-spell enable/disable
--- Tab 2: Custom Spells   — add/remove custom tracked spells by ID or shift-click link
+-- Options for CooldownCollaborator
+-- Main settings: standalone CCOptionsFrame (spellbook-safe, Escape to close)
+-- Blizzard AddOns stub: single button that opens the standalone frame
 
-local PANEL_W = 580
-local PANEL_H = 620
+local FRAME_W = 560
+local FRAME_H = 600
+local TAB_H   = 26
 
 local CLASS_ORDER = {
     "WARRIOR", "PALADIN", "PRIEST", "DEATHKNIGHT",
@@ -16,140 +17,70 @@ local CLASS_DISPLAY = {
     SHAMAN      = "Shaman",      MAGE        = "Mage",
     WARLOCK     = "Warlock",     MONK        = "Monk",
     DRUID       = "Druid",       DEMONHUNTER = "Demon Hunter",
-    EVOKER      = "Evoker",      UNKNOWN     = "Custom",
+    EVOKER      = "Evoker",
 }
 local MIN_DURATIONS = { 30, 60, 90, 120, 180 }
 
--- ── Small UI helpers ─────────────────────────────────────────────────────────
+-- ── Helpers ──────────────────────────────────────────────────────────────────
 
-local function Hdr(parent, text, anchor, oy)
-    local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    fs:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -12)
+local function MakeLabel(parent, text, size, anchor, ox, oy)
+    local fs = parent:CreateFontString(nil, "OVERLAY", size or "GameFontHighlight")
+    fs:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", ox or 0, oy or -8)
     fs:SetText(text)
     return fs
 end
 
-local function Line(parent, anchor, oy)
+local function MakeLine(parent, anchor, oy)
     local t = parent:CreateTexture(nil, "ARTWORK")
-    t:SetSize(PANEL_W - 32, 1)
+    t:SetSize(FRAME_W - 32, 1)
     t:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -4)
     t:SetColorTexture(0.3, 0.3, 0.4, 0.6)
     return t
 end
 
-local function CB(parent, label, anchor, oy, getter, setter)
+local function MakeCB(parent, label, anchor, ox, oy, getter, setter)
     local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     cb:SetSize(22, 22)
-    cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -6)
+    cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", ox or 0, oy or -4)
     cb:SetChecked(getter())
     cb:SetScript("OnClick", function(self) setter(self:GetChecked()) end)
-    local lbl = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lbl:SetPoint("LEFT", cb, "RIGHT", 2, 0)
     lbl:SetText(label)
     return cb, lbl
 end
 
-local function Slider(parent, label, lo, hi, step, anchor, oy, getter, setter, fmtFn)
-    local s = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
-    s:SetSize(240, 16)
-    s:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 4, oy or -22)
-    s:SetMinMaxValues(lo, hi)
-    s:SetValueStep(step)
-    s:SetObeyStepOnDrag(true)
-    s:SetValue(getter())
-    s.Text:SetText(label)
-    s.Low:SetText(tostring(lo))
-    s.High:SetText(tostring(hi))
-    local vt = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    vt:SetPoint("LEFT", s, "RIGHT", 8, 0)
-    vt:SetText(fmtFn(getter()))
-    s:SetScript("OnValueChanged", function(self, v)
-        setter(v)
-        vt:SetText(fmtFn(v))
-    end)
-    return s
-end
-
--- ── Tab switching ────────────────────────────────────────────────────────────
-
-local function MakeTabs(panel, labels, anchor, oy, onSwitch)
-    local btns = {}
-    local activeTab = 1
-
-    local function UpdateVisual()
-        for i, btn in ipairs(btns) do
-            if i == activeTab then
-                btn:SetBackdropColor(0.20, 0.20, 0.30, 1.0)
-                btn:SetBackdropBorderColor(0.55, 0.55, 0.75, 1.0)
-                btn.label:SetTextColor(1, 1, 1)
-            else
-                btn:SetBackdropColor(0.10, 0.10, 0.15, 0.9)
-                btn:SetBackdropBorderColor(0.30, 0.30, 0.45, 0.8)
-                btn.label:SetTextColor(0.7, 0.7, 0.7)
-            end
-        end
+local function ResolveSpell(text)
+    local linkID = text:match("|Hspell:(%d+)")
+    if linkID then return tonumber(linkID) end
+    if text:match("^%d+$") then return tonumber(text) end
+    -- name lookup via old compat API (7th return = canonical spellID)
+    if GetSpellInfo and text:len() >= 2 then
+        local n, _, _, _, _, _, sid = GetSpellInfo(text)
+        if n and sid then return sid end
     end
+    return nil
+end
 
-    for i, text in ipairs(labels) do
-        local t = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-        t:SetSize(120, 24)
-        t:SetBackdrop({
-            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 10,
-            insets = { left = 2, right = 2, top = 2, bottom = 2 },
-        })
-        if i == 1 then
-            t:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -4)
-        else
-            t:SetPoint("LEFT", btns[i-1], "RIGHT", 4, 0)
-        end
-
-        local lbl = t:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        lbl:SetPoint("CENTER")
-        lbl:SetText(text)
-        t.label = lbl
-
-        t:EnableMouse(true)
-        local idx = i
-        t:SetScript("OnMouseDown", function()
-            activeTab = idx
-            UpdateVisual()
-            onSwitch(idx)
-        end)
-
-        btns[i] = t
+local function LookupSpellName(spellID)
+    if not spellID then return nil end
+    local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+    if info then return info.name, info.iconID end
+    if GetSpellInfo then
+        local n, _, ic = GetSpellInfo(spellID)
+        return n, ic
     end
-
-    UpdateVisual()
-    return btns
 end
 
--- ── Default spells list (Tab 1) ──────────────────────────────────────────────
-
-function CC:BuildDefaultSpellsTab(parent)
-    local scroll = CreateFrame("ScrollFrame", "CCDefaultScroll", parent, "UIPanelScrollFrameTemplate")
-    scroll:SetSize(PANEL_W - 48, 218)
-    scroll:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-
-    local content = CreateFrame("Frame", nil, scroll)
-    content:SetWidth(PANEL_W - 64)
-    scroll:SetScrollChild(content)
-
-    self.defaultSpellContent = content
-    self.defaultSpellScroll  = scroll
-
-    self:RefreshDefaultSpellList()
-end
+-- ── Default Spells tab ───────────────────────────────────────────────────────
 
 function CC:RefreshDefaultSpellList()
     local content = self.defaultSpellContent
     if not content then return end
 
-    for _, child in pairs({ content:GetChildren() }) do child:Hide(); child:SetParent(nil) end
-    for _, child in pairs({ content:GetRegions() }) do child:Hide() end
+    for _, c in pairs({ content:GetChildren() }) do c:Hide(); c:SetParent(nil) end
+    for _, r in pairs({ content:GetRegions() }) do r:Hide() end
 
-    -- Group spells by class
     local byClass = {}
     for spellID, data in pairs(CC.SpellData) do
         if not data.custom then
@@ -162,210 +93,94 @@ function CC:RefreshDefaultSpellList()
         table.sort(byClass[cls], function(a, b) return a.data.name < b.data.name end)
     end
 
-    local CROW = 22    -- spell row height
-    local CHDR = 24    -- class header height
-    local y = 0
+    local ROW = 22
+    local HDR = 20
+    local y   = 0
 
     for _, cls in ipairs(CLASS_ORDER) do
         local spells = byClass[cls]
         if spells and #spells > 0 then
             local c = CC.ClassColors[cls] or CC.ClassColors.UNKNOWN
 
-            -- Class header
             local hdr = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            hdr:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
+            hdr:SetPoint("TOPLEFT", content, "TOPLEFT", 2, -y)
             hdr:SetText(CLASS_DISPLAY[cls] or cls)
             hdr:SetTextColor(c[1], c[2], c[3])
-            y = y + CHDR
+            y = y + HDR
 
             for _, entry in ipairs(spells) do
-                local spellID = entry.id
-                local data    = entry.data
-                local row     = CreateFrame("Frame", nil, content)
-                row:SetSize(content:GetWidth(), CROW)
+                local sid  = entry.id
+                local data = entry.data
+
+                local row = CreateFrame("Frame", nil, content)
+                row:SetSize(content:GetWidth() - 4, ROW)
                 row:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -y)
 
                 local ico = row:CreateTexture(nil, "ARTWORK")
-                ico:SetSize(18, 18)
-                ico:SetPoint("LEFT", row, "LEFT", 0, 0)
+                ico:SetSize(16, 16)
+                ico:SetPoint("LEFT", 0, 0)
                 ico:SetTexture(data.icon)
                 ico:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
                 local nm = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
                 nm:SetPoint("LEFT", ico, "RIGHT", 4, 0)
-                nm:SetText(data.name)
-                nm:SetWidth(220)
+                nm:SetWidth(210)
                 nm:SetJustifyH("LEFT")
+                nm:SetText(data.name)
 
                 local dur = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
                 dur:SetPoint("LEFT", nm, "RIGHT", 4, 0)
-                local m = math.floor(data.duration / 60)
-                local s = data.duration % 60
+                local m, s = math.floor(data.duration/60), data.duration % 60
                 dur:SetText(s == 0 and (m.."m") or (m > 0 and (m.."m "..s.."s") or (s.."s")))
 
-                -- Enable/disable checkbox
                 local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
                 cb:SetSize(20, 20)
-                cb:SetPoint("RIGHT", row, "RIGHT", -8, 0)
-                cb:SetChecked(not (CC.db.disabledSpells and CC.db.disabledSpells[spellID]))
-                local sid = spellID
-                cb:SetScript("OnClick", function(self)
-                    if self:GetChecked() then
-                        CC.db.disabledSpells[sid] = nil
-                    else
-                        CC.db.disabledSpells[sid] = true
-                    end
-                    CC:RefreshRows()
-                end)
+                cb:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+                cb:SetChecked(not (CC.db.disabledSpells and CC.db.disabledSpells[sid]))
 
-                -- Dim row when disabled
-                local function UpdateRowAlpha()
-                    local a = (CC.db.disabledSpells and CC.db.disabledSpells[spellID]) and 0.4 or 1.0
+                local function Dim()
+                    local a = (CC.db.disabledSpells and CC.db.disabledSpells[sid]) and 0.35 or 1.0
                     ico:SetAlpha(a); nm:SetAlpha(a); dur:SetAlpha(a)
                 end
-                cb:SetScript("PostClick", UpdateRowAlpha)
-                UpdateRowAlpha()
+                cb:SetScript("OnClick", function(self)
+                    if self:GetChecked() then CC.db.disabledSpells[sid] = nil
+                    else CC.db.disabledSpells[sid] = true end
+                    CC:RefreshRows()
+                    Dim()
+                end)
+                Dim()
 
-                y = y + CROW
+                y = y + ROW
             end
-
-            y = y + 4  -- gap between classes
+            y = y + 4
         end
     end
 
     content:SetHeight(math.max(y, 20))
 end
 
--- ── Custom spells list (Tab 2) ───────────────────────────────────────────────
-
-function CC:BuildCustomSpellsTab(parent)
-    local instrText = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    instrText:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -4)
-    instrText:SetText("Type a spell name or ID below. To shift-click a spell link,\nopen settings from the minimap button (right-click) instead.")
-
-    local spellInput = CreateFrame("EditBox", "CCSpellInput", parent, "InputBoxTemplate")
-    spellInput:SetSize(200, 20)
-    spellInput:SetPoint("TOPLEFT", instrText, "BOTTOMLEFT", 2, -8)
-    spellInput:SetAutoFocus(false)
-    spellInput:SetNumeric(false)
-    spellInput:SetMaxLetters(128)
-
-    local preview = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    preview:SetPoint("LEFT", spellInput, "RIGHT", 8, 0)
-    preview:SetTextColor(0.5, 0.8, 1)
-    preview:SetWidth(150)
-
-    local durLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    durLabel:SetPoint("TOPLEFT", spellInput, "BOTTOMLEFT", 0, -10)
-    durLabel:SetText("Cooldown duration (seconds):")
-
-    local durInput = CreateFrame("EditBox", "CCDurInput", parent, "InputBoxTemplate")
-    durInput:SetSize(60, 20)
-    durInput:SetPoint("LEFT", durLabel, "RIGHT", 6, 0)
-    durInput:SetAutoFocus(false)
-    durInput:SetNumeric(true)
-    durInput:SetMaxLetters(5)
-
-    local addBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    addBtn:SetSize(80, 22)
-    addBtn:SetPoint("LEFT", durInput, "RIGHT", 8, 0)
-    addBtn:SetText("Add Spell")
-
-    local pendingSpellID = nil
-
-    local function ResolveSpell(text)
-        -- Spell link pasted via shift-click
-        local linkID = text:match("|Hspell:(%d+)")
-        if linkID then
-            return tonumber(linkID)
-        end
-        -- Numeric spell ID typed directly
-        if text:match("^%d+$") then
-            return tonumber(text)
-        end
-        -- Spell name typed — try old GetSpellInfo(name) which returns spellID as 7th value
-        if GetSpellInfo and text:len() >= 2 then
-            local n, _, _, _, _, _, sid = GetSpellInfo(text)
-            if n and sid then return sid end
-        end
-        return nil
-    end
-
-    local function LookupName(spellID)
-        if not spellID then return nil end
-        local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
-        if info then return info.name end
-        return GetSpellInfo and select(1, GetSpellInfo(spellID))
-    end
-
-    spellInput:SetScript("OnTextChanged", function(self, userInput)
-        if not userInput then return end
-        local text = self:GetText()
-        -- Strip link formatting if pasted
-        local linkID = text:match("|Hspell:(%d+)")
-        if linkID then
-            pendingSpellID = tonumber(linkID)
-            self:SetText(linkID)
-            preview:SetText(LookupName(pendingSpellID) or "|cFFFF4444Unknown ID|r")
-            return
-        end
-        pendingSpellID = ResolveSpell(text)
-        if pendingSpellID then
-            preview:SetText(LookupName(pendingSpellID) or "|cFFFF4444Unknown ID|r")
-        elseif text:len() > 0 then
-            preview:SetText("|cFF888888type name or ID|r")
-        else
-            preview:SetText("")
-        end
-    end)
-
-    addBtn:SetScript("OnClick", function()
-        local sid = pendingSpellID or ResolveSpell(spellInput:GetText())
-        local dur = tonumber(durInput:GetText())
-        if CC:AddCustomSpell(sid, dur) then
-            spellInput:SetText(""); durInput:SetText(""); preview:SetText("")
-            pendingSpellID = nil
-            CC:RefreshSpellList()
-        end
-    end)
-
-    -- Custom spell scroll list
-    local listLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    listLabel:SetPoint("TOPLEFT", durLabel, "BOTTOMLEFT", 0, -18)
-    listLabel:SetText("Custom tracked spells:")
-
-    local scroll = CreateFrame("ScrollFrame", "CCCustomScroll", parent, "UIPanelScrollFrameTemplate")
-    scroll:SetSize(PANEL_W - 48, 150)
-    scroll:SetPoint("TOPLEFT", listLabel, "BOTTOMLEFT", 0, -6)
-
-    local listContent = CreateFrame("Frame", nil, scroll)
-    listContent:SetSize(PANEL_W - 64, 150)
-    scroll:SetScrollChild(listContent)
-
-    self.spellListContent = listContent
-    self:RefreshSpellList()
-end
+-- ── Custom Spells tab ────────────────────────────────────────────────────────
 
 function CC:RefreshSpellList()
     local content = self.spellListContent
     if not content then return end
 
-    for _, child in pairs({ content:GetChildren() }) do child:Hide(); child:SetParent(nil) end
+    for _, c in pairs({ content:GetChildren() }) do c:Hide(); c:SetParent(nil) end
 
-    local y = 0
     local ROW = 22
-    local hasAny = false
+    local y   = 0
+    local any = false
 
     for idStr, data in pairs(self.db.customSpells) do
-        hasAny = true
-        local spellID = tonumber(idStr)
+        any = true
+        local sid = tonumber(idStr)
         local row = CreateFrame("Frame", nil, content)
         row:SetSize(content:GetWidth(), ROW)
         row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
 
         local ico = row:CreateTexture(nil, "ARTWORK")
-        ico:SetSize(18, 18)
-        ico:SetPoint("LEFT", row, "LEFT", 0, 0)
+        ico:SetSize(16, 16)
+        ico:SetPoint("LEFT", 0, 0)
         ico:SetTexture(data.icon or 134400)
         ico:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
@@ -375,126 +190,379 @@ function CC:RefreshSpellList()
             data.name or idStr, data.duration or 0))
 
         local rmv = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        rmv:SetSize(60, 18)
+        rmv:SetSize(56, 18)
         rmv:SetPoint("LEFT", lbl, "RIGHT", 8, 0)
         rmv:SetText("Remove")
-        local sid = spellID
-        rmv:SetScript("OnClick", function() CC:RemoveCustomSpell(sid) end)
+        local s = sid
+        rmv:SetScript("OnClick", function() CC:RemoveCustomSpell(s) end)
 
         y = y + ROW
     end
 
-    if not hasAny then
-        local empty = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        empty:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
-        empty:SetText("No custom spells added yet.")
+    if not any then
+        local fs = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        fs:SetPoint("TOPLEFT", 0, 0)
+        fs:SetText("No custom spells added yet.")
     end
     content:SetHeight(math.max(y, 20))
 end
 
--- ── Main panel builder ───────────────────────────────────────────────────────
+-- ── Standalone options frame ─────────────────────────────────────────────────
 
-function CC:BuildOptionsPanel()
-    local panel = CreateFrame("Frame")
-    panel:SetSize(PANEL_W, PANEL_H)
+function CC:OpenOptions()
+    if self.optionsFrame then
+        self.optionsFrame:SetShown(not self.optionsFrame:IsShown())
+        return
+    end
 
-    -- Title
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("|cFF54a3ffCooldownCollaborator|r")
-    local ver = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    ver:SetPoint("LEFT", title, "RIGHT", 6, -1)
-    ver:SetText("v"..CC.version)
+    local f = CreateFrame("Frame", "CCOptionsFrame", UIParent, "BackdropTemplate")
+    f:SetSize(FRAME_W, FRAME_H)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("HIGH")
+    f:SetMovable(true)
+    f:SetClampedToScreen(true)
+    f:SetBackdrop({
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 24,
+        insets = { left = 8, right = 8, top = 8, bottom = 8 },
+    })
+    f:SetBackdropColor(0.06, 0.06, 0.10, 0.97)
+    f:SetBackdropBorderColor(0.4, 0.4, 0.6, 1)
+    -- Escape key closes it
+    tinsert(UISpecialFrames, "CCOptionsFrame")
 
-    -- ── Display settings ──
-    local hdrDisp = Hdr(panel, "Display Settings", title, -18)
-    Line(panel, hdrDisp, -2)
+    -- Title bar (drag handle)
+    local titleBar = CreateFrame("Frame", nil, f)
+    titleBar:SetSize(FRAME_W - 16, 30)
+    titleBar:SetPoint("TOP", f, "TOP", 0, -8)
+    titleBar:EnableMouse(true)
+    titleBar:SetScript("OnMouseDown", function() f:StartMoving() end)
+    titleBar:SetScript("OnMouseUp",   function() f:StopMovingOrSizing() end)
 
-    local cbReady, _ = CB(panel, "Show ready cooldowns", hdrDisp, -12,
-        function() return CC.db.showReady end,
-        function(v) CC.db.showReady = v; CC:RefreshRows() end)
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", f, "TOP", 0, -14)
+    title:SetText("|cFF54a3ffCooldownCollaborator|r  |cFF888888" .. CC.version .. "|r")
 
-    local cbLock, _ = CB(panel, "Lock panel position", cbReady, -2,
-        function() return CC.db.locked end,
-        function(v) CC.db.locked = v; CC:UpdateLock() end)
+    -- Close button
+    local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -4)
+    closeBtn:SetScript("OnClick", function() f:Hide() end)
 
-    local cbMM, _ = CB(panel, "Hide minimap button", cbLock, -2,
-        function() return CC.db.minimapHide end,
-        function(v)
-            CC.db.minimapHide = v
-            if CC.minimapBtn then CC.minimapBtn:SetShown(not v) end
-        end)
+    local yOff = -46   -- current vertical pen position from top of f
 
-    -- Min duration row
-    local mdLbl = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    mdLbl:SetPoint("TOPLEFT", cbMM, "BOTTOMLEFT", 22, -10)
+    -- ── Display settings ──────────────────────────────────────────────────
+
+    local hdrDisp = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    hdrDisp:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    hdrDisp:SetText("Display Settings")
+    yOff = yOff - 16
+    MakeLine(f, hdrDisp, -2)
+    yOff = yOff - 6
+
+    local anchor = f   -- for relative positioning below
+    local anchorY = yOff
+
+    local cbReady = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    cbReady:SetSize(22, 22)
+    cbReady:SetPoint("TOPLEFT", f, "TOPLEFT", 16, anchorY)
+    cbReady:SetChecked(CC.db.showReady)
+    cbReady:SetScript("OnClick", function(self)
+        CC.db.showReady = self:GetChecked(); CC:RefreshRows()
+    end)
+    local lReady = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lReady:SetPoint("LEFT", cbReady, "RIGHT", 2, 0)
+    lReady:SetText("Show ready cooldowns")
+    yOff = yOff - 26
+
+    local cbLock = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    cbLock:SetSize(22, 22)
+    cbLock:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    cbLock:SetChecked(CC.db.locked)
+    cbLock:SetScript("OnClick", function(self)
+        CC.db.locked = self:GetChecked(); CC:UpdateLock()
+    end)
+    local lLock = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lLock:SetPoint("LEFT", cbLock, "RIGHT", 2, 0)
+    lLock:SetText("Lock panel position")
+    yOff = yOff - 26
+
+    local cbMM = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    cbMM:SetSize(22, 22)
+    cbMM:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    cbMM:SetChecked(CC.db.minimapHide)
+    cbMM:SetScript("OnClick", function(self)
+        CC.db.minimapHide = self:GetChecked()
+        if CC.minimapBtn then CC.minimapBtn:SetShown(not CC.db.minimapHide) end
+    end)
+    local lMM = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lMM:SetPoint("LEFT", cbMM, "RIGHT", 2, 0)
+    lMM:SetText("Hide minimap button")
+    yOff = yOff - 30
+
+    -- Min duration buttons
+    local mdLbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    mdLbl:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
     mdLbl:SetText("Minimum cooldown to track:")
+    yOff = yOff - 26
 
     local durBtns = {}
     for i, val in ipairs(MIN_DURATIONS) do
-        local b = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-        b:SetSize(52, 22)
+        local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        b:SetSize(50, 22)
         b:SetText(val.."s")
         if i == 1 then
-            b:SetPoint("TOPLEFT", mdLbl, "BOTTOMLEFT", 0, -4)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
         else
             b:SetPoint("LEFT", durBtns[i-1], "RIGHT", 4, 0)
         end
         local v = val
         b:SetScript("OnClick", function()
             CC.db.minDuration = v
-            for j, btn in ipairs(durBtns) do btn:SetEnabled(true) end
+            for _, btn in ipairs(durBtns) do btn:SetEnabled(true) end
             b:SetEnabled(false)
             CC:RefreshRows()
         end)
         if CC.db.minDuration == val then b:SetEnabled(false) end
         durBtns[i] = b
     end
+    yOff = yOff - 30
 
-    Slider(panel, "Panel opacity", 0.3, 1.0, 0.05, durBtns[1], -24,
-        function() return CC.db.alpha end,
-        function(v) CC.db.alpha = v; if CC.frame then CC.frame:SetAlpha(v) end end,
-        function(v) return string.format("%.0f%%", v * 100) end)
+    -- Alpha slider
+    local alphaLbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    alphaLbl:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    alphaLbl:SetText("Panel opacity:")
+    local alphaSlider = CreateFrame("Slider", nil, f, "OptionsSliderTemplate")
+    alphaSlider:SetSize(200, 16)
+    alphaSlider:SetPoint("LEFT", alphaLbl, "RIGHT", 10, 0)
+    alphaSlider:SetMinMaxValues(0.2, 1.0)
+    alphaSlider:SetValueStep(0.05)
+    alphaSlider:SetObeyStepOnDrag(true)
+    alphaSlider:SetValue(CC.db.alpha or 0.9)
+    alphaSlider.Text:SetText("")
+    alphaSlider.Low:SetText("20%")
+    alphaSlider.High:SetText("100%")
+    local alphaVal = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    alphaVal:SetPoint("LEFT", alphaSlider, "RIGHT", 6, 0)
+    alphaVal:SetText(string.format("%.0f%%", (CC.db.alpha or 0.9) * 100))
+    alphaSlider:SetScript("OnValueChanged", function(self, v)
+        CC.db.alpha = v
+        alphaVal:SetText(string.format("%.0f%%", v * 100))
+        if CC.frame then CC.frame:SetAlpha(v) end
+    end)
+    yOff = yOff - 30
 
-    Slider(panel, "Panel scale", 0.6, 2.0, 0.1, durBtns[1], -52,
-        function() return CC.db.scale end,
-        function(v) CC.db.scale = v; if CC.frame then CC.frame:SetScale(v) end end,
-        function(v) return string.format("%.1f", v) end)
+    -- Scale slider
+    local scaleLbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    scaleLbl:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    scaleLbl:SetText("Panel scale:    ")
+    local scaleSlider = CreateFrame("Slider", nil, f, "OptionsSliderTemplate")
+    scaleSlider:SetSize(200, 16)
+    scaleSlider:SetPoint("LEFT", scaleLbl, "RIGHT", 10, 0)
+    scaleSlider:SetMinMaxValues(0.5, 2.0)
+    scaleSlider:SetValueStep(0.1)
+    scaleSlider:SetObeyStepOnDrag(true)
+    scaleSlider:SetValue(CC.db.scale or 1.0)
+    scaleSlider.Text:SetText("")
+    scaleSlider.Low:SetText("0.5x")
+    scaleSlider.High:SetText("2.0x")
+    local scaleVal = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scaleVal:SetPoint("LEFT", scaleSlider, "RIGHT", 6, 0)
+    scaleVal:SetText(string.format("%.1fx", CC.db.scale or 1.0))
+    scaleSlider:SetScript("OnValueChanged", function(self, v)
+        CC.db.scale = v
+        scaleVal:SetText(string.format("%.1fx", v))
+        if CC.frame then CC.frame:SetScale(v) end
+    end)
+    yOff = yOff - 26
 
-    -- ── Tab section ──
-    local hdrSpells = Hdr(panel, "Spell Tracking", durBtns[1], -76)
-    Line(panel, hdrSpells, -2)
+    -- ── Spell tracking section ────────────────────────────────────────────
 
-    -- Tab content area
-    local tabArea = CreateFrame("Frame", nil, panel)
-    tabArea:SetSize(PANEL_W - 32, 240)
+    local hdrSpells = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    hdrSpells:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    hdrSpells:SetText("Spell Tracking")
+    yOff = yOff - 16
+    MakeLine(f, hdrSpells, -2)
+    yOff = yOff - 10
 
-    local defaultContent = CreateFrame("Frame", nil, tabArea)
-    defaultContent:SetAllPoints(tabArea)
+    -- Tab buttons
+    local TAB_Y = yOff
+    local tabDefault = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    tabDefault:SetSize(130, TAB_H)
+    tabDefault:SetText("Default Spells")
+    tabDefault:SetPoint("TOPLEFT", f, "TOPLEFT", 16, TAB_Y)
 
-    local customContent = CreateFrame("Frame", nil, tabArea)
-    customContent:SetAllPoints(tabArea)
-    customContent:Hide()
+    local tabCustom = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    tabCustom:SetSize(130, TAB_H)
+    tabCustom:SetText("Custom Spells")
+    tabCustom:SetPoint("LEFT", tabDefault, "RIGHT", 4, 0)
 
-    local tabs = MakeTabs(panel,
-        { "Default Spells", "Custom Spells" },
-        hdrSpells, -14,
-        function(id)
-            if id == 1 then
-                defaultContent:Show(); customContent:Hide()
-            else
-                defaultContent:Hide(); customContent:Show()
-            end
-        end)
+    yOff = yOff - (TAB_H + 4)
 
-    tabArea:SetPoint("TOPLEFT", tabs[1], "BOTTOMLEFT", 0, 2)
+    -- Content area
+    local contentArea = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    contentArea:SetSize(FRAME_W - 32, FRAME_H - (-yOff) - 16)
+    contentArea:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    contentArea:SetBackdrop({
+        bgFile  = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 8,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    contentArea:SetBackdropColor(0.04, 0.04, 0.07, 0.8)
+    contentArea:SetBackdropBorderColor(0.25, 0.25, 0.35, 0.8)
 
-    self:BuildDefaultSpellsTab(defaultContent)
-    self:BuildCustomSpellsTab(customContent)
+    local CAW = contentArea:GetWidth() - 8
+    local CAH = contentArea:GetHeight() - 8
 
-    -- Register
+    -- ── Default spells panel ──
+
+    local defPanel = CreateFrame("ScrollFrame", "CCDefScroll", contentArea, "UIPanelScrollFrameTemplate")
+    defPanel:SetSize(CAW - 16, CAH)
+    defPanel:SetPoint("TOPLEFT", contentArea, "TOPLEFT", 4, -4)
+
+    local defContent = CreateFrame("Frame", nil, defPanel)
+    defContent:SetWidth(CAW - 32)
+    defPanel:SetScrollChild(defContent)
+
+    self.defaultSpellContent = defContent
+
+    -- ── Custom spells panel ──
+
+    local custPanel = CreateFrame("Frame", nil, contentArea)
+    custPanel:SetSize(CAW, CAH)
+    custPanel:SetPoint("TOPLEFT", contentArea, "TOPLEFT", 4, -4)
+    custPanel:Hide()
+
+    -- Instruction
+    local hint = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hint:SetPoint("TOPLEFT", custPanel, "TOPLEFT", 4, -4)
+    hint:SetText("Type a spell name or ID, then set its cooldown duration and click Add.\nShift-click a spell link to auto-fill (spellbook must be open).")
+    hint:SetJustifyH("LEFT")
+    hint:SetWidth(CAW - 16)
+
+    local spellInput = CreateFrame("EditBox", "CCSpellInput", custPanel, "InputBoxTemplate")
+    spellInput:SetSize(180, 22)
+    spellInput:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 2, -10)
+    spellInput:SetAutoFocus(false)
+    spellInput:SetNumeric(false)
+    spellInput:SetMaxLetters(128)
+    spellInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    local preview = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    preview:SetPoint("LEFT", spellInput, "RIGHT", 8, 0)
+    preview:SetWidth(160)
+    preview:SetTextColor(0.5, 0.85, 1)
+
+    local durLbl = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    durLbl:SetPoint("TOPLEFT", spellInput, "BOTTOMLEFT", 0, -10)
+    durLbl:SetText("Duration (sec):")
+
+    local durInput = CreateFrame("EditBox", "CCDurInput", custPanel, "InputBoxTemplate")
+    durInput:SetSize(60, 22)
+    durInput:SetPoint("LEFT", durLbl, "RIGHT", 6, 0)
+    durInput:SetAutoFocus(false)
+    durInput:SetNumeric(true)
+    durInput:SetMaxLetters(5)
+    durInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    local addBtn = CreateFrame("Button", nil, custPanel, "UIPanelButtonTemplate")
+    addBtn:SetSize(80, 22)
+    addBtn:SetPoint("LEFT", durInput, "RIGHT", 8, 0)
+    addBtn:SetText("Add Spell")
+
+    local pendingID = nil
+
+    spellInput:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput then return end
+        local text = self:GetText()
+        local linkID = text:match("|Hspell:(%d+)")
+        if linkID then
+            pendingID = tonumber(linkID)
+            self:SetText(linkID)
+            local name = LookupSpellName(pendingID)
+            preview:SetText(name or "|cFFFF4444Unknown|r")
+            return
+        end
+        pendingID = ResolveSpell(text)
+        if pendingID then
+            local name = LookupSpellName(pendingID)
+            preview:SetText(name or "|cFFFF4444Unknown ID|r")
+        elseif text:len() > 0 then
+            preview:SetText("|cFF888888resolving...|r")
+        else
+            preview:SetText("")
+        end
+    end)
+
+    addBtn:SetScript("OnClick", function()
+        local sid = pendingID or ResolveSpell(spellInput:GetText())
+        local dur = tonumber(durInput:GetText())
+        if CC:AddCustomSpell(sid, dur) then
+            spellInput:SetText(""); durInput:SetText(""); preview:SetText("")
+            pendingID = nil
+            CC:RefreshSpellList()
+        end
+    end)
+
+    -- Custom list scroll
+    local listHdr = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    listHdr:SetPoint("TOPLEFT", durLbl, "BOTTOMLEFT", 0, -18)
+    listHdr:SetText("Custom tracked spells:")
+
+    local listScroll = CreateFrame("ScrollFrame", "CCCustScroll", custPanel, "UIPanelScrollFrameTemplate")
+    listScroll:SetSize(CAW - 16, CAH - 130)
+    listScroll:SetPoint("TOPLEFT", listHdr, "BOTTOMLEFT", 0, -6)
+
+    local listContent = CreateFrame("Frame", nil, listScroll)
+    listContent:SetWidth(CAW - 32)
+    listScroll:SetScrollChild(listContent)
+    self.spellListContent = listContent
+
+    -- ── Tab switching ──
+
+    local function ShowDefault()
+        defPanel:Show(); custPanel:Hide()
+        tabDefault:SetEnabled(false); tabCustom:SetEnabled(true)
+    end
+    local function ShowCustom()
+        defPanel:Hide(); custPanel:Show()
+        tabDefault:SetEnabled(true); tabCustom:SetEnabled(false)
+        CC:RefreshSpellList()
+    end
+    tabDefault:SetScript("OnClick", ShowDefault)
+    tabCustom:SetScript("OnClick",  ShowCustom)
+
+    -- Default tab active on open
+    ShowDefault()
+    CC:RefreshDefaultSpellList()
+    CC:RefreshSpellList()
+
+    self.optionsFrame = f
+    f:Show()
+end
+
+-- ── Blizzard AddOns stub (opens the standalone frame) ────────────────────────
+
+function CC:BuildOptionsPanel()
+    local panel = CreateFrame("Frame")
+    panel:SetSize(400, 120)
+
+    local lbl = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    lbl:SetPoint("TOPLEFT", 16, -20)
+    lbl:SetText("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
+
+    local note = panel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    note:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -8)
+    note:SetText("Click below to open the full settings window.\nYou can also right-click the minimap button or type /cdc settings.")
+
+    local openBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    openBtn:SetSize(200, 26)
+    openBtn:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -12)
+    openBtn:SetText("Open CooldownCollaborator Settings")
+    openBtn:SetScript("OnClick", function() CC:OpenOptions() end)
+
     local category = Settings.RegisterCanvasLayoutCategory(panel, "CooldownCollaborator")
     Settings.RegisterAddOnCategory(category)
-    self.optionsCategory = category
     self.optionsCategoryID = category.ID
 end

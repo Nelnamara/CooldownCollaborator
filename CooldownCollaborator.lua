@@ -109,6 +109,10 @@ end
 
 function CC:RecordCooldown(unitToken, spellID)
     local data = CC.SpellData[spellID]
+    if CC.verbose then
+        print(string.format("|cFF54a3ffCDC|r cast seen: unit=%s spellID=%s known=%s",
+            tostring(unitToken), tostring(spellID), tostring(data ~= nil)))
+    end
     if not data then return end
     if data.duration < (self.db.minDuration or 60) then return end
     if self.db.disabledSpells and self.db.disabledSpells[spellID] then return end
@@ -201,17 +205,27 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         CC.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
         print("|cFF54a3ffCooldownCollaborator|r position reset.")
     elseif cmd == "settings" then
-        Settings.OpenToCategory(CC.optionsCategoryID)
+        CC:OpenOptions()
+    elseif cmd == "verbose" then
+        CC.verbose = not CC.verbose
+        print("|cFF54a3ffCooldownCollaborator|r verbose cast logging: " .. (CC.verbose and "ON" or "OFF"))
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
+        print("  In group:", tostring(IsInGroup()), " In raid:", tostring(IsInRaid()))
         print("  In encounter:", tostring(CC.inEncounter))
+        print("  Min duration filter:", CC.db.minDuration)
+        local any = false
         for name, entry in pairs(CC.state) do
             for sid, _ in pairs(entry.spells) do
+                any = true
                 local rem = CC:GetRemaining(name, sid)
                 local spell = CC.SpellData[sid]
                 print(string.format("    %s [%s] %s = %.0fs",
                     name, entry.class, spell and spell.name or tostring(sid), rem or 0))
             end
+        end
+        if not any then
+            print("  (no cooldowns recorded yet — try /cdc verbose, then use a tracked CD)")
         end
     else
         if CC.frame then
