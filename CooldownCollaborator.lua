@@ -180,7 +180,9 @@ ef:SetScript("OnEvent", function(self, event, ...)
         C_Timer.After(1, function() CC:BroadcastState() end)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local unitToken, _, spellID = ...
-        CC:RecordCooldown(unitToken, spellID)
+        if CC:IsTrackedUnit(unitToken) then
+            CC:RecordCooldown(unitToken, spellID)
+        end
     elseif event == "CHAT_MSG_ADDON" then
         CC:OnAddonMessage(...)
     elseif event == "PLAYER_LOGOUT" then

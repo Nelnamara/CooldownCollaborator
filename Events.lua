@@ -1,14 +1,16 @@
--- Register UNIT_SPELLCAST_SUCCEEDED for all possible group member unit tokens.
--- Pre-registering all tokens is idempotent and safe — tokens with no live unit never fire.
+-- RegisterUnitEvent only filters to the unit(s) passed in the MOST RECENT
+-- call for a given event - it does not accumulate across separate calls.
+-- Looping it per unit token left the frame listening only to the last
+-- token registered (raid40), so nothing ever fired solo or in small groups.
+-- Use a plain RegisterEvent instead and filter unitToken ourselves.
 function CC:RegisterGroupEvents()
-    local f = self.eventFrame
-    f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-    for i = 1, 4 do
-        f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "party" .. i)
-    end
-    for i = 1, 40 do
-        f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "raid" .. i)
-    end
+    self.eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+end
+
+function CC:IsTrackedUnit(unitToken)
+    return unitToken == "player"
+        or unitToken:match("^party%d$")
+        or unitToken:match("^raid%d%d?$")
 end
 
 function CC:GetActiveGroupNames()
