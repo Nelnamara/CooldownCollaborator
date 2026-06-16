@@ -1,6 +1,13 @@
 -- Addon messaging — sync CD state with other CooldownCollaborator users.
 -- Blocked during boss/M+ encounters AND briefly around death/resurrect; queues
--- and retries rather than dropping. Message format: "spellID:usedAt:playerName:classTag"
+-- and retries rather than dropping.
+--
+-- Message format: "spellID:secondsAgo:playerName:classTag"
+-- GetTime() is seconds since THAT CLIENT's own process started, not a shared
+-- clock - sending a raw GetTime() timestamp and comparing it against the
+-- receiver's own GetTime() is meaningless (produced a displayed "36839:39"
+-- remaining bug). Send elapsed time since cast instead, and have the
+-- receiver re-anchor it to their own GetTime() on arrival.
 
 CC.pendingSyncs = CC.pendingSyncs or {}
 
@@ -23,7 +30,8 @@ function CC:SendCooldownSync(spellID, playerName, usedAt)
 
     local entry = self.state[playerName]
     local classTag = entry and entry.class or "UNKNOWN"
-    local msg = string.format("%d:%.3f:%s:%s", spellID, usedAt, playerName, classTag)
+    local secondsAgo = math.max(0, GetTime() - usedAt)
+    local msg = string.format("%d:%.3f:%s:%s", spellID, secondsAgo, playerName, classTag)
 
     local result = C_ChatInfo.SendAddonMessage(self.PREFIX, msg, chatType)
     if CC.verbose then
@@ -41,17 +49,20 @@ end
 function CC:OnAddonMessage(prefix, message, _, sender)
     if prefix ~= self.PREFIX then return end
 
-    local spellIDStr, usedAtStr, playerName, classTag = strsplit(":", message, 4)
-    local spellID = tonumber(spellIDStr)
-    local usedAt  = tonumber(usedAtStr)
+    local spellIDStr, secondsAgoStr, playerName, classTag = strsplit(":", message, 4)
+    local spellID    = tonumber(spellIDStr)
+    local secondsAgo = tonumber(secondsAgoStr)
 
     if CC.verbose then
         print(string.format("|cFF54a3ffCDC|r sync received from %s: %s", tostring(sender), tostring(message)))
     end
 
-    if not spellID or not usedAt or not playerName or playerName == "" then return end
+    if not spellID or not secondsAgo or not playerName or playerName == "" then return end
 
-    self:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
+    -- Re-anchor to OUR OWN clock - secondsAgo is clock-independent, unlike
+    -- the sender's raw GetTime() value.
+    local localUsedAt = GetTime() - secondsAgo
+    self:RecordCooldownFromComm(playerName, spellID, localUsedAt, classTag)
 end
 
 -- Retry anything that failed to send (throttled, lockdown, etc.). SendCooldownSync
