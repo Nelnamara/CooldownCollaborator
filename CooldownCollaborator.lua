@@ -161,6 +161,24 @@ function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
     end
 end
 
+-- Resolve a player's name back to a live unit token, so we can check things
+-- (alive/dead) that GetCapabilityStatus's name-only entries cannot.
+local function FindUnitToken(name)
+    if UnitName("player") == name then return "player" end
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local token = "raid" .. i
+            if UnitName(token) == name then return token end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumGroupMembers() - 1 do
+            local token = "party" .. i
+            if UnitName(token) == name then return token end
+        end
+    end
+    return nil
+end
+
 -- Raid lead / assist only: target a dead player and announce who should
 -- rez them, naming the specific provider whose Battle Rez is ready right
 -- now rather than a generic "someone rez" callout.
@@ -187,11 +205,19 @@ function CC:RequestRez()
     local status = CC:GetCapabilityStatus("BATTLEREZ")
     local provider = nil
     for _, entry in ipairs(status) do
-        if entry.ready then provider = entry; break end
+        -- A dead player can't rez anyone, including themselves - skip the
+        -- target and skip anyone else who is also currently dead/ghost.
+        if entry.ready and entry.name ~= targetName then
+            local token = FindUnitToken(entry.name)
+            if not token or not UnitIsDeadOrGhost(token) then
+                provider = entry
+                break
+            end
+        end
     end
 
     if not provider then
-        print("|cFF54a3ffCDC|r No Battle Rez available right now.")
+        print("|cFF54a3ffCDC|r No living Battle Rez provider available right now.")
         return
     end
 
