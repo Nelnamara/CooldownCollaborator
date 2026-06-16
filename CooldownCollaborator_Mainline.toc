@@ -5,7 +5,6 @@
 ## Version: 1.0.0
 ## SavedVariables: CooldownCollaboratorDB
 ## X-Curse-Project-ID:
-## X-Wago-ID:
 ## X-Website: https://github.com/Nelnamara/CooldownCollaborator
 ## X-License: All Rights Reserved
 
