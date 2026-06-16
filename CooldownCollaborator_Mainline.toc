@@ -13,3 +13,5 @@ Data.lua
 Events.lua
 Comms.lua
 UI.lua
+Minimap.lua
+Options.lua

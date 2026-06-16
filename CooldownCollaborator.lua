@@ -14,13 +14,16 @@ CC.state = {}
 CC.inEncounter = false
 
 local DEFAULTS = {
-    x           = 0,
-    y           = 200,
-    scale       = 1.0,
-    locked      = false,
-    minDuration = 60,
-    showReady   = true,
-    alpha       = 0.9,
+    x              = 0,
+    y              = 200,
+    scale          = 1.0,
+    locked         = false,
+    minDuration    = 60,
+    showReady      = true,
+    alpha          = 0.9,
+    minimapAngle   = 225,
+    minimapHide    = false,
+    customSpells   = {},    -- [spellID] = { name, duration, icon }
 }
 
 function CC:Init()
@@ -32,9 +35,75 @@ function CC:Init()
         if self.db[k] == nil then self.db[k] = v end
     end
 
+    -- Merge user's custom spells into the live SpellData table
+    self:LoadCustomSpells()
+
     C_ChatInfo.RegisterAddonMessagePrefix(self.PREFIX)
     self:RegisterGroupEvents()
+    self:BuildOptionsPanel()
+    self:BuildMinimapButton()
     self:BuildUI()
+end
+
+function CC:LoadCustomSpells()
+    for idStr, data in pairs(self.db.customSpells) do
+        local spellID = tonumber(idStr)
+        if spellID and data.duration and data.duration > 0 then
+            CC.SpellData[spellID] = {
+                name     = data.name or ("Spell " .. spellID),
+                duration = data.duration,
+                icon     = data.icon or 134400,
+                class    = "UNKNOWN",
+                custom   = true,
+            }
+        end
+    end
+end
+
+function CC:AddCustomSpell(spellID, duration)
+    spellID = tonumber(spellID)
+    if not spellID or not duration or duration <= 0 then return false end
+
+    local name, icon
+    local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+    if info then
+        name = info.name
+        icon = info.iconID
+    else
+        name = GetSpellInfo and select(1, GetSpellInfo(spellID)) or ("Spell " .. spellID)
+        icon = GetSpellInfo and select(3, GetSpellInfo(spellID)) or 134400
+    end
+
+    if not name then
+        print("|cFF54a3ffCooldownCollaborator|r Unknown spell ID: " .. spellID)
+        return false
+    end
+
+    self.db.customSpells[tostring(spellID)] = {
+        name     = name,
+        duration = duration,
+        icon     = icon or 134400,
+    }
+    CC.SpellData[spellID] = {
+        name     = name,
+        duration = duration,
+        icon     = icon or 134400,
+        class    = "UNKNOWN",
+        custom   = true,
+    }
+    print(string.format("|cFF54a3ffCooldownCollaborator|r Added: %s (%ds)", name, duration))
+    return true
+end
+
+function CC:RemoveCustomSpell(spellID)
+    spellID = tonumber(spellID)
+    if not spellID then return end
+    self.db.customSpells[tostring(spellID)] = nil
+    if CC.SpellData[spellID] and CC.SpellData[spellID].custom then
+        CC.SpellData[spellID] = nil
+    end
+    self:RefreshRows()
+    self:RefreshSpellList()
 end
 
 function CC:RecordCooldown(unitToken, spellID)
@@ -80,7 +149,7 @@ function CC:GetRemaining(playerName, spellID)
     return rem > 0 and rem or 0
 end
 
--- Event frame — created once, methods added by other files before first event fires
+-- Event frame
 local ef = CreateFrame("Frame", "CCEventFrame")
 CC.eventFrame = ef
 
@@ -102,7 +171,6 @@ ef:SetScript("OnEvent", function(self, event, ...)
         CC.inEncounter = true
     elseif event == "ENCOUNTER_END" then
         CC.inEncounter = false
-        -- Wait 1 frame for lockdown to release before broadcasting
         C_Timer.After(1, function() CC:BroadcastState() end)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local unitToken, _, spellID = ...
@@ -130,20 +198,20 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         CC.frame:ClearAllPoints()
         CC.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
         print("|cFF54a3ffCooldownCollaborator|r position reset.")
+    elseif cmd == "settings" then
+        Settings.OpenToCategory(CC.optionsCategory)
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
         print("  In encounter:", tostring(CC.inEncounter))
-        print("  Tracked players:")
         for name, entry in pairs(CC.state) do
-            for sid, usedAt in pairs(entry.spells) do
+            for sid, _ in pairs(entry.spells) do
                 local rem = CC:GetRemaining(name, sid)
                 local spell = CC.SpellData[sid]
-                print(string.format("    %s [%s] %s = %.0fs remaining",
+                print(string.format("    %s [%s] %s = %.0fs",
                     name, entry.class, spell and spell.name or tostring(sid), rem or 0))
             end
         end
     else
-        -- Toggle visibility
         if CC.frame then
             CC.frame:SetShown(not CC.frame:IsShown())
         end

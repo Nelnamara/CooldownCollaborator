@@ -22,9 +22,10 @@ Rallying Cry · Aura Mastery · Lay on Hands · Blessing of Protection · Guardi
 | Command | Effect |
 |---|---|
 | `/cdc` | Toggle panel visibility |
-| `/cc lock` / `/cc unlock` | Lock or unlock frame position |
-| `/cc reset` | Reset to default position |
-| `/cc debug` | Print all tracked cooldowns and remaining times |
+| `/cdc lock` / `/cdc unlock` | Lock or unlock frame position |
+| `/cdc reset` | Reset to default position |
+| `/cdc debug` | Print all tracked cooldowns and remaining times |
+| `/cdc settings` | Open the options panel |
 
 ## Compatibility
 
