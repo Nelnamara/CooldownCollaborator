@@ -7,12 +7,6 @@ function CC:RegisterGroupEvents()
     self.eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 end
 
-function CC:IsTrackedUnit(unitToken)
-    return unitToken == "player"
-        or unitToken:match("^party%d$")
-        or unitToken:match("^raid%d%d?$")
-end
-
 function CC:GetActiveGroupNames()
     local names = {}
     local playerName = UnitName("player")

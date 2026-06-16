@@ -179,8 +179,14 @@ ef:SetScript("OnEvent", function(self, event, ...)
         CC.inEncounter = false
         C_Timer.After(1, function() CC:BroadcastState() end)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        -- spellID is SECRET for party/raid tokens — confirmed by live crash
+        -- ("attempted to index a table that cannot be indexed with secret
+        -- keys") when a party member's cast fired this event. Only "player"
+        -- gives a safe, indexable spellID. Other players' cooldowns must
+        -- arrive exclusively via the addon-message sync (OnAddonMessage),
+        -- never by reading this event for their unit token directly.
         local unitToken, _, spellID = ...
-        if CC:IsTrackedUnit(unitToken) then
+        if unitToken == "player" then
             CC:RecordCooldown(unitToken, spellID)
         end
     elseif event == "CHAT_MSG_ADDON" then
