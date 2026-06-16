@@ -4,7 +4,7 @@
 ## Author: Nelnamara
 ## Version: 1.0.0
 ## SavedVariables: CooldownCollaboratorDB
-## X-Curse-Project-ID:
+## X-Curse-Project-ID: 1577127
 ## X-Website: https://github.com/Nelnamara/CooldownCollaborator
 ## X-License: All Rights Reserved
 
