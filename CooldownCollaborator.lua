@@ -114,8 +114,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
-SLASH_COOLDOWNCOLLABORATOR1 = "/cc"
-SLASH_COOLDOWNCOLLABORATOR2 = "/collab"
+SLASH_COOLDOWNCOLLABORATOR1 = "/cdc"
 SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     local cmd = (msg or ""):match("^%s*(%S*)"):lower()
     if cmd == "lock" then
