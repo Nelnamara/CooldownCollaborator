@@ -3,7 +3,7 @@
 -- Author: Nelnamara
 
 CooldownCollaborator = {}
-local CC = CooldownCollaborator
+CC = CooldownCollaborator
 
 CC.version = "1.0.0"
 CC.PREFIX   = "CDCOLLAB"
