@@ -129,7 +129,7 @@ end
 
 function CC:BuildDefaultSpellsTab(parent)
     local scroll = CreateFrame("ScrollFrame", "CCDefaultScroll", parent, "UIPanelScrollFrameTemplate")
-    scroll:SetSize(PANEL_W - 48, parent:GetHeight() - 8)
+    scroll:SetSize(PANEL_W - 48, 218)
     scroll:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
 
     local content = CreateFrame("Frame", nil, scroll)
@@ -241,7 +241,7 @@ end
 function CC:BuildCustomSpellsTab(parent)
     local instrText = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     instrText:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -4)
-    instrText:SetText("Shift-click a spell from your spellbook, or type a Spell ID:")
+    instrText:SetText("Type a spell name or ID below. To shift-click a spell link,\nopen settings from the minimap button (right-click) instead.")
 
     local spellInput = CreateFrame("EditBox", "CCSpellInput", parent, "InputBoxTemplate")
     spellInput:SetSize(200, 20)
@@ -273,29 +273,54 @@ function CC:BuildCustomSpellsTab(parent)
 
     local pendingSpellID = nil
 
+    local function ResolveSpell(text)
+        -- Spell link pasted via shift-click
+        local linkID = text:match("|Hspell:(%d+)")
+        if linkID then
+            return tonumber(linkID)
+        end
+        -- Numeric spell ID typed directly
+        if text:match("^%d+$") then
+            return tonumber(text)
+        end
+        -- Spell name typed — try old GetSpellInfo(name) which returns spellID as 7th value
+        if GetSpellInfo and text:len() >= 2 then
+            local n, _, _, _, _, _, sid = GetSpellInfo(text)
+            if n and sid then return sid end
+        end
+        return nil
+    end
+
+    local function LookupName(spellID)
+        if not spellID then return nil end
+        local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+        if info then return info.name end
+        return GetSpellInfo and select(1, GetSpellInfo(spellID))
+    end
+
     spellInput:SetScript("OnTextChanged", function(self, userInput)
         if not userInput then return end
         local text = self:GetText()
+        -- Strip link formatting if pasted
         local linkID = text:match("|Hspell:(%d+)")
         if linkID then
             pendingSpellID = tonumber(linkID)
             self:SetText(linkID)
-        else
-            pendingSpellID = tonumber(text)
+            preview:SetText(LookupName(pendingSpellID) or "|cFFFF4444Unknown ID|r")
+            return
         end
+        pendingSpellID = ResolveSpell(text)
         if pendingSpellID then
-            local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(pendingSpellID)
-            local name = info and info.name
-                or (GetSpellInfo and select(1, GetSpellInfo(pendingSpellID)))
-            preview:SetText(name or "|cFFFF4444Unknown ID|r")
+            preview:SetText(LookupName(pendingSpellID) or "|cFFFF4444Unknown ID|r")
+        elseif text:len() > 0 then
+            preview:SetText("|cFF888888type name or ID|r")
         else
-            pendingSpellID = nil
             preview:SetText("")
         end
     end)
 
     addBtn:SetScript("OnClick", function()
-        local sid = pendingSpellID or tonumber(spellInput:GetText())
+        local sid = pendingSpellID or ResolveSpell(spellInput:GetText())
         local dur = tonumber(durInput:GetText())
         if CC:AddCustomSpell(sid, dur) then
             spellInput:SetText(""); durInput:SetText(""); preview:SetText("")
