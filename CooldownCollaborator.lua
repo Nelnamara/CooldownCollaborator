@@ -49,7 +49,10 @@ function CC:Init()
         if self.db[k] == nil then self.db[k] = v end
     end
 
-    -- Merge user's custom spells into the live SpellData table
+    -- Merge built-in consumables, then user's custom/registered ones
+    for id, data in pairs(CC.BuiltinConsumables or {}) do
+        CC.SpellData[id] = data
+    end
     self:LoadCustomSpells()
     self:LoadConsumableBuffs()
 

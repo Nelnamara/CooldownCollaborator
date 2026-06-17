@@ -53,6 +53,13 @@ CC.SpellData = {
     [391215] = { name = "Fury of the Aspects",       duration = 300, icon = 3578226, class = "EVOKER"      },
 }
 
+-- Built-in consumable buffs — tracked automatically, no /cdc consumable needed.
+-- Flask buff from Midnight cauldron: discover in-game via /cdc verbose, then
+-- register with: /cdc consumable <id> 3600 <Flask Name>
+CC.BuiltinConsumables = {
+    [1232585] = { name = "Well Fed",  duration = 3600, icon = 134052, class = "CONSUMABLE", consumable = true },
+}
+
 -- Class display colors (r, g, b) matching Blizzard's RAID_CLASS_COLORS
 CC.ClassColors = {
     WARRIOR     = { 0.78, 0.61, 0.43 },
