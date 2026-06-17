@@ -26,11 +26,12 @@ local BUFF_PREFIX = "CDCBUFF"
 
 -- Applied on top of CC.BuiltinConsumables (Data.lua) at load time
 local BUILTIN_CATEGORIES = {
-    [1232585] = "food",   -- Well Fed (any Midnight feast)
-    [1235057] = "flask",  -- Flask of Thalassian Resistance (Versatility)
+    [1232585] = "food",   -- Well Fed (Feast of the Midnight Masquerade)
+    [462187]  = "food",   -- Hearty Well Fed (Hearty Feast of the Midnight Masquerade)
     [1230876] = "flask",  -- Flask of the Magisters (Mastery)
-    -- Haste and Crit flask buff IDs: discover via /cdc verbose then drink the flask
-    -- and register with: /cdc consumable <id> 3600 <name> flask
+    [1230877] = "flask",  -- Flask of the Blood Knights (Haste)
+    [1230878] = "flask",  -- Flask of the Shattered Sun (Crit)
+    [1235057] = "flask",  -- Flask of Thalassian Resistance (Versatility)
 }
 
 -------------------------------------------------------------------------------

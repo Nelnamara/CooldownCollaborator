@@ -57,7 +57,14 @@ CC.SpellData = {
 -- Flask buff from Midnight cauldron: discover in-game via /cdc verbose, then
 -- register with: /cdc consumable <id> 3600 <Flask Name>
 CC.BuiltinConsumables = {
-    [1232585] = { name = "Well Fed",  duration = 3600, icon = 134052, class = "CONSUMABLE", consumable = true },
+    -- Midnight feasts
+    [1232585] = { name = "Well Fed",        duration = 3600, icon = 134052, class = "CONSUMABLE", consumable = true },
+    [462187]  = { name = "Hearty Well Fed", duration = 3600, icon = 134052, class = "CONSUMABLE", consumable = true },
+    -- Midnight flasks
+    [1230876] = { name = "Flask of the Magisters",        duration = 3600, icon = 134823, class = "CONSUMABLE", consumable = true },
+    [1230877] = { name = "Flask of the Blood Knights",    duration = 3600, icon = 134823, class = "CONSUMABLE", consumable = true },
+    [1230878] = { name = "Flask of the Shattered Sun",    duration = 3600, icon = 134823, class = "CONSUMABLE", consumable = true },
+    [1235057] = { name = "Flask of Thalassian Resistance",duration = 3600, icon = 134823, class = "CONSUMABLE", consumable = true },
 }
 
 -- Class display colors (r, g, b) matching Blizzard's RAID_CLASS_COLORS
