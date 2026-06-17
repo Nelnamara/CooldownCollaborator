@@ -187,7 +187,35 @@ function CC:RefreshEssentials()
 
     self.essentialsEmptyLabel:SetShown(not any)
 
-    -- Lay out visible rows top to bottom
+    if rezHeaderRow and CC:CanRequestRez() then
+        self.essentialsRezBtn:ClearAllPoints()
+        self.essentialsRezBtn:SetPoint("LEFT", rezHeaderRow.headerText, "RIGHT", 6, 0)
+        self.essentialsRezBtn:Show()
+    else
+        self.essentialsRezBtn:Hide()
+    end
+
+    -- Group buff status strip — Flask N/N  Food N/N at the bottom of the bar
+    local buffStatus = IsInGroup() and CC:GetGroupBuffStatus()
+    if buffStatus and buffStatus.total > 0 then
+        idx = idx + 1
+        if idx <= MAX_ROWS then
+            local flaskColor = buffStatus.flask < buffStatus.total and "|cFFFF6666" or "|cFF66FF66"
+            local foodColor  = buffStatus.food  < buffStatus.total and "|cFFFF6666" or "|cFF66FF66"
+            local row = rows[idx]
+            row.isHeader = true
+            row.headerText:SetText(string.format(
+                "%sFlask %d/%d|r   %sFood %d/%d|r",
+                flaskColor, buffStatus.flask, buffStatus.total,
+                foodColor,  buffStatus.food,  buffStatus.total))
+            row.headerText:SetTextColor(1, 1, 1)
+            row.headerText:Show()
+            row.icon:Hide(); row.nameText:Hide(); row.timeText:Hide(); row.classBar:Hide()
+            row:Show()
+        end
+    end
+
+    -- Final layout pass (needed after buff row may have been added above)
     local y = HEADER_HEIGHT
     for i = 1, idx do
         local row = rows[i]
@@ -196,14 +224,6 @@ function CC:RefreshEssentials()
         y = y + ROW_HEIGHT
     end
     self.essentialsFrame:SetHeight(math.max(y, HEADER_HEIGHT + ROW_HEIGHT))
-
-    if rezHeaderRow and CC:CanRequestRez() then
-        self.essentialsRezBtn:ClearAllPoints()
-        self.essentialsRezBtn:SetPoint("LEFT", rezHeaderRow.headerText, "RIGHT", 6, 0)
-        self.essentialsRezBtn:Show()
-    else
-        self.essentialsRezBtn:Hide()
-    end
 
     if IsInGroup() and self.db.essentialsEnabled then
         self.essentialsFrame:Show()

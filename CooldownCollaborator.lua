@@ -57,6 +57,7 @@ function CC:Init()
     self:LoadConsumableBuffs()
 
     C_ChatInfo.RegisterAddonMessagePrefix(self.PREFIX)
+    C_ChatInfo.RegisterAddonMessagePrefix("CDCBUFF")
     self:RegisterGroupEvents()
     self:BuildOptionsPanel()
     self:BuildMinimapButton()
@@ -266,6 +267,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
             self:RegisterEvent("ENCOUNTER_START")
             self:RegisterEvent("ENCOUNTER_END")
             self:RegisterEvent("CHAT_MSG_ADDON")
+            self:RegisterEvent("INSPECT_READY")
             self:RegisterEvent("PLAYER_LOGOUT")
         end
     elseif event == "GROUP_ROSTER_UPDATE" then
@@ -288,6 +290,8 @@ ef:SetScript("OnEvent", function(self, event, ...)
         if unitToken == "player" then
             CC:RecordCooldown(unitToken, spellID)
         end
+    elseif event == "INSPECT_READY" then
+        CC:OnInspectReady(...)
     elseif event == "CHAT_MSG_ADDON" then
         CC:OnAddonMessage(...)
     elseif event == "PLAYER_LOGOUT" then
@@ -339,12 +343,14 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         end
     elseif cmd == "roster" then
         CC:ScanRoster()
-        print("|cFF54a3ffCooldownCollaborator|r roster:")
+        print("|cFF54a3ffCooldownCollaborator|r roster (spec refinement queued):")
         for name, info in pairs(CC.roster or {}) do
             local caps = {}
             for key in pairs(info.capabilities) do caps[#caps + 1] = key end
+            local specName = CC:GetSpecName(name)
+            local classStr = specName and (specName .. " " .. info.class) or info.class
             print(string.format("    %s [%s] capabilities: %s",
-                name, info.class, #caps > 0 and table.concat(caps, ", ") or "none"))
+                name, classStr, #caps > 0 and table.concat(caps, ", ") or "none"))
         end
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)

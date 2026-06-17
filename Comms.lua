@@ -47,6 +47,12 @@ function CC:SendCooldownSync(spellID, playerName, usedAt)
 end
 
 function CC:OnAddonMessage(prefix, message, _, sender)
+    -- Route buff-status messages to the consumables handler
+    if prefix == "CDCBUFF" then
+        CC:OnBuffStatusMessage(sender, message)
+        return
+    end
+
     if prefix ~= self.PREFIX then return end
 
     local spellIDStr, secondsAgoStr, playerName, classTag = strsplit(":", message, 4)
