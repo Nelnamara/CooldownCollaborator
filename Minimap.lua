@@ -19,24 +19,10 @@ function CC:BuildMinimapButton()
     btn:RegisterForDrag("LeftButton")
     btn:RegisterForClicks("AnyUp")
 
-    -- Icon (addon artwork)
-    local icon = btn:CreateTexture(nil, "BACKGROUND")
+    -- Self-contained round icon (gold ring baked in) — SetAllPoints centers it cleanly.
+    local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints()
     icon:SetTexture("Interface\\AddOns\\CooldownCollaborator\\Media\\minimap.png")
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-
-    -- Circular mask so the icon looks like other minimap buttons
-    local mask = btn:CreateMaskTexture()
-    mask:SetAllPoints()
-    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask",
-        "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    icon:AddMaskTexture(mask)
-
-    -- Border ring
-    local border = btn:CreateTexture(nil, "OVERLAY")
-    border:SetSize(54, 54)
-    border:SetPoint("CENTER")
-    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     -- Initial position
     btn:SetPoint("CENTER", Minimap, "CENTER", AngleToOffset(db.minimapAngle or 225))
