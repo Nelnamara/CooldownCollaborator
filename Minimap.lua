@@ -19,10 +19,10 @@ function CC:BuildMinimapButton()
     btn:RegisterForDrag("LeftButton")
     btn:RegisterForClicks("AnyUp")
 
-    -- Icon (Rallying Cry)
+    -- Icon (addon artwork)
     local icon = btn:CreateTexture(nil, "BACKGROUND")
     icon:SetAllPoints()
-    icon:SetTexture(132351)
+    icon:SetTexture("Interface\\AddOns\\CooldownCollaborator\\Media\\minimap.png")
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
     -- Circular mask so the icon looks like other minimap buttons
