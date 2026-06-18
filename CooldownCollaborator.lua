@@ -254,6 +254,55 @@ function CC:GetRemaining(playerName, spellID)
     return rem > 0 and rem or 0
 end
 
+-- Live readiness for the LOCAL player's own spell, in seconds (0 = ready), or nil
+-- if we can't read it (spell unknown, or a value is still secret in this context).
+--
+-- Midnight 12.0.7 un-secreted combat-res (and other whitelisted) cooldowns AND
+-- charge counts, so for our own capability spells we can show true readiness
+-- immediately — even right after /reload or before we've observed a cast — and
+-- respect the raid-wide Battle Rez charge pool. Remote players are still learned
+-- only via the CDCOLLAB sync (their values remain secret to us).
+--
+-- pcall-guarded: a bare read of a secret value doesn't error, but comparing/using
+-- one does. If any field is still secret here the compare throws, ok is false, and
+-- we return nil so the caller falls back to the observed-cast model (GetRemaining).
+function CC:GetLocalReadiness(spellID)
+    if not C_Spell then return nil end
+
+    local known = false
+    pcall(function()
+        known = (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID))
+             or (IsSpellKnown and IsSpellKnown(spellID))
+    end)
+    if not known then return nil end
+
+    local remaining
+    local ok = pcall(function()
+        -- Charge-based (raid Battle Rez pool): ready while >=1 charge is banked,
+        -- otherwise count down to the next charge.
+        local ch = C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(spellID)
+        if ch and ch.maxCharges and ch.maxCharges > 1 then
+            if (ch.currentCharges or 0) >= 1 then
+                remaining = 0
+            else
+                local rem = (ch.cooldownStart or 0) + (ch.cooldownDuration or 0) - GetTime()
+                remaining = rem > 0 and rem or 0
+            end
+            return
+        end
+        -- Plain cooldown. duration <= 1.5 is just the GCD → treat as ready.
+        local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(spellID)
+        if cd and cd.isEnabled ~= false and cd.isActive and cd.duration and cd.duration > 1.5 then
+            local rem = (cd.startTime + cd.duration) - GetTime()
+            remaining = rem > 0 and rem or 0
+        else
+            remaining = 0  -- known and not on a real cooldown → ready
+        end
+    end)
+    if not ok then return nil end
+    return remaining
+end
+
 -- Event frame
 local ef = CreateFrame("Frame", "CCEventFrame")
 CC.eventFrame = ef

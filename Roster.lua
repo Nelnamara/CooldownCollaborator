@@ -199,14 +199,23 @@ function CC:GetCapabilityStatus(capKey)
     local results = {}
     if not self.roster then return results end
 
+    local playerName = UnitName("player")
+
     for name, info in pairs(self.roster) do
         local spellIDs = info.capabilities[capKey]
         if spellIDs then
             local bestRemaining = nil
             local usedSpellID   = nil
+            local isLocal       = (name == playerName)
 
             for _, spellID in ipairs(spellIDs) do
-                local remaining = self:GetRemaining(name, spellID)
+                -- For ourselves, prefer the true live cooldown/charge readout
+                -- (12.0.7 un-secreted these); fall back to the observed-cast
+                -- model if it's unreadable. Remote players: comm only.
+                local remaining = isLocal and self:GetLocalReadiness(spellID) or nil
+                if remaining == nil then
+                    remaining = self:GetRemaining(name, spellID)
+                end
                 if remaining and (not bestRemaining or remaining < bestRemaining) then
                     bestRemaining = remaining
                     usedSpellID   = spellID
