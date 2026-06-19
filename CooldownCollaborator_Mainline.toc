@@ -3,7 +3,7 @@
 ## Notes: Group and raid cooldown coordinator - tracks all members' major defensive and utility CDs, auto-switches between party and raid layout.
 ## IconTexture: Interface\AddOns\CooldownCollaborator\Media\icon.png
 ## Author: Nelnamara
-## Version: 1.0.2
+## Version: 1.0.3
 ## SavedVariables: CooldownCollaboratorDB
 ## X-Curse-Project-ID: 1577127
 ## X-Website: https://github.com/Nelnamara/CooldownCollaborator

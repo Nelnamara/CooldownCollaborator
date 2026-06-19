@@ -5,7 +5,7 @@
 CooldownCollaborator = {}
 CC = CooldownCollaborator
 
-CC.version = "1.0.2"
+CC.version = "1.0.3"
 CC.PREFIX   = "CDCOLLAB"
 
 -- state[playerName] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
