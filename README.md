@@ -57,6 +57,31 @@ In Midnight, `C_Spell.GetSpellCooldown()` timing fields are secret values — yo
 
 Sync messages carry elapsed time since cast, not an absolute timestamp — `GetTime()` is seconds since each client's own process started, not a shared clock, so comparing one client's raw timestamp against another's produces nonsense. Each client re-anchors incoming sync data to its own clock on arrival.
 
+## Changelog
+
+### v1.0.3
+- Live local readiness for Battle-Rez and Bloodlust providers — reads your own charges and cooldown directly now that those values are no longer secret on the `player` unit in 12.0.7
+- Minimap button resized to the standard 24px
+
+### v1.0.2
+- Minimap button and AddOns-list icon using the addon artwork (self-contained gold ring, fixes the off-center tracking-border offset)
+
+### v1.0.1
+- Built-in consumable tracking — Well Fed and Haste/Crit flask buffs detected automatically
+- Group flask/food status strip
+- Spec detection refined via `NotifyInspect`
+
+### v1.0.0
+- Initial release: shared cooldown panel (29 tracked spells across 13 classes), roster capability scan, Essentials Bar, Lane View, raid-lead Request Rez, and addon-message sync
+
+## Roadmap
+
+- [ ] **Click-to-expand missing buffs** — show *which* group members are missing flask/food by name
+- [ ] **Dual potion tracking** — combat/utility potion usage windows (e.g. Voidlight)
+- [ ] **Consumable ranks** — quality-tiered food/flask display (legendary → quest-grade)
+- [ ] **Encounter sync hardening** — broader retry coverage across death/lockdown windows
+- [ ] **Per-spec capability detail** — distinguish talented Battle-Rez/Lust availability, not just class
+
 ## Author
 
 Nelnamara — [CurseForge](https://www.curseforge.com/wow/addons/cooldowncollaborator) · [GitHub](https://github.com/Nelnamara/CooldownCollaborator)
