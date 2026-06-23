@@ -21,6 +21,7 @@ flask/food status, and a minimap button.
 - `GetTime()` is per-client (seconds since that client's process start). Wire **secondsAgo**, not a raw timestamp; receiver re-anchors with `GetTime() - secondsAgo`.
 - `RegisterUnitEvent` **overwrites** the unit filter (doesn't accumulate) — use `RegisterEvent` + manual token filtering.
 - `AreOutgoingAddonChatMessagesRestricted()` is unreliable — attempt the send and queue/retry on a non-nil result code.
+- **12.0.7 un-secreted combat-res (and some whitelisted) cooldowns + charge counts for the `"player"`.** `CC:GetLocalReadiness(spellID)` (in `CooldownCollaborator.lua`) reads your OWN Battle-Rez/Bloodlust true cooldown + the raid Battle-Rez charge pool via `C_Spell.GetSpellCooldown`/`GetSpellCharges`, pcall-guarded; `Roster.lua:GetCapabilityStatus` prefers it for the local player and falls back to the observed-cast model when unreadable. Remote players' values stay secret → still comm-only. (v1.0.3)
 
 ## Slash
 `/cdc` (toggle) · `verbose` · `roster` · `debug` · `essentials` · `lanes` · `rez` · `consumable <id> <dur> <name>` · `lock`/`unlock` · `settings`
@@ -29,7 +30,7 @@ flask/food status, and a minimap button.
 - BigWigs **packager runs on `v*` tag push** (GitHub Actions). Pushing `main` does NOT release.
 - CurseForge API secret is named **`CURSFORGE_API_KEY`** (misspelled — missing the E — but consistent across the suite; do not "fix" it).
 - Local test deploy: copy changed files to `D:\World of Warcraft\_retail_\Interface\AddOns\CooldownCollaborator\`.
-- Current version: **1.0.2** (Interface 120007).
+- Current version: **1.0.3** (Interface 120007). v1.0.3 added live local readiness for Battle-Rez/Bloodlust (see the combat-res gotcha above); v1.0.1 built-in consumable + flask/food strip; v1.0.2 minimap button polish.
 
 ## Conventions
 - **Never** append a `Co-Authored-By` trailer to commits.
