@@ -54,8 +54,15 @@ local function ResolveSpell(text)
     local linkID = text:match("|Hspell:(%d+)")
     if linkID then return tonumber(linkID) end
     if text:match("^%d+$") then return tonumber(text) end
-    -- name lookup via old compat API (7th return = canonical spellID)
-    if GetSpellInfo and text:len() >= 2 then
+    if text:len() < 2 then return nil end
+    -- C_Spell.GetSpellInfo takes a spell name too (only spells the player
+    -- knows resolve by name). The old global is gone on retail 12.x and Forever.
+    if C_Spell and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, text)
+        if ok and info and info.spellID then return info.spellID end
+    end
+    -- old compat API (7th return = canonical spellID), older clients only
+    if GetSpellInfo then
         local n, _, _, _, _, _, sid = GetSpellInfo(text)
         if n and sid then return sid end
     end

@@ -21,31 +21,12 @@ CC.buffRoster       = CC.buffRoster or {}        -- [playerName] = { flask=bool,
 local BUFF_PREFIX = "CDCBUFF"
 
 -------------------------------------------------------------------------------
--- Built-in consumable categories — known Midnight IDs
--------------------------------------------------------------------------------
-
--- Applied on top of CC.BuiltinConsumables (Data.lua) at load time
-local BUILTIN_CATEGORIES = {
-    [1232585] = "food",   -- Well Fed (Feast of the Midnight Masquerade)
-    [462187]  = "food",   -- Hearty Well Fed (Hearty Feast of the Midnight Masquerade)
-    [1230876] = "flask",  -- Flask of the Magisters (Mastery)
-    [1230877] = "flask",  -- Flask of the Blood Knights (Haste)
-    [1230878] = "flask",  -- Flask of the Shattered Sun (Crit)
-    [1235057] = "flask",  -- Flask of Thalassian Resistance (Versatility)
-}
-
--------------------------------------------------------------------------------
 -- Load / register consumables
 -------------------------------------------------------------------------------
 
 function CC:LoadConsumableBuffs()
-    -- Apply categories to built-ins first
-    for id, cat in pairs(BUILTIN_CATEGORIES) do
-        if CC.SpellData[id] then
-            CC.SpellData[id].category = cat
-        end
-    end
-
+    -- Built-ins (CC.BuiltinConsumables, per client in Data.lua) already carry
+    -- their category and are merged into CC.SpellData by CC:Init.
     for idStr, data in pairs(self.db.consumableBuffs or {}) do
         local spellID = tonumber(idStr)
         if spellID and data.duration and data.duration > 0 then
@@ -115,47 +96,75 @@ end
 -- Self-detection poll (rising-edge only)
 -------------------------------------------------------------------------------
 
+-- Is this aura on the player? true/false, or nil when it can't be read right
+-- now. Auras are secret in combat on Forever and on retail 12.1, and reading
+-- one there can throw ("Auras cannot be accessed when secret while tainted"),
+-- so the read and the nil-compare both run inside the pcall.
+local function PlayerHasAura(spellID)
+    local present, expiresAt
+    local ok = pcall(function()
+        local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
+        present = aura ~= nil
+        -- expirationTime is GetTime()-based; 0 means no expiry. Read inside the
+        -- pcall too: it can be secret.
+        if aura and aura.expirationTime and aura.expirationTime > 0 then
+            expiresAt = aura.expirationTime
+        end
+    end)
+    if not ok then return nil end
+    return present, expiresAt
+end
+
 function CC:PollConsumables()
+    -- Flask/food checks are a pre-pull thing; in combat the auras are secret.
+    if InCombatLockdown() then return end
+
     local myName   = UnitName("player")
     local changed  = false
     local hasFlask = false
     local hasFood  = false
 
-    -- Check built-ins
-    for id, cat in pairs(BUILTIN_CATEGORIES) do
-        local present   = C_UnitAuras.GetPlayerAuraBySpellID(id) ~= nil
-        local wasActive = self.consumableActive[id]
-
-        if present and not wasActive then
-            CC:RecordCooldown("player", id)
+    local function check(spellID, cat)
+        local present, expiresAt = PlayerHasAura(spellID)
+        if present == nil then
+            -- Unreadable: keep what we knew.
+            present = self.consumableActive[spellID] and true or false
+        else
+            local wasActive = self.consumableActive[spellID]
+            if present and not wasActive then
+                -- First sight since load may be an aura that was already up
+                -- (login, /reload): use its real start, or keep the restored
+                -- time, instead of restarting the timer at full length.
+                local data = CC.SpellData[spellID]
+                local usedAt = expiresAt and data and (expiresAt - data.duration) or nil
+                local me = UnitName("player")
+                local known = me and CC.state[me] and CC.state[me].spells[spellID]
+                local stillRunning = known and data and (known + data.duration > GetTime())
+                if wasActive == nil and stillRunning and not usedAt then
+                    -- restored from the saved variable; nothing to do
+                else
+                    CC:RecordCooldown("player", spellID, usedAt)
+                end
+            end
+            if present ~= (wasActive and true or false) then changed = true end
+            self.consumableActive[spellID] = present
         end
-        self.consumableActive[id] = present
-
         if present then
             if cat == "flask" then hasFlask = true end
             if cat == "food"  then hasFood  = true end
         end
-        if present ~= wasActive then changed = true end
     end
 
-    -- Check user-registered consumables
-    for idStr, data in pairs(self.db.consumableBuffs or {}) do
+    -- Built-ins for this client
+    for id, data in pairs(CC.BuiltinConsumables or {}) do
+        check(id, data.category)
+    end
+
+    -- User-registered consumables
+    for idStr in pairs(self.db.consumableBuffs or {}) do
         local spellID = tonumber(idStr)
         if spellID then
-            local present   = C_UnitAuras.GetPlayerAuraBySpellID(spellID) ~= nil
-            local wasActive = self.consumableActive[spellID]
-
-            if present and not wasActive then
-                CC:RecordCooldown("player", spellID)
-            end
-            self.consumableActive[spellID] = present
-
-            local cat = CC.SpellData[spellID] and CC.SpellData[spellID].category
-            if present then
-                if cat == "flask" then hasFlask = true end
-                if cat == "food"  then hasFood  = true end
-            end
-            if present ~= wasActive then changed = true end
+            check(spellID, CC.SpellData[spellID] and CC.SpellData[spellID].category)
         end
     end
 
@@ -164,6 +173,7 @@ function CC:PollConsumables()
         self.buffBroadcastDone = true
         self:BroadcastBuffStatus(myName, hasFlask, hasFood)
     end
+    self.lastBuffStatus = { flask = hasFlask, food = hasFood }
 
     -- Update own entry in buffRoster for local display
     if myName then
@@ -180,14 +190,44 @@ function CC:BroadcastBuffStatus(playerName, hasFlask, hasFood)
     -- Message format: "flask:1:food:1"
     local msg = string.format("flask:%d:food:%d",
         hasFlask and 1 or 0, hasFood and 1 or 0)
-    local chatType = IsInRaid() and "RAID" or "PARTY"
-    C_ChatInfo.SendAddonMessage(BUFF_PREFIX, msg, chatType)
+    if CC.QueueAddonMessage then
+        -- Shared queue (Comms.lua): throttled, retried, newest status wins.
+        CC:QueueAddonMessage(BUFF_PREFIX, msg, "buffstatus")
+    else
+        C_ChatInfo.SendAddonMessage(BUFF_PREFIX, msg, CC:GroupChatType() or "PARTY")
+    end
 end
+
+-- Someone joined: they have nobody's status yet, so announce ours again
+-- (debounced, with a little jitter so a full raid doesn't send at once).
+local buffResendPending = false
+local function ScheduleBuffResend()
+    if buffResendPending then return end
+    buffResendPending = true
+    C_Timer.After(3 + math.random() * 2, function()
+        buffResendPending = false
+        local st = CC.lastBuffStatus
+        if st and IsInGroup() then
+            CC:BroadcastBuffStatus(UnitName("player"), st.flask, st.food)
+        end
+    end)
+end
+
+local lastGroupSize = 0
+local rosterFrame = CreateFrame("Frame")
+rosterFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+rosterFrame:SetScript("OnEvent", function()
+    local size = GetNumGroupMembers()
+    if size > lastGroupSize then ScheduleBuffResend() end
+    lastGroupSize = size
+end)
 
 -- Called from Comms.lua or directly from the event handler
 function CC:OnBuffStatusMessage(sender, msg)
     local flask, food = msg:match("flask:(%d):food:(%d)")
     if not flask then return end
+    -- Senders arrive as "Name-Realm"; the roster is keyed by UnitName().
+    sender = CC:ShortName(sender)
     self.buffRoster[sender] = { flask = flask == "1", food = food == "1" }
     if CC.RefreshEssentials then CC:RefreshEssentials() end
 end
@@ -222,7 +262,11 @@ function CC:GetGroupBuffStatus()
 
     check("player")
     if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do check("raid" .. i) end
+        -- The raid1..N list includes the player; don't count them twice.
+        local me = UnitName("player")
+        for i = 1, GetNumGroupMembers() do
+            if UnitName("raid" .. i) ~= me then check("raid" .. i) end
+        end
     else
         for i = 1, GetNumGroupMembers() - 1 do check("party" .. i) end
     end
@@ -231,4 +275,6 @@ function CC:GetGroupBuffStatus()
              missingFlask=missingFlask, missingFood=missingFood }
 end
 
-C_Timer.NewTicker(2, function() CC:PollConsumables() end)
+C_Timer.NewTicker(2, function()
+    if CC.db then CC:PollConsumables() end
+end)

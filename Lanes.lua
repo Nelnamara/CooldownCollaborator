@@ -14,7 +14,7 @@ function CC:BuildLaneView()
     local db = self.db
 
     local f = CreateFrame("Frame", "CCLaneFrame", UIParent, "BackdropTemplate")
-    f:SetSize(LANE_WIDTH + 16, LANE_HEIGHT * 2 + LANE_GAP + 30)
+    f:SetSize(LANE_WIDTH + 16, (LANE_HEIGHT + LANE_GAP) * #CC.CAPABILITY_ORDER + 30)
     f:SetPoint("CENTER", UIParent, "CENTER", db.laneX or 0, db.laneY or -200)
     f:SetScale(db.laneScale or 1.0)
     f:SetFrameStrata("MEDIUM")
@@ -65,7 +65,7 @@ function CC:BuildLaneView()
         lane.label = label
 
         lane.icons = {}
-        for i = 1, 6 do
+        for i = 1, 10 do
             local icon = lane:CreateTexture(nil, "ARTWORK")
             icon:SetSize(ICON_SIZE, ICON_SIZE)
             icon:Hide()
@@ -142,6 +142,9 @@ function CC:RefreshLanes()
                     end
                     if fits then break end
                     level = level + 1
+                    -- Many READY icons share the right edge; past three rows
+                    -- they overlap instead of spilling over the lanes below.
+                    if level >= 2 then break end
                 end
                 levelOccupants[level] = levelOccupants[level] or {}
                 table.insert(levelOccupants[level], xPos)

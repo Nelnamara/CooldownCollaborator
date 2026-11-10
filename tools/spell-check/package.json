@@ -1,0 +1,9 @@
+{
+	"name": "cdc-spell-check",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Checks CooldownCollaborator's Data.lua against each client's game data from wago.tools",
+	"main": "check.js",
+	"scripts": { "check": "node check.js" },
+	"dependencies": { "fengari": "^0.1.4" }
+}

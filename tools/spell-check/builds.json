@@ -1,0 +1,24 @@
+{
+	"clients": [
+		{
+			"key": "forever",
+			"name": "WoW: Forever",
+			"isForever": true,
+			"build": "1.60.1.70862"
+		},
+		{
+			"key": "retail",
+			"name": "Retail (Midnight)",
+			"isForever": false,
+			"build": "12.1.5.70783",
+			"relaxed": {
+				"icons": false,
+				"minCooldownMs": 10001,
+				"consumableDurationIfKnown": true
+			},
+			"nameAliases": {
+				"207399": "Ancestral Prot. Totem"
+			}
+		}
+	]
+}

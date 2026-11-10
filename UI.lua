@@ -183,6 +183,24 @@ function CC:BuildRowData()
         return a.name < b.name
     end)
 
+    -- More rows than fit (big raids): cooldowns that are counting down get
+    -- a slot first, READY rows fill the rest; display order stays the same.
+    if #rows > MAX_ROWS then
+        local onCD = 0
+        for _, r in ipairs(rows) do if r.remaining > 0 then onCD = onCD + 1 end end
+        local readySlots = math.max(0, MAX_ROWS - onCD)
+        local kept = {}
+        for _, r in ipairs(rows) do
+            if r.remaining > 0 then
+                kept[#kept + 1] = r
+            elseif readySlots > 0 then
+                kept[#kept + 1] = r
+                readySlots = readySlots - 1
+            end
+        end
+        rows = kept
+    end
+
     return rows
 end
 

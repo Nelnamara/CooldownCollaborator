@@ -1,5 +1,5 @@
 -- Essentials Bar — slim, always-visible view of just the highest-value
--- raid-wide resources (Bloodlust/Heroism, Battle Rez), driven entirely by
+-- raid-wide resources (per-client capabilities from Data.lua), driven entirely by
 -- Roster.lua's capability scan + the same CC.state used by the main panel.
 -- Shows "ready" placeholders for capable-but-unused providers BEFORE anyone
 -- has cast anything, which the main row list cannot do (it only ever shows
@@ -8,12 +8,13 @@
 local ROW_HEIGHT   = 22
 local HEADER_HEIGHT = 16
 local FRAME_WIDTH  = 220
-local MAX_ROWS     = 10
+local MAX_ROWS     = 40
 
 local function FormatTime(secs)
     if not secs or secs <= 0 then return "READY" end
     local m = math.floor(secs / 60)
     local s = math.floor(secs % 60)
+    if m >= 60 then return string.format("%dh%02dm", math.floor(m / 60), m % 60) end
     if m > 0 then return string.format("%d:%02d", m, s) end
     return string.format("%ds", s)
 end
@@ -143,7 +144,10 @@ function CC:RefreshEssentials()
             if idx > MAX_ROWS then break end
             local hdrRow = rows[idx]
             hdrRow.isHeader = true
-            hdrRow.headerText:SetText(cap.label)
+            local readyCount = 0
+            for _, e in ipairs(status) do if e.ready then readyCount = readyCount + 1 end end
+            hdrRow.headerText:SetText(string.format("%s  %d/%d", cap.label, readyCount, #status))
+            hdrRow.headerText:SetTextColor(0.6, 0.8, 1)
             hdrRow.headerText:Show()
             hdrRow.icon:Hide()
             hdrRow.nameText:Hide()
@@ -151,9 +155,21 @@ function CC:RefreshEssentials()
             hdrRow.classBar:Hide()
             hdrRow:Show()
 
-            if capKey == "BATTLEREZ" then rezHeaderRow = hdrRow end
+            if cap.rez then rezHeaderRow = hdrRow end
 
-            for _, entry in ipairs(status) do
+            local perCap = self.db.essentialsPerCap or 3
+            for n, entry in ipairs(status) do
+                if n > perCap then
+                    idx = idx + 1
+                    if idx > MAX_ROWS then break end
+                    local more = rows[idx]
+                    more.isHeader = true
+                    more.headerText:SetText(string.format("|cFF888888+%d more|r", #status - perCap))
+                    more.headerText:Show()
+                    more.icon:Hide(); more.nameText:Hide(); more.timeText:Hide(); more.classBar:Hide()
+                    more:Show()
+                    break
+                end
                 idx = idx + 1
                 if idx > MAX_ROWS then break end
                 local row = rows[idx]

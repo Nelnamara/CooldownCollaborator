@@ -4,3 +4,7 @@ ignore:
   - .gitignore
   - .github
   - README.md
+  - CLAUDE.md
+  - tools
+  - Media/icon.png
+  - Media/minimap.png

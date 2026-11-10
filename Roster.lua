@@ -12,27 +12,7 @@
 --
 -- CC.roster[name] = { class="SHAMAN", capabilities={ BLOODLUST={2825,32182} } }
 
--- capability key -> { label, classes = { CLASSTAG = {spellID,...} } }
-CC.CAPABILITIES = {
-    BLOODLUST = {
-        label = "Bloodlust/Heroism",
-        classes = {
-            SHAMAN = { 2825, 32182 },
-            MAGE   = { 80353 },
-            EVOKER = { 391215 },
-        },
-    },
-    BATTLEREZ = {
-        label = "Battle Rez",
-        classes = {
-            DRUID       = { 20484 },
-            DEATHKNIGHT = { 61999 },
-        },
-    },
-}
-
--- Ordered list for stable display
-CC.CAPABILITY_ORDER = { "BLOODLUST", "BATTLEREZ" }
+-- CC.CAPABILITIES / CC.CAPABILITY_ORDER are defined per client in Data.lua.
 
 -- Spec names for /cdc roster printout
 local SPEC_NAMES = {
@@ -117,7 +97,9 @@ function CC:QueueInspectAll()
         end
     end
     -- Self-inspect is instant and doesn't use the throttled API
-    local selfSpec = GetSpecialization()
+    -- Forever has class-only spec info: skip the whole refinement there.
+    if CC.isForever then return end
+    local selfSpec = GetSpecialization and GetSpecialization() or nil
     local selfName = UnitName("player")
     if selfName and selfSpec then
         self.rosterSpecs[selfName] = selfSpec
@@ -135,6 +117,7 @@ end
 
 -- Drain one entry from the inspect queue.
 function CC:ProcessInspectQueue()
+    if CC.isForever then return end
     if self.inspectActive then return end
     if #self.inspectQueue == 0 then return end
 
@@ -147,6 +130,7 @@ function CC:ProcessInspectQueue()
     end
 
     self.inspectActive = true
+    if not NotifyInspect then self.inspectActive = false return end
     NotifyInspect(unit)
     -- Failsafe: if INSPECT_READY never fires (unit out of range, etc.), advance
     C_Timer.After(INSPECT_THROTTLE + 1, function()
@@ -160,6 +144,7 @@ end
 -- Called from the event handler when INSPECT_READY fires.
 function CC:OnInspectReady(unitID)
     self.inspectActive = false
+    if CC.isForever then return end
 
     local name = UnitName(unitID)
     if not name or name == "" then
@@ -170,6 +155,7 @@ function CC:OnInspectReady(unitID)
     -- GetInspectSpecialization returns the spec index (1/2/3/4) for the unit.
     -- Returns 0 or nil if the unit's spec is hidden (high-privacy mode).
     local specIndex = GetInspectSpecialization and GetInspectSpecialization(unitID) or 0
+    if not GetInspectSpecialization then specIndex = 0 end
 
     if specIndex and specIndex > 0 then
         self.rosterSpecs[name] = specIndex
@@ -184,7 +170,7 @@ function CC:OnInspectReady(unitID)
         end
     end
 
-    ClearInspectPlayer()
+    if ClearInspectPlayer then ClearInspectPlayer() end
     -- Continue the queue after the mandatory throttle window
     C_Timer.After(INSPECT_THROTTLE, function() CC:ProcessInspectQueue() end)
 end
@@ -200,13 +186,37 @@ function CC:GetCapabilityStatus(capKey)
     if not self.roster then return results end
 
     local playerName = UnitName("player")
+    local cap = self.CAPABILITIES and self.CAPABILITIES[capKey]
 
     for name, info in pairs(self.roster) do
-        local spellIDs = info.capabilities[capKey]
+        local classIDs = info.capabilities[capKey]
+        local isLocal  = (name == playerName)
+        local spellIDs = nil
+
+        if classIDs then
+            if isLocal then
+                -- Always live for ourselves
+                spellIDs = {}
+                for _, id in ipairs(classIDs) do
+                    if self:KnowsSpell(id) then spellIDs[#spellIDs + 1] = id end
+                end
+            else
+                local known = self.knownSpells and self.knownSpells[name]
+                if known then
+                    spellIDs = {}
+                    for _, id in ipairs(classIDs) do
+                        if known[id] then spellIDs[#spellIDs + 1] = id end
+                    end
+                elseif not (cap and cap.talent) then
+                    spellIDs = classIDs  -- class-based fallback (may not run the addon)
+                end
+            end
+            if spellIDs and #spellIDs == 0 then spellIDs = nil end
+        end
+
         if spellIDs then
             local bestRemaining = nil
             local usedSpellID   = nil
-            local isLocal       = (name == playerName)
 
             for _, spellID in ipairs(spellIDs) do
                 -- For ourselves, prefer the true live cooldown/charge readout

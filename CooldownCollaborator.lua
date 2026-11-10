@@ -1,14 +1,69 @@
 -- CooldownCollaborator
--- Group and raid cooldown coordinator for WoW Midnight (12.x)
+-- Group and raid cooldown coordinator for WoW Midnight (12.x) and WoW: Forever (1.60.x)
 -- Author: Nelnamara
 
 CooldownCollaborator = {}
 CC = CooldownCollaborator
 
-CC.version = "1.0.3"
+CC.version = "1.1.0"
 CC.PREFIX   = "CDCOLLAB"
 
--- state[playerName] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
+-- Which client we're on. Forever runs the modern (retail) API with Midnight's
+-- restrictions but a vanilla-era interface number (16xxx), so detect it by that
+-- band, never by WOW_PROJECT_ID (it changed during the Forever beta).
+local _, _, _, tocversion = GetBuildInfo()
+CC.tocversion = tocversion or 0
+CC.isForever  = CC.tocversion >= 16000 and CC.tocversion < 17000
+
+-- Spell ranks (Forever keeps them: every rank has its own spell ID). Data.lua
+-- keys each tracked spell by ONE canonical ID and fills CC.SpellAlias with
+-- [anyRankID] = canonicalID. Everything stored, sent or displayed uses the
+-- canonical ID. On retail there are no ranks, so canonical == cast ID.
+CC.SpellAlias = CC.SpellAlias or {}
+function CC:CanonicalSpellID(spellID)
+    return CC.SpellAlias[spellID] or spellID
+end
+
+-- All rank IDs of a tracked spell (canonical first). Falls back to { id }.
+function CC:SpellRanks(spellID)
+    local data = CC.SpellData and CC.SpellData[spellID]
+    return (data and data.ranks) or { spellID }
+end
+
+-- Does the local player know this spell (any rank)? pcall-guarded: these
+-- calls take secret-sensitive arguments on Midnight/Forever.
+function CC:KnowsSpell(spellID)
+    -- Item use effects (Soulstone) are never in the spellbook: the class decides.
+    local data = CC.SpellData and CC.SpellData[spellID]
+    if data and data.item then
+        local _, classTag = UnitClass("player")
+        return classTag == data.class, spellID
+    end
+    for _, id in ipairs(self:SpellRanks(spellID)) do
+        local known = false
+        pcall(function()
+            if C_SpellBook and C_SpellBook.IsSpellKnown then
+                known = C_SpellBook.IsSpellKnown(id)
+            elseif IsSpellKnownOrOverridesKnown then
+                known = IsSpellKnownOrOverridesKnown(id)
+            elseif IsSpellKnown then
+                known = IsSpellKnown(id)
+            end
+        end)
+        if known then return true, id end
+    end
+    return false
+end
+
+-- Addon-message senders arrive as "Name-Realm"; the rest of the addon keys
+-- players by UnitName() (no realm). Normalize to that.
+function CC:ShortName(name)
+    if not name then return nil end
+    if Ambiguate then return Ambiguate(name, "short") end
+    return (name:match("^([^-]+)")) or name
+end
+
+-- state[playerName] = { class = "WARRIOR", spells = { [canonicalSpellID] = usedAt (local GetTime()) } }
 CC.state = {}
 
 CC.inEncounter = false
@@ -86,6 +141,15 @@ function CC:AddCustomSpell(spellID, duration)
     spellID = tonumber(spellID)
     if not spellID or not duration or duration <= 0 then return false end
 
+    -- Any rank of a built-in spell is already tracked (casts map to its
+    -- canonical ID, so a custom entry for another rank would never fill).
+    local canonical = CC.SpellAlias[spellID]
+    if canonical and CC.SpellData[canonical] and not CC.SpellData[canonical].custom then
+        print(string.format("|cFF54a3ffCooldownCollaborator|r %s is already tracked.",
+            CC.SpellData[canonical].name or tostring(spellID)))
+        return false
+    end
+
     local name, icon
     local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
     if info then
@@ -128,7 +192,10 @@ function CC:RemoveCustomSpell(spellID)
     self:RefreshSpellList()
 end
 
-function CC:RecordCooldown(unitToken, spellID)
+-- usedAt is optional (local GetTime() of the cast); defaults to now. Consumables
+-- pass the real start when an aura was already up (login, /reload).
+function CC:RecordCooldown(unitToken, spellID, usedAt)
+    spellID = self:CanonicalSpellID(spellID)
     local data = CC.SpellData[spellID]
     if CC.verbose then
         print(string.format("|cFF54a3ffCDC|r cast seen: unit=%s spellID=%s known=%s",
@@ -145,13 +212,18 @@ function CC:RecordCooldown(unitToken, spellID)
         local _, classTag = UnitClass(unitToken)
         self.state[name] = { class = classTag or "UNKNOWN", spells = {} }
     end
-    self.state[name].spells[spellID] = GetTime()
+    local now = usedAt or GetTime()
+    self.state[name].spells[spellID] = now
 
-    self:SendCooldownSync(spellID, name, GetTime())
+    -- Sync.lua saves our own cooldowns so a /reload or relog keeps them.
+    if unitToken == "player" and CC.OnOwnCooldown then CC:OnOwnCooldown(spellID, now) end
+
+    self:SendCooldownSync(spellID, name, now)
     self:RefreshAllViews()
 end
 
 function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
+    spellID = self:CanonicalSpellID(spellID)
     local data = CC.SpellData[spellID]
     if not data then return end
 
@@ -187,8 +259,10 @@ end
 -- rez them, naming the specific provider whose Battle Rez is ready right
 -- now rather than a generic "someone rez" callout.
 function CC:CanRequestRez()
+    -- IsRaidLeader/IsRaidOfficer were removed from the game long ago (absent from
+    -- both the retail and Forever API docs); calling them errored inside raids.
     if IsInRaid() then
-        return IsRaidLeader() or IsRaidOfficer()
+        return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
     elseif IsInGroup() then
         return UnitIsGroupLeader("player")
     end
@@ -206,7 +280,11 @@ function CC:RequestRez()
     end
 
     local targetName = UnitName("target")
-    local status = CC:GetCapabilityStatus("BATTLEREZ")
+    local rezKey = "BATTLEREZ"
+    for key, cap in pairs(CC.CAPABILITIES or {}) do
+        if cap.rez then rezKey = key break end
+    end
+    local status = CC:GetCapabilityStatus(rezKey)
     local provider = nil
     for _, entry in ipairs(status) do
         -- A dead player can't rez anyone, including themselves - skip the
@@ -229,12 +307,9 @@ function CC:RequestRez()
     local spellName = data and data.name or "Battle Rez"
     local msg = string.format("%s, please %s %s!", provider.name, spellName, targetName)
 
-    if IsInRaid() then
-        SendChatMessage(msg, "RAID")
-        SendChatMessage(msg, "RAID_WARNING")
-    else
-        SendChatMessage(msg, "PARTY")
-    end
+    local chatType = CC.GroupChatType and CC:GroupChatType() or (IsInRaid() and "RAID" or "PARTY")
+    SendChatMessage(msg, chatType)
+    if chatType == "RAID" then SendChatMessage(msg, "RAID_WARNING") end
 end
 
 function CC:RefreshAllViews()
@@ -268,13 +343,14 @@ end
 -- we return nil so the caller falls back to the observed-cast model (GetRemaining).
 function CC:GetLocalReadiness(spellID)
     if not C_Spell then return nil end
+    -- An item's cooldown isn't the use spell's cooldown; use the observed use.
+    local itemData = CC.SpellData and CC.SpellData[spellID]
+    if itemData and itemData.item then return nil end
 
-    local known = false
-    pcall(function()
-        known = (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID))
-             or (IsSpellKnown and IsSpellKnown(spellID))
-    end)
+    -- Read the rank the player actually knows (Forever has ranks).
+    local known, knownID = self:KnowsSpell(spellID)
     if not known then return nil end
+    spellID = knownID or spellID
 
     local remaining
     local ok = pcall(function()
@@ -398,8 +474,10 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
             for key in pairs(info.capabilities) do caps[#caps + 1] = key end
             local specName = CC:GetSpecName(name)
             local classStr = specName and (specName .. " " .. info.class) or info.class
-            print(string.format("    %s [%s] capabilities: %s",
-                name, classStr, #caps > 0 and table.concat(caps, ", ") or "none"))
+            local ver = CC.addonVersions and CC.addonVersions[name]
+            print(string.format("    %s [%s] capabilities: %s  |cFF888888%s|r",
+                name, classStr, #caps > 0 and table.concat(caps, ", ") or "none",
+                ver and ("addon " .. ver) or "no addon seen"))
         end
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)

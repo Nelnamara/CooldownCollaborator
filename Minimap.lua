@@ -22,7 +22,7 @@ function CC:BuildMinimapButton()
     -- Self-contained round icon (gold ring baked in) — SetAllPoints centers it cleanly.
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints()
-    icon:SetTexture("Interface\\AddOns\\CooldownCollaborator\\Media\\minimap.png")
+    icon:SetTexture("Interface\\AddOns\\CooldownCollaborator\\Media\\minimap.tga")
 
     -- Initial position
     btn:SetPoint("CENTER", Minimap, "CENTER", AngleToOffset(db.minimapAngle or 225))
