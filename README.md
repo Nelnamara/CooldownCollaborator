@@ -89,6 +89,7 @@ Detects your own casts via `UNIT_SPELLCAST_SUCCEEDED` on the `player` token only
 - Fixed: flask/food status from other players could go uncounted (their name arrived with a realm suffix), and in raids you were counted twice
 - Fixed: Fury of the Aspects pointed at the wrong spell, so it was never tracked; Anti-Magic Zone, Healing Tide Totem and Darkness now use the game's base cooldowns
 - Fixed: typing a spell name in Custom Spells found nothing on current clients
+- Fixed: the minimap button sat inside the map on WoW: Forever's larger minimap; it now follows the minimap's size (and Edit Mode rescaling)
 - Flask/food checks pause in combat, where those buffs can't be read
 - Retail interface 12.1.5
 
