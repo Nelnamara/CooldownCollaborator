@@ -298,6 +298,26 @@ function CC:OpenOptions()
     local lMM = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lMM:SetPoint("LEFT", cbMM, "RIGHT", 2, 0)
     lMM:SetText("Hide minimap button")
+    yOff = yOff - 26
+
+    -- CDTL3 bridge: greyed/hidden unless CDTL3 (with the timer API) is loaded
+    local cbBridge = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    cbBridge:SetSize(22, 22)
+    cbBridge:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
+    cbBridge:SetScript("OnClick", function(self)
+        CC:SetShowOnCDTL3(self:GetChecked())
+    end)
+    local lBridge = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lBridge:SetPoint("LEFT", cbBridge, "RIGHT", 2, 0)
+    lBridge:SetText("Show group cooldowns on CDTL3's lanes")
+    function CC:RefreshBridgeOption()
+        local avail = CC:BridgeAvailable()
+        cbBridge:SetShown(avail)
+        lBridge:SetShown(avail)
+        cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
+    end
+    CC:RefreshBridgeOption()
     yOff = yOff - 30
 
     -- Min duration buttons

@@ -8,6 +8,7 @@ flask/food status, and a minimap button.
 ## Files
 - `CooldownCollaborator.lua` — core: init, DB defaults, event frame, `RecordCooldown`, Rez logic, slash `/cdc`.
 - `Data.lua` — `CC.SpellData` (tracked-spell whitelist), `CC.BuiltinConsumables`, `CC.ClassColors`.
+- `Bridge.lua` — optional CDTL3 timer-type bridge (`cdcGroup`); every call guarded, no-op without CDTL3.
 - `Comms.lua` — addon messaging. Prefixes: `CDCOLLAB` (cooldown sync) and `CDCBUFF` (flask/food status).
 - `Roster.lua` — `NotifyInspect` queue for spec detection; capability scan.
 - `Essentials.lua` — the Essentials bar (ready providers + flask/food strip).

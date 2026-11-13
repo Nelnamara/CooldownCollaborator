@@ -59,8 +59,8 @@ function CC:ScanRoster()
     local roster = {}
 
     local function addUnit(unit)
-        local name = UnitName(unit)
-        if not name or name == "" then return end
+        local name = CC:FullName(unit)
+        if not name then return end
         local _, classTag = UnitClass(unit)
         if not classTag then return end
 
@@ -118,7 +118,7 @@ function CC:QueueInspectAll()
     end
     -- Self-inspect is instant and doesn't use the throttled API
     local selfSpec = GetSpecialization()
-    local selfName = UnitName("player")
+    local selfName = CC:FullName("player")
     if selfName and selfSpec then
         self.rosterSpecs[selfName] = selfSpec
         if self.roster and self.roster[selfName] then
@@ -161,7 +161,7 @@ end
 function CC:OnInspectReady(unitID)
     self.inspectActive = false
 
-    local name = UnitName(unitID)
+    local name = CC:FullName(unitID)
     if not name or name == "" then
         C_Timer.After(0.1, function() CC:ProcessInspectQueue() end)
         return
@@ -199,7 +199,7 @@ function CC:GetCapabilityStatus(capKey)
     local results = {}
     if not self.roster then return results end
 
-    local playerName = UnitName("player")
+    local playerName = self:FullName("player")
 
     for name, info in pairs(self.roster) do
         local spellIDs = info.capabilities[capKey]

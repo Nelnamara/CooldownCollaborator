@@ -69,6 +69,12 @@ Detects your own casts via `UNIT_SPELLCAST_SUCCEEDED` on the `player` token only
 
 ## Changelog
 
+### Unreleased
+- Ready-now announcements: when your own tracked spell comes off cooldown it tells the group, so talent-shortened cooldowns no longer show long on other clients (older clients ignore it)
+- Players are keyed by name and realm, so same-named players from different realms no longer clash
+- Optional CooldownTimeline3 bridge: group cooldowns can show on CDTL3's lanes (Settings checkbox, on by default when CDTL3 is loaded)
+- Interface 120105 (Retail 12.1.5)
+
 ### v1.0.3
 - Live local readiness for Battle-Rez and Bloodlust providers — reads your own charges and cooldown directly now that those values are no longer secret on the `player` unit in 12.0.7
 - Minimap button resized to the standard 24px
@@ -90,6 +96,8 @@ Detects your own casts via `UNIT_SPELLCAST_SUCCEEDED` on the `player` token only
 
 <details>
 <summary>Planned</summary>
+
+- **WoW: Forever version** - possible later; same addon messages, different spell list (not started)
 
 - **Click-to-expand missing buffs** — show *which* group members are missing flask/food by name
 - **Dual potion tracking** — combat/utility potion usage windows (e.g. Voidlight)

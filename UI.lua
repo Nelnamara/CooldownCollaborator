@@ -200,7 +200,7 @@ function CC:RefreshRows()
             row._playerName = rd.name
             row.classBar:SetColorTexture(c[1], c[2], c[3], 1)
             row.icon:SetTexture(rd.data.icon)
-            row.nameText:SetText(rd.name)
+            row.nameText:SetText(CC:ShortName(rd.name))
             row.nameText:SetTextColor(c[1], c[2], c[3])
             row.spellText:SetText(rd.data.name)
             row.spellText:SetTextColor(0.85, 0.85, 0.85)

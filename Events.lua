@@ -9,18 +9,18 @@ end
 
 function CC:GetActiveGroupNames()
     local names = {}
-    local playerName = UnitName("player")
+    local playerName = self:FullName("player")
     if playerName then names[playerName] = true end
 
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
-            local name = UnitName("raid" .. i)
-            if name and name ~= "" then names[name] = true end
+            local name = self:FullName("raid" .. i)
+            if name then names[name] = true end
         end
     elseif IsInGroup() then
         for i = 1, GetNumGroupMembers() - 1 do
-            local name = UnitName("party" .. i)
-            if name and name ~= "" then names[name] = true end
+            local name = self:FullName("party" .. i)
+            if name then names[name] = true end
         end
     end
     return names
@@ -28,17 +28,26 @@ end
 
 function CC:PruneState()
     local active = self:GetActiveGroupNames()
-    for name in pairs(self.state) do
+    for name, entry in pairs(self.state) do
         if not active[name] then
+            for spellID in pairs(entry.spells) do
+                self:BridgeStop(name, spellID)
+            end
             self.state[name] = nil
         end
     end
 end
 
+-- Re-send OUR OWN recorded cooldowns. Identity travels with the message
+-- sender, so relaying other players' entries would mis-attribute them.
 function CC:BroadcastState()
-    for name, entry in pairs(self.state) do
-        for spellID, usedAt in pairs(entry.spells) do
-            self:SendCooldownSync(spellID, name, usedAt)
+    local me = self:FullName("player")
+    local entry = me and self.state[me]
+    if not entry then return end
+    for spellID, usedAt in pairs(entry.spells) do
+        -- Skip spells already announced ready; no point re-arming them.
+        if not CC.SpellData[spellID] or (usedAt + CC.SpellData[spellID].duration) > GetTime() then
+            self:SendCooldownSync(spellID, me, usedAt)
         end
     end
 end

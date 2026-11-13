@@ -8,10 +8,62 @@ CC = CooldownCollaborator
 CC.version = "1.0.4"
 CC.PREFIX   = "CDCOLLAB"
 
--- state[playerName] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
+-- state["Name-Realm"] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
 CC.state = {}
 
 CC.inEncounter = false
+
+-- Local player's own tracked spells that were used and have not yet been
+-- announced as ready: [spellID] = usedAt (local GetTime()).
+CC.localActive = {}
+
+-------------------------------------------------------------------------------
+-- Player identity: "Name-Realm" so same-named players from different realms
+-- never clash. Display code uses CC:ShortName().
+-------------------------------------------------------------------------------
+
+function CC:FullName(unit)
+    local name, realm = UnitFullName(unit)
+    if not name or name == "" then return nil end
+    if not realm or realm == "" then realm = GetNormalizedRealmName() end
+    if realm and realm ~= "" then return name .. "-" .. realm end
+    return name
+end
+
+function CC:ShortName(full)
+    if not full then return full end
+    return full:match("^([^-]+)") or full
+end
+
+-- Addon-message senders normally carry a realm; add ours if one is missing.
+function CC:NormalizeSender(sender)
+    if not sender or sender == "" then return nil end
+    if sender:find("-", 1, true) then return sender end
+    local realm = GetNormalizedRealmName()
+    if realm and realm ~= "" then return sender .. "-" .. realm end
+    return sender
+end
+
+-- Turn a bare name (old-format message body) into a group member's full name.
+function CC:ResolveBareName(bare)
+    local function check(unit)
+        if UnitExists(unit) and UnitName(unit) == bare then return self:FullName(unit) end
+    end
+    local found = check("player")
+    if found then return found end
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            found = check("raid" .. i)
+            if found then return found end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumGroupMembers() - 1 do
+            found = check("party" .. i)
+            if found then return found end
+        end
+    end
+    return self:NormalizeSender(bare)
+end
 
 local DEFAULTS = {
     x              = 0,
@@ -38,6 +90,8 @@ local DEFAULTS = {
     laneY       = -200,
     laneScale   = 1.0,
     laneLocked  = false,
+
+    showOnCDTL3 = true,   -- feed group cooldowns to CDTL3's lanes (if CDTL3 is loaded)
 }
 
 function CC:Init()
@@ -138,16 +192,34 @@ function CC:RecordCooldown(unitToken, spellID)
     if data.duration < (self.db.minDuration or 60) then return end
     if self.db.disabledSpells and self.db.disabledSpells[spellID] then return end
 
-    local name = UnitName(unitToken)
-    if not name or name == "" then return end
+    local name = self:FullName(unitToken)
+    if not name then return end
 
     if not self.state[name] then
         local _, classTag = UnitClass(unitToken)
         self.state[name] = { class = classTag or "UNKNOWN", spells = {} }
     end
-    self.state[name].spells[spellID] = GetTime()
+    local now = GetTime()
+    self.state[name].spells[spellID] = now
 
-    self:SendCooldownSync(spellID, name, GetTime())
+    -- Watch our own spell so we can announce "ready now" (talents shorten
+    -- the real cooldown below the base length everyone else assumes).
+    if unitToken == "player" and not data.consumable then
+        self.localActive[spellID] = now
+    end
+
+    self:SendCooldownSync(spellID, name, now)
+    self:BridgeStart(name, spellID, now, self.state[name].class)
+    self:RefreshAllViews()
+end
+
+-- A remote player's spell is ready now (their "ready now" announcement).
+function CC:RecordReadyFromComm(playerName, spellID)
+    local data = CC.SpellData[spellID]
+    local entry = self.state[playerName]
+    if not data or not entry or not entry.spells[spellID] then return end
+    entry.spells[spellID] = GetTime() - data.duration
+    self:BridgeStop(playerName, spellID)
     self:RefreshAllViews()
 end
 
@@ -161,6 +233,7 @@ function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
     local cur = self.state[playerName].spells[spellID]
     if not cur or usedAt > cur then
         self.state[playerName].spells[spellID] = usedAt
+        self:BridgeStart(playerName, spellID, usedAt, self.state[playerName].class)
         self:RefreshAllViews()
     end
 end
@@ -168,16 +241,16 @@ end
 -- Resolve a player's name back to a live unit token, so we can check things
 -- (alive/dead) that GetCapabilityStatus's name-only entries cannot.
 local function FindUnitToken(name)
-    if UnitName("player") == name then return "player" end
+    if CC:FullName("player") == name then return "player" end
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
             local token = "raid" .. i
-            if UnitName(token) == name then return token end
+            if CC:FullName(token) == name then return token end
         end
     elseif IsInGroup() then
         for i = 1, GetNumGroupMembers() - 1 do
             local token = "party" .. i
-            if UnitName(token) == name then return token end
+            if CC:FullName(token) == name then return token end
         end
     end
     return nil
@@ -205,7 +278,7 @@ function CC:RequestRez()
         return
     end
 
-    local targetName = UnitName("target")
+    local targetName = self:FullName("target")
     local status = CC:GetCapabilityStatus("BATTLEREZ")
     local provider = nil
     for _, entry in ipairs(status) do
@@ -227,7 +300,7 @@ function CC:RequestRez()
 
     local data = CC.SpellData[provider.spellID]
     local spellName = data and data.name or "Battle Rez"
-    local msg = string.format("%s, please %s %s!", provider.name, spellName, targetName)
+    local msg = string.format("%s, please %s %s!", self:ShortName(provider.name), spellName, self:ShortName(targetName))
 
     if IsInRaid() then
         SendChatMessage(msg, "RAID")
@@ -303,6 +376,48 @@ function CC:GetLocalReadiness(spellID)
     return remaining
 end
 
+-- Is our own spell off cooldown right now? Returns true / false, or nil when
+-- it can't be read. cd.isActive is never secret; reads are pcall-guarded.
+local function LocalSpellIsReady(spellID)
+    local ready
+    local ok = pcall(function()
+        local ch = C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(spellID)
+        if ch and ch.maxCharges and ch.maxCharges > 1 then
+            ready = (ch.currentCharges or 0) >= 1
+            return
+        end
+        local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(spellID)
+        if not cd then return end
+        ready = not cd.isActive
+    end)
+    if not ok then return nil end
+    return ready
+end
+
+-- Cheap poll: only the spells we've used and not yet announced. Skipped
+-- entirely (one next() call) when nothing is outstanding.
+function CC:PollLocalReady()
+    if not next(self.localActive) then return end
+    local now = GetTime()
+    for spellID, usedAt in pairs(self.localActive) do
+        -- Grace so the cooldown has actually started before we judge it.
+        if now - usedAt > 3 and LocalSpellIsReady(spellID) == true then
+            self.localActive[spellID] = nil
+            local me = self:FullName("player")
+            local data = CC.SpellData[spellID]
+            local entry = me and self.state[me]
+            if entry and data and entry.spells[spellID] then
+                entry.spells[spellID] = now - data.duration
+            end
+            if me then self:BridgeStop(me, spellID) end
+            self:SendReadySync(spellID)
+            self:RefreshAllViews()
+        end
+    end
+end
+
+C_Timer.NewTicker(1, function() CC:PollLocalReady() end)
+
 -- Event frame
 local ef = CreateFrame("Frame", "CCEventFrame")
 CC.eventFrame = ef
@@ -318,6 +433,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
             self:RegisterEvent("CHAT_MSG_ADDON")
             self:RegisterEvent("INSPECT_READY")
             self:RegisterEvent("PLAYER_LOGOUT")
+            self:RegisterEvent("PLAYER_LOGIN")
         end
     elseif event == "GROUP_ROSTER_UPDATE" then
         CC:PruneState()
@@ -343,6 +459,9 @@ ef:SetScript("OnEvent", function(self, event, ...)
         CC:OnInspectReady(...)
     elseif event == "CHAT_MSG_ADDON" then
         CC:OnAddonMessage(...)
+    elseif event == "PLAYER_LOGIN" then
+        -- Every addon is loaded by now, so CDTL3 (if present) is ready.
+        CC:BridgeRegister()
     elseif event == "PLAYER_LOGOUT" then
         CC:SavePosition()
     end
@@ -399,7 +518,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
             local specName = CC:GetSpecName(name)
             local classStr = specName and (specName .. " " .. info.class) or info.class
             print(string.format("    %s [%s] capabilities: %s",
-                name, classStr, #caps > 0 and table.concat(caps, ", ") or "none"))
+                CC:ShortName(name), classStr, #caps > 0 and table.concat(caps, ", ") or "none"))
         end
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
@@ -413,7 +532,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
                 local rem = CC:GetRemaining(name, sid)
                 local spell = CC.SpellData[sid]
                 print(string.format("    %s [%s] %s = %.0fs",
-                    name, entry.class, spell and spell.name or tostring(sid), rem or 0))
+                    CC:ShortName(name), entry.class, spell and spell.name or tostring(sid), rem or 0))
             end
         end
         if not any then

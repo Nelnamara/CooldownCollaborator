@@ -116,7 +116,7 @@ end
 -------------------------------------------------------------------------------
 
 function CC:PollConsumables()
-    local myName   = UnitName("player")
+    local myName   = CC:FullName("player")
     local changed  = false
     local hasFlask = false
     local hasFood  = false
@@ -188,7 +188,7 @@ end
 function CC:OnBuffStatusMessage(sender, msg)
     local flask, food = msg:match("flask:(%d):food:(%d)")
     if not flask then return end
-    self.buffRoster[sender] = { flask = flask == "1", food = food == "1" }
+    self.buffRoster[self:NormalizeSender(sender) or sender] = { flask = flask == "1", food = food == "1" }
     if CC.RefreshEssentials then CC:RefreshEssentials() end
 end
 
@@ -204,19 +204,19 @@ function CC:GetGroupBuffStatus()
     if not IsInGroup() then return nil end
 
     local function check(unit)
-        local name = UnitName(unit)
+        local name = CC:FullName(unit)
         if not name or not UnitIsConnected(unit) then return end
         total = total + 1
         local entry = self.buffRoster[name]
         if entry and entry.flask then
             hasFlask = hasFlask + 1
         else
-            missingFlask[#missingFlask + 1] = name
+            missingFlask[#missingFlask + 1] = CC:ShortName(name)
         end
         if entry and entry.food then
             hasFood = hasFood + 1
         else
-            missingFood[#missingFood + 1] = name
+            missingFood[#missingFood + 1] = CC:ShortName(name)
         end
     end
 

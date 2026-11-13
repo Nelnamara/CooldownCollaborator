@@ -166,7 +166,7 @@ function CC:RefreshEssentials()
 
                 row.classBar:SetColorTexture(c[1], c[2], c[3], 1)
                 if data then row.icon:SetTexture(data.icon) end
-                row.nameText:SetText(entry.name)
+                row.nameText:SetText(CC:ShortName(entry.name))
                 row.nameText:SetTextColor(c[1], c[2], c[3])
 
                 if entry.ready then
