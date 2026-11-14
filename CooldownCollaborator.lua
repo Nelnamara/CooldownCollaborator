@@ -1,12 +1,63 @@
 -- CooldownCollaborator
--- Group and raid cooldown coordinator for WoW Midnight (12.x)
+-- Group and raid cooldown coordinator for World of Warcraft: Retail (Midnight
+-- 12.x), MoP Classic, TBC Anniversary, Classic Era and WoW: Forever.
 -- Author: Nelnamara
 
 CooldownCollaborator = {}
 CC = CooldownCollaborator
 
-CC.version = "1.0.4"
+CC.version = "1.1.0"
 CC.PREFIX   = "CDCOLLAB"
+
+-------------------------------------------------------------------------------
+-- Client detection (the same rules as CooldownTimeline3). WoW: Forever runs
+-- the modern engine and API (the old spell globals are gone, values can be
+-- secret, no combat log) but reports a vanilla-era interface number (16xxx).
+-- So tocversion only picks CONTENT (the TOCs load each client's spell list);
+-- retailAPI picks which API calls exist. Never pick an API by tocversion alone.
+-------------------------------------------------------------------------------
+
+local _, _, _, tocversion = GetBuildInfo()
+CC.tocversion = tocversion
+CC.isForever = (tocversion >= 16000 and tocversion < 17000)
+    or (WOW_PROJECT_MAINLINE ~= nil and WOW_PROJECT_ID == WOW_PROJECT_MAINLINE and tocversion < 110000)
+CC.retailAPI = tocversion >= 110000 or CC.isForever
+-- Specs (and the inspect pipeline that reads them) are used on Retail only.
+CC.isRetail = tocversion >= 110000
+
+-- Frames with a backdrop take the template only where the client has it.
+CC.BackdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
+
+-- Globals that don't exist on every client, resolved per call. WoW: Forever
+-- ships no deprecation fallbacks: no IsSpellKnown / IsSpellKnownOrOverridesKnown
+-- and no GetSpellInfo globals there.
+local function PlayerSpellBank()
+    return Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
+end
+
+CC.Compat = {
+    IsSpellKnown = function(spellID)
+        if IsSpellKnownOrOverridesKnown or IsSpellKnown then
+            return (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID))
+                or (IsSpellKnown and IsSpellKnown(spellID)) or false
+        end
+        if C_SpellBook and C_SpellBook.IsSpellKnown then
+            return C_SpellBook.IsSpellKnown(spellID, PlayerSpellBank()) or false
+        end
+        return false
+    end,
+    -- name, icon, spellID of a spell (an ID, or a name where the client takes one)
+    GetSpellInfo = function(spell)
+        if C_Spell and C_Spell.GetSpellInfo then
+            local info = C_Spell.GetSpellInfo(spell)
+            if info and info.name then return info.name, info.iconID, info.spellID end
+        end
+        if GetSpellInfo then
+            local name, _, icon, _, _, _, spellID = GetSpellInfo(spell)
+            if name then return name, icon, spellID end
+        end
+    end,
+}
 
 -- state["Name-Realm"] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
 CC.state = {}
