@@ -154,6 +154,9 @@ function CC:Init()
         if self.db[k] == nil then self.db[k] = v end
     end
 
+    -- Rank map and name index from this client's own list (Data_<client>.lua)
+    self:BuildSpellIndex()
+
     -- Merge built-in consumables, then user's custom/registered ones
     for id, data in pairs(CC.BuiltinConsumables or {}) do
         CC.SpellData[id] = data
@@ -234,10 +237,13 @@ function CC:RemoveCustomSpell(spellID)
 end
 
 function CC:RecordCooldown(unitToken, spellID)
+    -- Every rank records under (and is sent as) its base ID.
+    local castID = spellID
+    spellID = self:BaseSpellID(spellID)
     local data = CC.SpellData[spellID]
     if CC.verbose then
         print(string.format("|cFF54a3ffCDC|r cast seen: unit=%s spellID=%s known=%s",
-            tostring(unitToken), tostring(spellID), tostring(data ~= nil)))
+            tostring(unitToken), tostring(castID), tostring(data ~= nil)))
     end
     if not data then return end
     if data.duration < (self.db.minDuration or 60) then return end
@@ -254,8 +260,9 @@ function CC:RecordCooldown(unitToken, spellID)
     self.state[name].spells[spellID] = now
 
     -- Watch our own spell so we can announce "ready now" (talents shorten
-    -- the real cooldown below the base length everyone else assumes).
-    if unitToken == "player" and not data.consumable then
+    -- the real cooldown below the base length everyone else assumes). Not
+    -- for a spell whose cooldown sits on an item: its own cooldown reads 0.
+    if unitToken == "player" and not data.consumable and not data.itemCooldown then
         self.localActive[spellID] = now
     end
 
@@ -266,6 +273,7 @@ end
 
 -- A remote player's spell is ready now (their "ready now" announcement).
 function CC:RecordReadyFromComm(playerName, spellID)
+    spellID = self:BaseSpellID(spellID)
     local data = CC.SpellData[spellID]
     local entry = self.state[playerName]
     if not data or not entry or not entry.spells[spellID] then return end

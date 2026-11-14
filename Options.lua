@@ -9,7 +9,7 @@ local TAB_H   = 26
 local CLASS_ORDER = {
     "WARRIOR", "PALADIN", "PRIEST", "DEATHKNIGHT",
     "SHAMAN", "MAGE", "WARLOCK", "MONK",
-    "DRUID", "DEMONHUNTER", "EVOKER",
+    "DRUID", "DEMONHUNTER", "EVOKER", "HUNTER", "ROGUE",
 }
 local CLASS_DISPLAY = {
     WARRIOR     = "Warrior",     PALADIN     = "Paladin",
@@ -17,7 +17,8 @@ local CLASS_DISPLAY = {
     SHAMAN      = "Shaman",      MAGE        = "Mage",
     WARLOCK     = "Warlock",     MONK        = "Monk",
     DRUID       = "Druid",       DEMONHUNTER = "Demon Hunter",
-    EVOKER      = "Evoker",
+    EVOKER      = "Evoker",      HUNTER      = "Hunter",
+    ROGUE       = "Rogue",
 }
 local MIN_DURATIONS = { 30, 60, 90, 120, 180 }
 

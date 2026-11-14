@@ -12,6 +12,7 @@
 
 CooldownCollaborator.lua
 Data.lua
+Data_Retail.lua
 Events.lua
 Comms.lua
 Bridge.lua
