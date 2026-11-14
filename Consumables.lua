@@ -180,7 +180,8 @@ function CC:BroadcastBuffStatus(playerName, hasFlask, hasFood)
     -- Message format: "flask:1:food:1"
     local msg = string.format("flask:%d:food:%d",
         hasFlask and 1 or 0, hasFood and 1 or 0)
-    local chatType = IsInRaid() and "RAID" or "PARTY"
+    local chatType = self:GroupChannel()
+    if not chatType then return end
     C_ChatInfo.SendAddonMessage(BUFF_PREFIX, msg, chatType)
 end
 

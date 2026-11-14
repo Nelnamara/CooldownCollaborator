@@ -13,18 +13,35 @@
 
 CC.pendingSyncs = CC.pendingSyncs or {}
 
+-- The channel that reaches the whole group: INSTANCE_CHAT in an instance group
+-- (dungeon finder, battleground), else RAID or PARTY; nil when not grouped.
+function CC:GroupChannel()
+    if LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+        return "INSTANCE_CHAT"
+    elseif IsInRaid() then
+        return "RAID"
+    elseif IsInGroup() then
+        return "PARTY"
+    end
+    return nil
+end
+
+-- Did SendAddonMessage send it? Retail and Forever return an
+-- Enum.SendAddonMessageResult (0 = Success); other builds nothing or true.
+-- Anything else (3 = throttled, 11 = lockdown, false, ...) didn't go out.
+function CC:AddonMessageSent(result)
+    if result == nil or result == true or result == 0 then return true end
+    local results = Enum and Enum.SendAddonMessageResult
+    return results ~= nil and results.Success ~= nil and result == results.Success
+end
+
 function CC:SendCooldownSync(spellID, playerName, usedAt)
     -- AreOutgoingAddonChatMessagesRestricted() was firing true far more often
     -- than expected (outside any encounter or death window), blocking every
     -- send before it was even attempted. Stop trusting that predictive check
     -- and just attempt the real send - SendAddonMessage's own return code is
     -- the authoritative signal, and is what we now act on.
-    local chatType
-    if IsInRaid() then
-        chatType = "RAID"
-    elseif IsInGroup() then
-        chatType = "PARTY"
-    end
+    local chatType = self:GroupChannel()
     if not chatType then
         if CC.verbose then print("|cFF54a3ffCDC|r sync skipped: not in a group") end
         return
@@ -39,13 +56,15 @@ function CC:SendCooldownSync(spellID, playerName, usedAt)
 
     local result = C_ChatInfo.SendAddonMessage(self.PREFIX, msg, chatType)
     if CC.verbose then
+        -- Retail 12.x only; nil elsewhere
+        local restricted = C_ChatInfo.AreOutgoingAddonChatMessagesRestricted
+            and C_ChatInfo.AreOutgoingAddonChatMessagesRestricted()
         print(string.format("|cFF54a3ffCDC|r sync send attempt: %s via %s (result=%s, restrictedCheck=%s)",
-            msg, chatType, tostring(result), tostring(C_ChatInfo.AreOutgoingAddonChatMessagesRestricted())))
+            msg, chatType, tostring(result), tostring(restricted)))
     end
 
-    -- nil/0 == success. Anything else (3 = throttled, 11 = lockdown, etc.)
-    -- means it didn't go out - queue for retry instead of dropping it.
-    if result then
+    -- Not sent (throttled, lockdown, etc.): queue for retry instead of dropping it.
+    if not self:AddonMessageSent(result) then
         table.insert(CC.pendingSyncs, { spellID = spellID, playerName = playerName, usedAt = usedAt })
     end
 end
@@ -54,12 +73,7 @@ end
 -- tracked spell comes off cooldown. Old clients parse "R" as the spell ID,
 -- get nil from tonumber and drop it.
 function CC:SendReadySync(spellID)
-    local chatType
-    if IsInRaid() then
-        chatType = "RAID"
-    elseif IsInGroup() then
-        chatType = "PARTY"
-    end
+    local chatType = self:GroupChannel()
     if not chatType then return end
 
     local msg = "R:" .. spellID
@@ -68,7 +82,7 @@ function CC:SendReadySync(spellID)
         print(string.format("|cFF54a3ffCDC|r ready send attempt: %s via %s (result=%s)",
             msg, chatType, tostring(result)))
     end
-    if result then
+    if not self:AddonMessageSent(result) then
         table.insert(CC.pendingSyncs, { kind = "ready", spellID = spellID })
     end
 end
