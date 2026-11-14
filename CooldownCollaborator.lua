@@ -274,14 +274,24 @@ function CC:RecordReadyFromComm(playerName, spellID)
     self:RefreshAllViews()
 end
 
+-- Another player's cast, from their addon message or (Era, TBC, MoP) from the
+-- combat log. On those clients the same cast can arrive both ways: a second
+-- report within DUPLICATE_WINDOW seconds of the recorded one is that same cast
+-- and changes nothing.
+local DUPLICATE_WINDOW = 5
+
 function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
+    spellID = self:BaseSpellID(spellID)
     local data = CC.SpellData[spellID]
-    if not data then return end
+    if not data or not playerName then return end
 
     if not self.state[playerName] then
         self.state[playerName] = { class = classTag or "UNKNOWN", spells = {} }
+    elseif classTag and classTag ~= "UNKNOWN" and self.state[playerName].class == "UNKNOWN" then
+        self.state[playerName].class = classTag
     end
     local cur = self.state[playerName].spells[spellID]
+    if cur and math.abs(usedAt - cur) < DUPLICATE_WINDOW then return end
     if not cur or usedAt > cur then
         self.state[playerName].spells[spellID] = usedAt
         self:BridgeStart(playerName, spellID, usedAt, self.state[playerName].class)
@@ -559,6 +569,12 @@ ef:SetScript("OnEvent", function(self, event, ...)
         local unitToken, _, spellID = ...
         if unitToken == "player" then
             CC:RecordCooldown(unitToken, spellID)
+        end
+    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        -- Era, TBC and MoP only (Events.lua): other players' casts
+        local ok, err = pcall(CC.OnCombatLog, CC)
+        if not ok and CC.verbose then
+            print("|cFF54a3ffCDC|r combat log error: " .. tostring(err))
         end
     elseif event == "INSPECT_READY" then
         CC:OnInspectReady(...)
