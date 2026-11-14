@@ -6,15 +6,18 @@ Tracks party/raid members' major defensive & utility cooldowns, an Essentials ba
 flask/food status, and a minimap button.
 
 ## Files
-- `CooldownCollaborator.lua` — core: init, DB defaults, event frame, `RecordCooldown`, Rez logic, slash `/cdc`.
-- `Data.lua` — `CC.SpellData` (tracked-spell whitelist), `CC.BuiltinConsumables`, `CC.ClassColors`.
-- `Bridge.lua` — optional CDTL3 timer-type bridge (`cdcGroup`); every call guarded, no-op without CDTL3.
-- `Comms.lua` — addon messaging. Prefixes: `CDCOLLAB` (cooldown sync) and `CDCBUFF` (flask/food status).
-- `Roster.lua` — `NotifyInspect` queue for spec detection; capability scan.
+- `CooldownCollaborator.lua` — core: client detection and `CC.Compat` (top), init, DB defaults, event frame, `RecordCooldown`, `RecordCooldownFromComm` (one record per cast: a second report within 5 s is the same cast), own-spell readiness (`GetLocalReadiness`, `KnownRank`, ready-now poll), Rez logic, slash `/cdc`.
+- `Data.lua` — shared: `CC.ClassColors`, and `CC:BuildSpellIndex()` (run in Init) → `CC.RankToBase[anyRankID] = baseID` and `CC.SpellByName` (English and client names); `CC:BaseSpellID(id)`.
+- `Data_Retail.lua`, `Data_Mists.lua`, `Data_TBC.lua`, `Data_Era.lua`, `Data_Forever.lua` — one per client, each TOC loads only its own: `CC.SpellData[baseID] = { name, duration, icon, class, ranks = {...} }` (ranks on Era/TBC/Forever; every rank records under, and is sent as, the base ID), `CC.Providers` (lust / Battle Rez classes → base IDs), `CC.BuiltinConsumables` (with `category`) and `CC.ConsumableMatch` ("id" Retail/Forever, "name" Era/TBC/MoP). Rows are checked against the game data (SpellName, SpellCooldowns, SpellMisc icons, SpellDuration) of the builds in `cdtl3-dev/tools/spell-list-check/builds.json`; `docs/port-research.md` section B has the tables. Soulstone is tracked, never a Battle Rez provider; on Era/TBC/Forever its cooldown is the item's (`itemCooldown = true`: no ready-now watch).
+- `Bridge.lua` — optional CDTL3 timer-type bridge (`cdcGroup`); every call guarded, no-op without CDTL3. On Era/TBC/MoP CDTL3's own combat-log raid cooldowns step aside while this type is on (CDTL3 Group.lua `CollaboratorFeeds`).
+- `Comms.lua` — addon messaging. Prefixes: `CDCOLLAB` (cooldown sync) and `CDCBUFF` (flask/food status). `CC:GroupChannel()` (INSTANCE_CHAT in an instance group, else RAID/PARTY); `CC:AddonMessageSent(result)` (nil, true, 0, `Enum.SendAddonMessageResult.Success` = sent; anything else is queued for retry).
+- `Events.lua` — `UNIT_SPELLCAST_SUCCEEDED` ("player" only) and, on Era/TBC/MoP, the combat-log path: `COMBAT_LOG_EVENT_UNFILTERED` registered only where `retailAPI` is false and the accessor exists, in a pcall; `SPELL_CAST_SUCCESS` from party/raid players (not me, no pets) → `CC:MatchSpell` (ID, any rank, then name) → `RecordCooldownFromComm` with the class from `GetPlayerInfoByGUID` (pcall). Nothing is sent for those casts. Also roster pruning and `BroadcastState`.
+- `Roster.lua` — capability table built from `CC.Providers` (no provider on this client → no capability, lane, header or Essentials slot: no lust on Era/Forever); `NotifyInspect` spec labels on Retail only.
 - `Essentials.lua` — the Essentials bar (ready providers + flask/food strip).
-- `Lanes.lua` — Lane view (stacked provider timelines).
-- `Consumables.lua` — self-poll of own flask/food auras → broadcast category presence.
+- `Lanes.lua` — Lane view (one lane per capability the client has).
+- `Consumables.lua` — self-poll of own flask/food auras → broadcast category presence. Retail/Forever: `GetPlayerAuraBySpellID` by ID (auras secret); Era/TBC/MoP: the readable aura list, built-ins by name, `/cdc consumable` entries by spell ID.
 - `UI.lua`, `Options.lua`, `Minimap.lua`.
+- `tools/tests/` (not packaged) — the test suite, see Build.
 
 ## Midnight API gotchas (critical)
 - `aura.spellId` / `aura.name` are **SECRET** even on `"player"`. Only safe lookup is `C_UnitAuras.GetPlayerAuraBySpellID(knownID)`. This is why flask/food tracking is peer-broadcast (each client detects its own, announces via `CDCBUFF`).
@@ -30,8 +33,11 @@ flask/food status, and a minimap button.
 ## Build / release / deploy
 - BigWigs **packager runs on `v*` tag push** (GitHub Actions). Pushing `main` does NOT release.
 - CurseForge API secret is named **`CURSFORGE_API_KEY`** (misspelled — missing the E — but consistent across the suite; do not "fix" it).
+- **One package, six TOCs** (copied from CooldownTimeline3): `_Mainline` (120105 Retail), `_Mists` (50504 MoP Classic), `_TBC` (20506 TBC Anniversary), `_Vanilla` (11509 Classic Era), `_Camelot` (16001 WoW: Forever) and an unsuffixed `CooldownCollaborator.toc` (16001, the Forever fallback: Forever loads `_Camelot` then the plain TOC, never `_Mainline`). One Interface number per TOC (the packager fails a suffixed TOC carrying another game type's number); all six must keep the same `## SavedVariables: CooldownCollaboratorDB` and `## Version`; `X-Curse-Project-ID: 1577127` sits in the unsuffixed, `_Camelot` and `_Mainline` TOCs. File lists are identical except the one `Data_<client>.lua`. Bump each TOC's Interface when its client patches. `.pkgmeta` keeps `CLAUDE.md`, `README.md`, `docs`, `tools` and the `Media/*.png` source art out of the package.
+- **Client detection** (`CooldownCollaborator.lua` top, same rules as CDTL3.lua): `CC.tocversion` picks content (the TOCs pick the spell list); `CC.retailAPI = tocversion >= 110000 or CC.isForever` picks which API calls exist; `CC.isForever` = the 16000–16999 band (Forever is the modern engine with a vanilla interface number: secret values, no combat log, no `IsSpellKnown`/`GetSpellInfo` globals); `CC.isRetail` gates specs/inspect. Never pick an API by interface number alone; call `CC.Compat.IsSpellKnown` / `CC.Compat.GetSpellInfo`, not the bare globals. Own cooldowns: `C_Spell` (isActive) where `retailAPI`, legacy `GetSpellCooldown`/`GetSpellCharges` elsewhere (no isActive there). Hidden values are only compared inside a pcall.
+- **Tests**: `powershell -File tools\tests\runall.ps1` loads every TOC under its client's stubbed API and runs `tools/tests/checks.lua` (fengari; `run.js` is cdtl3-dev's runner and loads fengari from the sibling `cdtl3-dev/tools/spell-list-check/node_modules`, so `npm install` there first, or set `FENGARI_DIR`). It prints one `RESULT <toc> <client>: tracked spells N, checks N, fails 0, lua errors 0` line per TOC, plus any `FAIL` line. `wow.lua` is cdtl3-dev's stub client cut down, with each client's real gaps. One TOC by hand: `node tools\tests\run.js . 11509 tools\tests\checks.lua CooldownCollaborator_Vanilla.toc`. Keep tests in the repo.
 - Local test deploy: copy changed files to `D:\World of Warcraft\_retail_\Interface\AddOns\CooldownCollaborator\`.
-- Current version: **1.0.4** (Interface 120105). The `catch-up` branch adds the CDTL3 bridge (`Bridge.lua`) and ready-now announcements. v1.0.3 added live local readiness for Battle-Rez/Bloodlust (see the combat-res gotcha above); v1.0.1 built-in consumable + flask/food strip; v1.0.2 minimap button polish.
+- Current version: **1.1.0** (all six TOCs + `CC.version`): Classic Era, TBC Anniversary, MoP Classic and WoW: Forever join Retail; plan in `docs/CLASSIC_FOREVER_PLAN.md`, facts and spell tables in `docs/port-research.md`. 1.0.4 (Interface 120105) and the `catch-up` branch added the CDTL3 bridge (`Bridge.lua`) and ready-now announcements. v1.0.3 added live local readiness for Battle-Rez/Bloodlust (see the combat-res gotcha above); v1.0.1 built-in consumable + flask/food strip; v1.0.2 minimap button polish.
 
 ## Conventions
 - **Never** append a `Co-Authored-By` trailer to commits.
