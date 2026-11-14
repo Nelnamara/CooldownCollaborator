@@ -35,7 +35,10 @@ function CC:AddonMessageSent(result)
     return results ~= nil and results.Success ~= nil and result == results.Success
 end
 
-function CC:SendCooldownSync(spellID, playerName, usedAt)
+-- A send the game keeps refusing is tried again every 2 s, at most this many times (about half a minute)
+CC.MAX_SEND_TRIES = 15
+
+function CC:SendCooldownSync(spellID, playerName, usedAt, tries)
     -- AreOutgoingAddonChatMessagesRestricted() was firing true far more often
     -- than expected (outside any encounter or death window), blocking every
     -- send before it was even attempted. Stop trusting that predictive check
@@ -64,15 +67,16 @@ function CC:SendCooldownSync(spellID, playerName, usedAt)
     end
 
     -- Not sent (throttled, lockdown, etc.): queue for retry instead of dropping it.
-    if not self:AddonMessageSent(result) then
-        table.insert(CC.pendingSyncs, { spellID = spellID, playerName = playerName, usedAt = usedAt })
+    tries = (tries or 0) + 1
+    if not self:AddonMessageSent(result) and tries < CC.MAX_SEND_TRIES then
+        table.insert(CC.pendingSyncs, { spellID = spellID, playerName = playerName, usedAt = usedAt, tries = tries })
     end
 end
 
 -- "Ready now" announcement: "R:spellID". Sent by a player when their own
 -- tracked spell comes off cooldown. Old clients parse "R" as the spell ID,
 -- get nil from tonumber and drop it.
-function CC:SendReadySync(spellID)
+function CC:SendReadySync(spellID, tries)
     local chatType = self:GroupChannel()
     if not chatType then return end
 
@@ -82,8 +86,9 @@ function CC:SendReadySync(spellID)
         print(string.format("|cFF54a3ffCDC|r ready send attempt: %s via %s (result=%s)",
             msg, chatType, tostring(result)))
     end
-    if not self:AddonMessageSent(result) then
-        table.insert(CC.pendingSyncs, { kind = "ready", spellID = spellID })
+    tries = (tries or 0) + 1
+    if not self:AddonMessageSent(result) and tries < CC.MAX_SEND_TRIES then
+        table.insert(CC.pendingSyncs, { kind = "ready", spellID = spellID, tries = tries })
     end
 end
 
@@ -142,9 +147,9 @@ C_Timer.NewTicker(2, function()
     CC.pendingSyncs = {}
     for _, item in ipairs(queue) do
         if item.kind == "ready" then
-            CC:SendReadySync(item.spellID)
+            CC:SendReadySync(item.spellID, item.tries)
         else
-            CC:SendCooldownSync(item.spellID, item.playerName, item.usedAt)
+            CC:SendCooldownSync(item.spellID, item.playerName, item.usedAt, item.tries)
         end
     end
 end)
