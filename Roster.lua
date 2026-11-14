@@ -4,35 +4,35 @@
 --   1. Class scan (instant, O(n)) — flags everyone whose CLASS can provide a
 --      capability. Happens on every GROUP_ROSTER_UPDATE.
 --
---   2. Spec refinement (throttled, ~2s/unit) — uses NotifyInspect/INSPECT_READY
---      to narrow down to exact spec. Matters mainly for Evoker (Augmentation
---      is the spec that typically brings Fury of the Aspects) and for future
---      talent-level checks if Blizzard re-gates abilities behind talent rows.
---      Results stored in CC.rosterSpecs[name] = specIndex.
+--   2. Spec refinement (throttled, ~2s/unit, Retail only) — uses
+--      NotifyInspect/INSPECT_READY to narrow down to exact spec. Matters mainly
+--      for Evoker (Augmentation is the spec that typically brings Fury of the
+--      Aspects) and for future talent-level checks if Blizzard re-gates
+--      abilities behind talent rows. Results stored in
+--      CC.rosterSpecs[name] = specIndex. The spec is only a label: Era, TBC and
+--      Forever have no specs, and MoP doesn't show one yet.
 --
 -- CC.roster[name] = { class="SHAMAN", capabilities={ BLOODLUST={2825,32182} } }
 
--- capability key -> { label, classes = { CLASSTAG = {spellID,...} } }
-CC.CAPABILITIES = {
-    BLOODLUST = {
-        label = "Bloodlust/Heroism",
-        classes = {
-            SHAMAN = { 2825, 32182 },
-            MAGE   = { 80353 },
-            EVOKER = { 391215 },
-        },
-    },
-    BATTLEREZ = {
-        label = "Battle Rez",
-        classes = {
-            DRUID       = { 20484 },
-            DEATHKNIGHT = { 61999 },
-        },
-    },
+-- capability key -> { label, classes = { CLASSTAG = {spellID,...} } }, built
+-- from the client's providers (CC.Providers, Data_<client>.lua). A capability
+-- nobody can provide on this client (no lust on Era or Forever) gets no entry,
+-- so it has no lane, header or Essentials slot.
+local CAPABILITY_LABELS = {
+    BLOODLUST = "Bloodlust/Heroism",
+    BATTLEREZ = "Battle Rez",
 }
 
 -- Ordered list for stable display
-CC.CAPABILITY_ORDER = { "BLOODLUST", "BATTLEREZ" }
+CC.CAPABILITIES     = {}
+CC.CAPABILITY_ORDER = {}
+for _, key in ipairs({ "BLOODLUST", "BATTLEREZ" }) do
+    local classes = CC.Providers and CC.Providers[key]
+    if classes and next(classes) then
+        CC.CAPABILITIES[key] = { label = CAPABILITY_LABELS[key], classes = classes }
+        CC.CAPABILITY_ORDER[#CC.CAPABILITY_ORDER + 1] = key
+    end
+end
 
 -- Spec names for /cdc roster printout
 local SPEC_NAMES = {
