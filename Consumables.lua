@@ -73,8 +73,11 @@ function CC:AddConsumableBuff(spellID, duration, name)
     -- Parse optional trailing category keyword
     local category = nil
     if name then
+        -- two matches in turn: "a or b" would keep only the first capture
         local stripped, trailing = name:match("^(.-)%s+(flask)$")
-                                or name:match("^(.-)%s+(food)$")
+        if not stripped then
+            stripped, trailing = name:match("^(.-)%s+(food)$")
+        end
         if stripped and trailing then
             name     = stripped ~= "" and stripped or nil
             category = trailing
