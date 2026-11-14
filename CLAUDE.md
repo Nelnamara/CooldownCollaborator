@@ -31,7 +31,7 @@ flask/food status, and a minimap button.
 - BigWigs **packager runs on `v*` tag push** (GitHub Actions). Pushing `main` does NOT release.
 - CurseForge API secret is named **`CURSFORGE_API_KEY`** (misspelled — missing the E — but consistent across the suite; do not "fix" it).
 - Local test deploy: copy changed files to `D:\World of Warcraft\_retail_\Interface\AddOns\CooldownCollaborator\`.
-- Current version: **1.0.3** (Interface 120007). v1.0.3 added live local readiness for Battle-Rez/Bloodlust (see the combat-res gotcha above); v1.0.1 built-in consumable + flask/food strip; v1.0.2 minimap button polish.
+- Current version: **1.0.4** (Interface 120105). The `catch-up` branch adds the CDTL3 bridge (`Bridge.lua`) and ready-now announcements. v1.0.3 added live local readiness for Battle-Rez/Bloodlust (see the combat-res gotcha above); v1.0.1 built-in consumable + flask/food strip; v1.0.2 minimap button polish.
 
 ## Conventions
 - **Never** append a `Co-Authored-By` trailer to commits.
