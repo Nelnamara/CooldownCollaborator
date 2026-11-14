@@ -55,22 +55,18 @@ local function ResolveSpell(text)
     local linkID = text:match("|Hspell:(%d+)")
     if linkID then return tonumber(linkID) end
     if text:match("^%d+$") then return tonumber(text) end
-    -- name lookup via old compat API (7th return = canonical spellID)
-    if GetSpellInfo and text:len() >= 2 then
-        local n, _, _, _, _, _, sid = GetSpellInfo(text)
-        if n and sid then return sid end
+    -- name lookup: C_Spell.GetSpellInfo takes a name on the modern engine (the
+    -- only way on Forever), then the old global where it exists
+    if text:len() >= 2 then
+        local ok, n, _, sid = pcall(CC.Compat.GetSpellInfo, text)
+        if ok and n and sid then return sid end
     end
     return nil
 end
 
 local function LookupSpellName(spellID)
     if not spellID then return nil end
-    local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
-    if info then return info.name, info.iconID end
-    if GetSpellInfo then
-        local n, _, ic = GetSpellInfo(spellID)
-        return n, ic
-    end
+    return CC.Compat.GetSpellInfo(spellID)
 end
 
 -- ── Default Spells tab ───────────────────────────────────────────────────────
@@ -216,7 +212,7 @@ function CC:OpenOptions()
         return
     end
 
-    local f = CreateFrame("Frame", "CCOptionsFrame", UIParent, "BackdropTemplate")
+    local f = CreateFrame("Frame", "CCOptionsFrame", UIParent, CC.BackdropTemplate)
     f:SetSize(FRAME_W, FRAME_H)
     f:SetPoint("CENTER")
     f:SetFrameStrata("HIGH")
@@ -428,7 +424,7 @@ function CC:OpenOptions()
     yOff = yOff - (TAB_H + 4)
 
     -- Content area
-    local contentArea = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    local contentArea = CreateFrame("Frame", nil, f, CC.BackdropTemplate)
     contentArea:SetSize(FRAME_W - 32, FRAME_H - (-yOff) - 16)
     contentArea:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
     contentArea:SetBackdrop({
@@ -590,7 +586,17 @@ function CC:BuildOptionsPanel()
     openBtn:SetText("Open CooldownCollaborator Settings")
     openBtn:SetScript("OnClick", function() CC:OpenOptions() end)
 
-    local category = Settings.RegisterCanvasLayoutCategory(panel, "CooldownCollaborator")
-    Settings.RegisterAddOnCategory(category)
-    self.optionsCategoryID = category.ID
+    -- The Settings panel where the client has it, else the old Interface
+    -- Options list; neither is required (/cdc settings and the minimap button
+    -- open the window), so a failure here never stops Init.
+    if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
+        local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, panel, "CooldownCollaborator")
+        if ok and category then
+            pcall(Settings.RegisterAddOnCategory, category)
+            self.optionsCategoryID = category.ID
+        end
+    elseif InterfaceOptions_AddCategory then
+        panel.name = "CooldownCollaborator"
+        pcall(InterfaceOptions_AddCategory, panel)
+    end
 end

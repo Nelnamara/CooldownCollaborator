@@ -194,15 +194,7 @@ function CC:AddCustomSpell(spellID, duration)
     spellID = tonumber(spellID)
     if not spellID or not duration or duration <= 0 then return false end
 
-    local name, icon
-    local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
-    if info then
-        name = info.name
-        icon = info.iconID
-    else
-        name = GetSpellInfo and select(1, GetSpellInfo(spellID)) or ("Spell " .. spellID)
-        icon = GetSpellInfo and select(3, GetSpellInfo(spellID)) or 134400
-    end
+    local name, icon = CC.Compat.GetSpellInfo(spellID)
 
     if not name then
         print("|cFF54a3ffCooldownCollaborator|r Unknown spell ID: " .. spellID)
@@ -398,37 +390,73 @@ end
 -- pcall-guarded: a bare read of a secret value doesn't error, but comparing/using
 -- one does. If any field is still secret here the compare throws, ok is false, and
 -- we return nil so the caller falls back to the observed-cast model (GetRemaining).
-function CC:GetLocalReadiness(spellID)
-    if not C_Spell then return nil end
+--
+-- Retail and Forever read C_Spell (tables with isActive). Era, TBC and MoP read
+-- the legacy GetSpellCooldown / GetSpellCharges: their tables have no isActive,
+-- so the C_Spell path would call every spell ready.
 
-    local known = false
-    pcall(function()
-        known = (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID))
-             or (IsSpellKnown and IsSpellKnown(spellID))
-    end)
-    if not known then return nil end
+-- The highest rank of a tracked spell the player knows (any rank counts as
+-- knowing it), or nil. A spell without ranks is just itself.
+function CC:KnownRank(spellID)
+    local data = CC.SpellData[spellID]
+    local ids = data and data.ranks or { spellID }
+    for i = #ids, 1, -1 do
+        local ok, known = pcall(CC.Compat.IsSpellKnown, ids[i])
+        if ok and known then return ids[i] end
+    end
+    return nil
+end
+
+-- The player's charges of a spell: current, max, recharge start, recharge
+-- length; nothing for a spell without charges. Call inside a pcall.
+local function ReadCharges(id)
+    if CC.retailAPI then
+        local ch = C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(id)
+        if ch then
+            return ch.currentCharges, ch.maxCharges, ch.cooldownStartTime, ch.cooldownDuration
+        end
+    elseif GetSpellCharges then
+        return GetSpellCharges(id)
+    end
+end
+
+function CC:GetLocalReadiness(spellID)
+    local id = self:KnownRank(spellID)
+    if not id then return nil end
 
     local remaining
     local ok = pcall(function()
         -- Charge-based (raid Battle Rez pool): ready while >=1 charge is banked,
         -- otherwise count down to the next charge.
-        local ch = C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(spellID)
-        if ch and ch.maxCharges and ch.maxCharges > 1 then
-            if (ch.currentCharges or 0) >= 1 then
+        local current, maxCharges, chStart, chDuration = ReadCharges(id)
+        if maxCharges and maxCharges > 1 then
+            if (current or 0) >= 1 then
                 remaining = 0
             else
-                local rem = (ch.cooldownStart or 0) + (ch.cooldownDuration or 0) - GetTime()
+                local rem = (chStart or 0) + (chDuration or 0) - GetTime()
                 remaining = rem > 0 and rem or 0
             end
             return
         end
         -- Plain cooldown. duration <= 1.5 is just the GCD → treat as ready.
-        local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(spellID)
-        if cd and cd.isEnabled ~= false and cd.isActive and cd.duration and cd.duration > 1.5 then
-            local rem = (cd.startTime + cd.duration) - GetTime()
-            remaining = rem > 0 and rem or 0
+        if CC.retailAPI then
+            local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(id)
+            if cd and cd.isEnabled ~= false and cd.isActive and cd.duration and cd.duration > 1.5 then
+                local rem = (cd.startTime + cd.duration) - GetTime()
+                remaining = rem > 0 and rem or 0
+            else
+                remaining = 0  -- known and not on a real cooldown → ready
+            end
         else
-            remaining = 0  -- known and not on a real cooldown → ready
+            local start, duration, enabled = GetSpellCooldown(id)
+            -- enabled 0: the cooldown starts when the spell's effect ends; unknown yet
+            if enabled == 0 then return end
+            if start and start > 0 and duration and duration > 1.5 then
+                local rem = (start + duration) - GetTime()
+                remaining = rem > 0 and rem or 0
+            else
+                remaining = 0
+            end
         end
     end)
     if not ok then return nil end
@@ -438,16 +466,32 @@ end
 -- Is our own spell off cooldown right now? Returns true / false, or nil when
 -- it can't be read. cd.isActive is never secret; reads are pcall-guarded.
 local function LocalSpellIsReady(spellID)
+    -- A ranked spell reads the rank the player knows; none known: can't tell.
+    local data = CC.SpellData[spellID]
+    local id = spellID
+    if data and data.ranks then
+        id = CC:KnownRank(spellID)
+        if not id then return nil end
+    end
     local ready
     local ok = pcall(function()
-        local ch = C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(spellID)
-        if ch and ch.maxCharges and ch.maxCharges > 1 then
-            ready = (ch.currentCharges or 0) >= 1
+        local current, maxCharges = ReadCharges(id)
+        if maxCharges and maxCharges > 1 then
+            ready = (current or 0) >= 1
             return
         end
-        local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(spellID)
-        if not cd then return end
-        ready = not cd.isActive
+        if CC.retailAPI then
+            local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(id)
+            if not cd then return end
+            ready = not cd.isActive
+        else
+            local start, duration, enabled = GetSpellCooldown(id)
+            if enabled == 0 then
+                ready = false  -- waiting for its effect to end
+                return
+            end
+            ready = not (start and start > 0 and duration and duration > 1.5)
+        end
     end)
     if not ok then return nil end
     return ready
@@ -490,7 +534,9 @@ ef:SetScript("OnEvent", function(self, event, ...)
             self:RegisterEvent("ENCOUNTER_START")
             self:RegisterEvent("ENCOUNTER_END")
             self:RegisterEvent("CHAT_MSG_ADDON")
-            self:RegisterEvent("INSPECT_READY")
+            if CC.isRetail then
+                self:RegisterEvent("INSPECT_READY")
+            end
             self:RegisterEvent("PLAYER_LOGOUT")
             self:RegisterEvent("PLAYER_LOGIN")
         end
@@ -570,7 +616,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         end
     elseif cmd == "roster" then
         CC:ScanRoster()
-        print("|cFF54a3ffCooldownCollaborator|r roster (spec refinement queued):")
+        print("|cFF54a3ffCooldownCollaborator|r roster" .. (CC.isRetail and " (spec refinement queued)" or "") .. ":")
         for name, info in pairs(CC.roster or {}) do
             local caps = {}
             for key in pairs(info.capabilities) do caps[#caps + 1] = key end

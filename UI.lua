@@ -29,7 +29,7 @@ end
 function CC:BuildUI()
     local db = self.db
 
-    local frame = CreateFrame("Frame", "CCMainFrame", UIParent, "BackdropTemplate")
+    local frame = CreateFrame("Frame", "CCMainFrame", UIParent, CC.BackdropTemplate)
     frame:SetSize(FRAME_WIDTH, TITLE_HEIGHT + ROW_HEIGHT)
     frame:SetPoint("CENTER", UIParent, "CENTER", db.x or 0, db.y or 200)
     frame:SetScale(db.scale or 1.0)

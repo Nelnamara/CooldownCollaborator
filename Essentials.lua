@@ -21,7 +21,7 @@ end
 function CC:BuildEssentialsBar()
     local db = self.db
 
-    local f = CreateFrame("Frame", "CCEssentialsFrame", UIParent, "BackdropTemplate")
+    local f = CreateFrame("Frame", "CCEssentialsFrame", UIParent, CC.BackdropTemplate)
     f:SetSize(FRAME_WIDTH, HEADER_HEIGHT + ROW_HEIGHT)
     f:SetPoint("CENTER", UIParent, "CENTER", db.essentialsX or 220, db.essentialsY or 200)
     f:SetScale(db.essentialsScale or 1.0)

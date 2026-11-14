@@ -92,7 +92,9 @@ function CC:ScanRoster()
     end
 
     -- Queue a spec refinement pass now that we have fresh unit tokens
-    self:QueueInspectAll()
+    if CC.isRetail then
+        self:QueueInspectAll()
+    end
 
     if CC.RefreshEssentials then CC:RefreshEssentials() end
 end
@@ -117,7 +119,8 @@ function CC:QueueInspectAll()
         end
     end
     -- Self-inspect is instant and doesn't use the throttled API
-    local selfSpec = GetSpecialization()
+    local getSpec = GetSpecialization or (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization)
+    local selfSpec = getSpec and getSpec()
     local selfName = CC:FullName("player")
     if selfName and selfSpec then
         self.rosterSpecs[selfName] = selfSpec
