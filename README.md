@@ -4,7 +4,7 @@
 
 CooldownCollaborator gives your group a live shared view of every major defensive and utility cooldown — who has it, how long until it's back, and whether it's ready to assign. Works for both 5-man party and full 40-player raids with automatic layout switching. One download covers all five clients, and each client tracks its own spell list.
 
-**Help us test it.** Version 1.1.0 is new on every client except Retail, and its link to CooldownTimeline3 is new everywhere. It hasn't had wide testing in real groups yet. Please try it in your dungeons and raids, ideally with friends who run it too, and tell us what you see, good or bad, in [Issues](https://github.com/Nelnamara/CooldownCollaborator/issues).
+**Try it in your groups.** Version 1.1.0 is new on every client except Retail, and its link to CooldownTimeline3 is new everywhere. Testing in all kinds of groups (dungeons, raids, battlegrounds, with friends who run it too) is encouraged and appreciated. Tell us what you see, good or bad, in [Issues](https://github.com/Nelnamara/CooldownCollaborator/issues).
 
 ---
 

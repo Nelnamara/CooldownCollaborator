@@ -8,7 +8,7 @@ One download covers Retail 12.1.5, MoP Classic 5.5.4, TBC Anniversary 2.5.6, Cla
 
 **Classic Era, TBC Anniversary and MoP Classic: your groupmates don't need it for their cooldowns to show.** CC reads other players' casts from the combat log. Ready-now announcements and flask and food status still come only from players who have CC.
 
-**Help us test it.** Version 1.1.0 is new on every client except Retail, and its link to CooldownTimeline3 is new everywhere. It hasn't had wide testing in real groups yet. Please try it in your dungeons and raids, ideally with friends who run it too, and tell us what you see, good or bad, at https://github.com/Nelnamara/CooldownCollaborator/issues.
+**Try it in your groups.** Version 1.1.0 is new on every client except Retail, and its link to CooldownTimeline3 is new everywhere. Testing in all kinds of groups (dungeons, raids, battlegrounds, with friends who run it too) is encouraged and appreciated. Tell us what you see, good or bad, at https://github.com/Nelnamara/CooldownCollaborator/issues.
 
 ## What it does
 
