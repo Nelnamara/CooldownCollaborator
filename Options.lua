@@ -9,7 +9,7 @@ local TAB_H   = 26
 local CLASS_ORDER = {
     "WARRIOR", "PALADIN", "PRIEST", "DEATHKNIGHT",
     "SHAMAN", "MAGE", "WARLOCK", "MONK",
-    "DRUID", "DEMONHUNTER", "EVOKER",
+    "DRUID", "DEMONHUNTER", "EVOKER", "HUNTER", "ROGUE",
 }
 local CLASS_DISPLAY = {
     WARRIOR     = "Warrior",     PALADIN     = "Paladin",
@@ -17,7 +17,8 @@ local CLASS_DISPLAY = {
     SHAMAN      = "Shaman",      MAGE        = "Mage",
     WARLOCK     = "Warlock",     MONK        = "Monk",
     DRUID       = "Druid",       DEMONHUNTER = "Demon Hunter",
-    EVOKER      = "Evoker",
+    EVOKER      = "Evoker",      HUNTER      = "Hunter",
+    ROGUE       = "Rogue",
 }
 local MIN_DURATIONS = { 30, 60, 90, 120, 180 }
 
@@ -54,22 +55,18 @@ local function ResolveSpell(text)
     local linkID = text:match("|Hspell:(%d+)")
     if linkID then return tonumber(linkID) end
     if text:match("^%d+$") then return tonumber(text) end
-    -- name lookup via old compat API (7th return = canonical spellID)
-    if GetSpellInfo and text:len() >= 2 then
-        local n, _, _, _, _, _, sid = GetSpellInfo(text)
-        if n and sid then return sid end
+    -- name lookup: C_Spell.GetSpellInfo takes a name on the modern engine (the
+    -- only way on Forever), then the old global where it exists
+    if text:len() >= 2 then
+        local ok, n, _, sid = pcall(CC.Compat.GetSpellInfo, text)
+        if ok and n and sid then return sid end
     end
     return nil
 end
 
 local function LookupSpellName(spellID)
     if not spellID then return nil end
-    local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
-    if info then return info.name, info.iconID end
-    if GetSpellInfo then
-        local n, _, ic = GetSpellInfo(spellID)
-        return n, ic
-    end
+    return CC.Compat.GetSpellInfo(spellID)
 end
 
 -- ── Default Spells tab ───────────────────────────────────────────────────────
@@ -215,7 +212,7 @@ function CC:OpenOptions()
         return
     end
 
-    local f = CreateFrame("Frame", "CCOptionsFrame", UIParent, "BackdropTemplate")
+    local f = CreateFrame("Frame", "CCOptionsFrame", UIParent, CC.BackdropTemplate)
     f:SetSize(FRAME_W, FRAME_H)
     f:SetPoint("CENTER")
     f:SetFrameStrata("HIGH")
@@ -298,6 +295,33 @@ function CC:OpenOptions()
     local lMM = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lMM:SetPoint("LEFT", cbMM, "RIGHT", 2, 0)
     lMM:SetText("Hide minimap button")
+    yOff = yOff - 26
+
+    -- CDTL3 bridge: greyed/hidden unless CDTL3 (with the timer API) is loaded
+    local cbBridge = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    cbBridge:SetSize(22, 22)
+    cbBridge:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
+    cbBridge:SetScript("OnClick", function(self)
+        CC:SetShowOnCDTL3(self:GetChecked())
+    end)
+    local lBridge = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lBridge:SetPoint("LEFT", cbBridge, "RIGHT", 2, 0)
+    lBridge:SetText("Show group cooldowns on CooldownTimeline3's lanes")
+    cbBridge:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Show group cooldowns on CooldownTimeline3's lanes")
+        GameTooltip:AddLine("Your cooldowns and your group's show as icons with a countdown on CooldownTimeline3's lanes. CooldownTimeline3 decides which lane. Change it in CooldownTimeline3 under Filters > Defaults > Group cooldowns.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    cbBridge:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    function CC:RefreshBridgeOption()
+        local avail = CC:BridgeAvailable()
+        cbBridge:SetShown(avail)
+        lBridge:SetShown(avail)
+        cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
+    end
+    CC:RefreshBridgeOption()
     yOff = yOff - 30
 
     -- Min duration buttons
@@ -400,7 +424,7 @@ function CC:OpenOptions()
     yOff = yOff - (TAB_H + 4)
 
     -- Content area
-    local contentArea = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    local contentArea = CreateFrame("Frame", nil, f, CC.BackdropTemplate)
     contentArea:SetSize(FRAME_W - 32, FRAME_H - (-yOff) - 16)
     contentArea:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
     contentArea:SetBackdrop({
@@ -562,7 +586,17 @@ function CC:BuildOptionsPanel()
     openBtn:SetText("Open CooldownCollaborator Settings")
     openBtn:SetScript("OnClick", function() CC:OpenOptions() end)
 
-    local category = Settings.RegisterCanvasLayoutCategory(panel, "CooldownCollaborator")
-    Settings.RegisterAddOnCategory(category)
-    self.optionsCategoryID = category.ID
+    -- The Settings panel where the client has it, else the old Interface
+    -- Options list; neither is required (/cdc settings and the minimap button
+    -- open the window), so a failure here never stops Init.
+    if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
+        local ok, category = pcall(Settings.RegisterCanvasLayoutCategory, panel, "CooldownCollaborator")
+        if ok and category then
+            pcall(Settings.RegisterAddOnCategory, category)
+            self.optionsCategoryID = category.ID
+        end
+    elseif InterfaceOptions_AddCategory then
+        panel.name = "CooldownCollaborator"
+        pcall(InterfaceOptions_AddCategory, panel)
+    end
 end

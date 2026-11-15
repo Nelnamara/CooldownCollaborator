@@ -1,9 +1,10 @@
-﻿## Interface: 120007
+## Interface: 120105
 ## Title: |cFF54a3ffCooldownCollaborator|r
 ## Notes: Group and raid cooldown coordinator - tracks all members' major defensive and utility CDs, auto-switches between party and raid layout.
-## IconTexture: Interface\AddOns\CooldownCollaborator\Media\icon.png
+## IconTexture: Interface\AddOns\CooldownCollaborator\Media\icon.tga
 ## Author: Nelnamara
-## Version: 1.0.3
+## Version: 1.1.0
+## OptionalDeps: CooldownTimeline3
 ## SavedVariables: CooldownCollaboratorDB
 ## X-Curse-Project-ID: 1577127
 ## X-Website: https://github.com/Nelnamara/CooldownCollaborator
@@ -11,8 +12,10 @@
 
 CooldownCollaborator.lua
 Data.lua
+Data_Retail.lua
 Events.lua
 Comms.lua
+Bridge.lua
 UI.lua
 Roster.lua
 Essentials.lua

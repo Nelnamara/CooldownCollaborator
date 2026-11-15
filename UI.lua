@@ -29,7 +29,7 @@ end
 function CC:BuildUI()
     local db = self.db
 
-    local frame = CreateFrame("Frame", "CCMainFrame", UIParent, "BackdropTemplate")
+    local frame = CreateFrame("Frame", "CCMainFrame", UIParent, CC.BackdropTemplate)
     frame:SetSize(FRAME_WIDTH, TITLE_HEIGHT + ROW_HEIGHT)
     frame:SetPoint("CENTER", UIParent, "CENTER", db.x or 0, db.y or 200)
     frame:SetScale(db.scale or 1.0)
@@ -200,7 +200,7 @@ function CC:RefreshRows()
             row._playerName = rd.name
             row.classBar:SetColorTexture(c[1], c[2], c[3], 1)
             row.icon:SetTexture(rd.data.icon)
-            row.nameText:SetText(rd.name)
+            row.nameText:SetText(CC:ShortName(rd.name))
             row.nameText:SetTextColor(c[1], c[2], c[3])
             row.spellText:SetText(rd.data.name)
             row.spellText:SetTextColor(0.85, 0.85, 0.85)

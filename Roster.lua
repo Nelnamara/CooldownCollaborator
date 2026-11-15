@@ -4,35 +4,35 @@
 --   1. Class scan (instant, O(n)) — flags everyone whose CLASS can provide a
 --      capability. Happens on every GROUP_ROSTER_UPDATE.
 --
---   2. Spec refinement (throttled, ~2s/unit) — uses NotifyInspect/INSPECT_READY
---      to narrow down to exact spec. Matters mainly for Evoker (Augmentation
---      is the spec that typically brings Fury of the Aspects) and for future
---      talent-level checks if Blizzard re-gates abilities behind talent rows.
---      Results stored in CC.rosterSpecs[name] = specIndex.
+--   2. Spec refinement (throttled, ~2s/unit, Retail only) — uses
+--      NotifyInspect/INSPECT_READY to narrow down to exact spec. Matters mainly
+--      for Evoker (Augmentation is the spec that typically brings Fury of the
+--      Aspects) and for future talent-level checks if Blizzard re-gates
+--      abilities behind talent rows. Results stored in
+--      CC.rosterSpecs[name] = specIndex. The spec is only a label: Era, TBC and
+--      Forever have no specs, and MoP doesn't show one yet.
 --
 -- CC.roster[name] = { class="SHAMAN", capabilities={ BLOODLUST={2825,32182} } }
 
--- capability key -> { label, classes = { CLASSTAG = {spellID,...} } }
-CC.CAPABILITIES = {
-    BLOODLUST = {
-        label = "Bloodlust/Heroism",
-        classes = {
-            SHAMAN = { 2825, 32182 },
-            MAGE   = { 80353 },
-            EVOKER = { 391215 },
-        },
-    },
-    BATTLEREZ = {
-        label = "Battle Rez",
-        classes = {
-            DRUID       = { 20484 },
-            DEATHKNIGHT = { 61999 },
-        },
-    },
+-- capability key -> { label, classes = { CLASSTAG = {spellID,...} } }, built
+-- from the client's providers (CC.Providers, Data_<client>.lua). A capability
+-- nobody can provide on this client (no lust on Era or Forever) gets no entry,
+-- so it has no lane, header or Essentials slot.
+local CAPABILITY_LABELS = {
+    BLOODLUST = "Bloodlust/Heroism",
+    BATTLEREZ = "Battle Rez",
 }
 
 -- Ordered list for stable display
-CC.CAPABILITY_ORDER = { "BLOODLUST", "BATTLEREZ" }
+CC.CAPABILITIES     = {}
+CC.CAPABILITY_ORDER = {}
+for _, key in ipairs({ "BLOODLUST", "BATTLEREZ" }) do
+    local classes = CC.Providers and CC.Providers[key]
+    if classes and next(classes) then
+        CC.CAPABILITIES[key] = { label = CAPABILITY_LABELS[key], classes = classes }
+        CC.CAPABILITY_ORDER[#CC.CAPABILITY_ORDER + 1] = key
+    end
+end
 
 -- Spec names for /cdc roster printout
 local SPEC_NAMES = {
@@ -59,8 +59,8 @@ function CC:ScanRoster()
     local roster = {}
 
     local function addUnit(unit)
-        local name = UnitName(unit)
-        if not name or name == "" then return end
+        local name = CC:FullName(unit)
+        if not name then return end
         local _, classTag = UnitClass(unit)
         if not classTag then return end
 
@@ -92,7 +92,9 @@ function CC:ScanRoster()
     end
 
     -- Queue a spec refinement pass now that we have fresh unit tokens
-    self:QueueInspectAll()
+    if CC.isRetail then
+        self:QueueInspectAll()
+    end
 
     if CC.RefreshEssentials then CC:RefreshEssentials() end
 end
@@ -117,8 +119,9 @@ function CC:QueueInspectAll()
         end
     end
     -- Self-inspect is instant and doesn't use the throttled API
-    local selfSpec = GetSpecialization()
-    local selfName = UnitName("player")
+    local getSpec = GetSpecialization or (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization)
+    local selfSpec = getSpec and getSpec()
+    local selfName = CC:FullName("player")
     if selfName and selfSpec then
         self.rosterSpecs[selfName] = selfSpec
         if self.roster and self.roster[selfName] then
@@ -161,7 +164,7 @@ end
 function CC:OnInspectReady(unitID)
     self.inspectActive = false
 
-    local name = UnitName(unitID)
+    local name = CC:FullName(unitID)
     if not name or name == "" then
         C_Timer.After(0.1, function() CC:ProcessInspectQueue() end)
         return
@@ -199,7 +202,7 @@ function CC:GetCapabilityStatus(capKey)
     local results = {}
     if not self.roster then return results end
 
-    local playerName = UnitName("player")
+    local playerName = self:FullName("player")
 
     for name, info in pairs(self.roster) do
         local spellIDs = info.capabilities[capKey]

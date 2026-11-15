@@ -21,7 +21,7 @@ end
 function CC:BuildEssentialsBar()
     local db = self.db
 
-    local f = CreateFrame("Frame", "CCEssentialsFrame", UIParent, "BackdropTemplate")
+    local f = CreateFrame("Frame", "CCEssentialsFrame", UIParent, CC.BackdropTemplate)
     f:SetSize(FRAME_WIDTH, HEADER_HEIGHT + ROW_HEIGHT)
     f:SetPoint("CENTER", UIParent, "CENTER", db.essentialsX or 220, db.essentialsY or 200)
     f:SetScale(db.essentialsScale or 1.0)
@@ -166,7 +166,7 @@ function CC:RefreshEssentials()
 
                 row.classBar:SetColorTexture(c[1], c[2], c[3], 1)
                 if data then row.icon:SetTexture(data.icon) end
-                row.nameText:SetText(entry.name)
+                row.nameText:SetText(CC:ShortName(entry.name))
                 row.nameText:SetTextColor(c[1], c[2], c[3])
 
                 if entry.ready then

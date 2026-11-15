@@ -13,8 +13,10 @@ local LANE_GAP    = 6
 function CC:BuildLaneView()
     local db = self.db
 
-    local f = CreateFrame("Frame", "CCLaneFrame", UIParent, "BackdropTemplate")
-    f:SetSize(LANE_WIDTH + 16, LANE_HEIGHT * 2 + LANE_GAP + 30)
+    -- One lane per capability this client has (Era and Forever: Battle Rez only)
+    local laneCount = math.max(#CC.CAPABILITY_ORDER, 1)
+    local f = CreateFrame("Frame", "CCLaneFrame", UIParent, CC.BackdropTemplate)
+    f:SetSize(LANE_WIDTH + 16, LANE_HEIGHT * laneCount + LANE_GAP * (laneCount - 1) + 30)
     f:SetPoint("CENTER", UIParent, "CENTER", db.laneX or 0, db.laneY or -200)
     f:SetScale(db.laneScale or 1.0)
     f:SetFrameStrata("MEDIUM")

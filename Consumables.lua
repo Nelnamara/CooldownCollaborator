@@ -1,9 +1,15 @@
 -- Cauldron/Feast tracking — each client detects its own buffs and broadcasts
 -- its category status (flask/food) so the raid can see who is buffed.
 --
--- Detection: aura.name and .spellId are SECRET even on the local player.
--- The only safe lookup is C_UnitAuras.GetPlayerAuraBySpellID(knownID), so
--- consumables must be registered by ID up front (/cdc consumable).
+-- Detection depends on the client (CC.ConsumableMatch, Data_<client>.lua):
+--   "id"   (Retail, WoW: Forever): aura.name and .spellId are SECRET even on
+--          the local player. The only safe lookup is
+--          C_UnitAuras.GetPlayerAuraBySpellID(knownID), so consumables must be
+--          known by ID up front (built-ins, /cdc consumable).
+--   "name" (Era, TBC, MoP): auras are readable, and one flask or "Well Fed"
+--          buff comes in many spell IDs, so the built-ins match by aura NAME
+--          (English and the client's own); /cdc consumable entries match the
+--          aura's spell ID.
 --
 -- Group status: flask/food presence is broadcast as "CDC:BUFF:flask:1" etc.
 -- Receivers track CC.buffRoster[playerName] = { flask=bool, food=bool }.
@@ -20,29 +26,25 @@ CC.buffRoster       = CC.buffRoster or {}        -- [playerName] = { flask=bool,
 -- Wire format for group buff sync
 local BUFF_PREFIX = "CDCBUFF"
 
--------------------------------------------------------------------------------
--- Built-in consumable categories — known Midnight IDs
--------------------------------------------------------------------------------
-
--- Applied on top of CC.BuiltinConsumables (Data.lua) at load time
-local BUILTIN_CATEGORIES = {
-    [1232585] = "food",   -- Well Fed (Feast of the Midnight Masquerade)
-    [462187]  = "food",   -- Hearty Well Fed (Hearty Feast of the Midnight Masquerade)
-    [1230876] = "flask",  -- Flask of the Magisters (Mastery)
-    [1230877] = "flask",  -- Flask of the Blood Knights (Haste)
-    [1230878] = "flask",  -- Flask of the Shattered Sun (Crit)
-    [1235057] = "flask",  -- Flask of Thalassian Resistance (Versatility)
-}
+-- "name" matching: aura name -> built-in consumable ID (filled at load)
+local builtinByName = {}
 
 -------------------------------------------------------------------------------
 -- Load / register consumables
 -------------------------------------------------------------------------------
 
 function CC:LoadConsumableBuffs()
-    -- Apply categories to built-ins first
-    for id, cat in pairs(BUILTIN_CATEGORIES) do
-        if CC.SpellData[id] then
-            CC.SpellData[id].category = cat
+    -- Built-ins (CC.BuiltinConsumables, with their category) are already merged
+    -- into CC.SpellData by Init. "name" matching also knows each one by the
+    -- client's own name for it.
+    builtinByName = {}
+    if CC.ConsumableMatch == "name" then
+        for id, data in pairs(CC.BuiltinConsumables or {}) do
+            builtinByName[data.name] = id
+            local ok, localName = pcall(CC.Compat.GetSpellInfo, id)
+            if ok and type(localName) == "string" and localName ~= "" then
+                builtinByName[localName] = id
+            end
         end
     end
 
@@ -71,8 +73,11 @@ function CC:AddConsumableBuff(spellID, duration, name)
     -- Parse optional trailing category keyword
     local category = nil
     if name then
+        -- two matches in turn: "a or b" would keep only the first capture
         local stripped, trailing = name:match("^(.-)%s+(flask)$")
-                                or name:match("^(.-)%s+(food)$")
+        if not stripped then
+            stripped, trailing = name:match("^(.-)%s+(food)$")
+        end
         if stripped and trailing then
             name     = stripped ~= "" and stripped or nil
             category = trailing
@@ -115,15 +120,61 @@ end
 -- Self-detection poll (rising-edge only)
 -------------------------------------------------------------------------------
 
+-- Retail and Forever: is this aura on the player? (by ID; secret-safe)
+local function HasPlayerAuraID(spellID)
+    if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return false end
+    local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
+    return ok and aura ~= nil
+end
+
+-- Era, TBC and MoP: the player's buffs by name and by spell ID (readable there).
+local function ScanPlayerBuffs()
+    local names, ids = {}, {}
+    for i = 1, 40 do
+        local name, spellID
+        if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+            local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            if not aura then break end
+            name, spellID = aura.name, aura.spellId
+        elseif UnitAura then
+            local n, _, _, _, _, _, _, _, _, id = UnitAura("player", i, "HELPFUL")
+            if not n then break end
+            name, spellID = n, id
+        else
+            break
+        end
+        if name then names[name] = true end
+        if spellID then ids[spellID] = true end
+    end
+    return names, ids
+end
+
 function CC:PollConsumables()
-    local myName   = UnitName("player")
+    local myName   = CC:FullName("player")
     local changed  = false
     local hasFlask = false
     local hasFood  = false
 
+    local byName = CC.ConsumableMatch == "name"
+    local auraNames, auraIDs, foundByName
+    if byName then
+        auraNames, auraIDs = ScanPlayerBuffs()
+        foundByName = {}
+        for name in pairs(auraNames) do
+            local id = builtinByName[name]
+            if id then foundByName[id] = true end
+        end
+    end
+
     -- Check built-ins
-    for id, cat in pairs(BUILTIN_CATEGORIES) do
-        local present   = C_UnitAuras.GetPlayerAuraBySpellID(id) ~= nil
+    for id, data in pairs(CC.BuiltinConsumables or {}) do
+        local cat       = data.category
+        local present
+        if byName then
+            present = foundByName[id] == true
+        else
+            present = HasPlayerAuraID(id)
+        end
         local wasActive = self.consumableActive[id]
 
         if present and not wasActive then
@@ -142,7 +193,12 @@ function CC:PollConsumables()
     for idStr, data in pairs(self.db.consumableBuffs or {}) do
         local spellID = tonumber(idStr)
         if spellID then
-            local present   = C_UnitAuras.GetPlayerAuraBySpellID(spellID) ~= nil
+            local present
+            if byName then
+                present = auraIDs[spellID] == true
+            else
+                present = HasPlayerAuraID(spellID)
+            end
             local wasActive = self.consumableActive[spellID]
 
             if present and not wasActive then
@@ -180,7 +236,8 @@ function CC:BroadcastBuffStatus(playerName, hasFlask, hasFood)
     -- Message format: "flask:1:food:1"
     local msg = string.format("flask:%d:food:%d",
         hasFlask and 1 or 0, hasFood and 1 or 0)
-    local chatType = IsInRaid() and "RAID" or "PARTY"
+    local chatType = self:GroupChannel()
+    if not chatType then return end
     C_ChatInfo.SendAddonMessage(BUFF_PREFIX, msg, chatType)
 end
 
@@ -188,7 +245,7 @@ end
 function CC:OnBuffStatusMessage(sender, msg)
     local flask, food = msg:match("flask:(%d):food:(%d)")
     if not flask then return end
-    self.buffRoster[sender] = { flask = flask == "1", food = food == "1" }
+    self.buffRoster[self:NormalizeSender(sender) or sender] = { flask = flask == "1", food = food == "1" }
     if CC.RefreshEssentials then CC:RefreshEssentials() end
 end
 
@@ -204,19 +261,19 @@ function CC:GetGroupBuffStatus()
     if not IsInGroup() then return nil end
 
     local function check(unit)
-        local name = UnitName(unit)
+        local name = CC:FullName(unit)
         if not name or not UnitIsConnected(unit) then return end
         total = total + 1
         local entry = self.buffRoster[name]
         if entry and entry.flask then
             hasFlask = hasFlask + 1
         else
-            missingFlask[#missingFlask + 1] = name
+            missingFlask[#missingFlask + 1] = CC:ShortName(name)
         end
         if entry and entry.food then
             hasFood = hasFood + 1
         else
-            missingFood[#missingFood + 1] = name
+            missingFood[#missingFood + 1] = CC:ShortName(name)
         end
     end
 

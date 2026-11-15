@@ -1,17 +1,120 @@
 -- CooldownCollaborator
--- Group and raid cooldown coordinator for WoW Midnight (12.x)
+-- Group and raid cooldown coordinator for World of Warcraft: Retail (Midnight
+-- 12.x), MoP Classic, TBC Anniversary, Classic Era and WoW: Forever.
 -- Author: Nelnamara
 
 CooldownCollaborator = {}
 CC = CooldownCollaborator
 
-CC.version = "1.0.3"
+CC.version = "1.1.0"
 CC.PREFIX   = "CDCOLLAB"
 
--- state[playerName] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
+-------------------------------------------------------------------------------
+-- Client detection (the same rules as CooldownTimeline3). WoW: Forever runs
+-- the modern engine and API (the old spell globals are gone, values can be
+-- secret, no combat log) but reports a vanilla-era interface number (16xxx).
+-- So tocversion only picks CONTENT (the TOCs load each client's spell list);
+-- retailAPI picks which API calls exist. Never pick an API by tocversion alone.
+-------------------------------------------------------------------------------
+
+local _, _, _, tocversion = GetBuildInfo()
+CC.tocversion = tocversion
+CC.isForever = (tocversion >= 16000 and tocversion < 17000)
+    or (WOW_PROJECT_MAINLINE ~= nil and WOW_PROJECT_ID == WOW_PROJECT_MAINLINE and tocversion < 110000)
+CC.retailAPI = tocversion >= 110000 or CC.isForever
+-- Specs (and the inspect pipeline that reads them) are used on Retail only.
+CC.isRetail = tocversion >= 110000
+
+-- Frames with a backdrop take the template only where the client has it.
+CC.BackdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
+
+-- Globals that don't exist on every client, resolved per call. WoW: Forever
+-- ships no deprecation fallbacks: no IsSpellKnown / IsSpellKnownOrOverridesKnown
+-- and no GetSpellInfo globals there.
+local function PlayerSpellBank()
+    return Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
+end
+
+CC.Compat = {
+    IsSpellKnown = function(spellID)
+        if IsSpellKnownOrOverridesKnown or IsSpellKnown then
+            return (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID))
+                or (IsSpellKnown and IsSpellKnown(spellID)) or false
+        end
+        if C_SpellBook and C_SpellBook.IsSpellKnown then
+            return C_SpellBook.IsSpellKnown(spellID, PlayerSpellBank()) or false
+        end
+        return false
+    end,
+    -- name, icon, spellID of a spell (an ID, or a name where the client takes one)
+    GetSpellInfo = function(spell)
+        if C_Spell and C_Spell.GetSpellInfo then
+            local info = C_Spell.GetSpellInfo(spell)
+            if info and info.name then return info.name, info.iconID, info.spellID end
+        end
+        if GetSpellInfo then
+            local name, _, icon, _, _, _, spellID = GetSpellInfo(spell)
+            if name then return name, icon, spellID end
+        end
+    end,
+}
+
+-- state["Name-Realm"] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
 CC.state = {}
 
 CC.inEncounter = false
+
+-- Local player's own tracked spells that were used and have not yet been
+-- announced as ready: [spellID] = usedAt (local GetTime()).
+CC.localActive = {}
+
+-------------------------------------------------------------------------------
+-- Player identity: "Name-Realm" so same-named players from different realms
+-- never clash. Display code uses CC:ShortName().
+-------------------------------------------------------------------------------
+
+function CC:FullName(unit)
+    local name, realm = UnitFullName(unit)
+    if not name or name == "" then return nil end
+    if not realm or realm == "" then realm = GetNormalizedRealmName() end
+    if realm and realm ~= "" then return name .. "-" .. realm end
+    return name
+end
+
+function CC:ShortName(full)
+    if not full then return full end
+    return full:match("^([^-]+)") or full
+end
+
+-- Addon-message senders normally carry a realm; add ours if one is missing.
+function CC:NormalizeSender(sender)
+    if not sender or sender == "" then return nil end
+    if sender:find("-", 1, true) then return sender end
+    local realm = GetNormalizedRealmName()
+    if realm and realm ~= "" then return sender .. "-" .. realm end
+    return sender
+end
+
+-- Turn a bare name (old-format message body) into a group member's full name.
+function CC:ResolveBareName(bare)
+    local function check(unit)
+        if UnitExists(unit) and UnitName(unit) == bare then return self:FullName(unit) end
+    end
+    local found = check("player")
+    if found then return found end
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            found = check("raid" .. i)
+            if found then return found end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumGroupMembers() - 1 do
+            found = check("party" .. i)
+            if found then return found end
+        end
+    end
+    return self:NormalizeSender(bare)
+end
 
 local DEFAULTS = {
     x              = 0,
@@ -38,6 +141,8 @@ local DEFAULTS = {
     laneY       = -200,
     laneScale   = 1.0,
     laneLocked  = false,
+
+    showOnCDTL3 = true,   -- feed group cooldowns to CDTL3's lanes (if CDTL3 is loaded)
 }
 
 function CC:Init()
@@ -48,6 +153,9 @@ function CC:Init()
     for k, v in pairs(DEFAULTS) do
         if self.db[k] == nil then self.db[k] = v end
     end
+
+    -- Rank map and name index from this client's own list (Data_<client>.lua)
+    self:BuildSpellIndex()
 
     -- Merge built-in consumables, then user's custom/registered ones
     for id, data in pairs(CC.BuiltinConsumables or {}) do
@@ -86,15 +194,7 @@ function CC:AddCustomSpell(spellID, duration)
     spellID = tonumber(spellID)
     if not spellID or not duration or duration <= 0 then return false end
 
-    local name, icon
-    local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
-    if info then
-        name = info.name
-        icon = info.iconID
-    else
-        name = GetSpellInfo and select(1, GetSpellInfo(spellID)) or ("Spell " .. spellID)
-        icon = GetSpellInfo and select(3, GetSpellInfo(spellID)) or 134400
-    end
+    local name, icon = CC.Compat.GetSpellInfo(spellID)
 
     if not name then
         print("|cFF54a3ffCooldownCollaborator|r Unknown spell ID: " .. spellID)
@@ -129,38 +229,72 @@ function CC:RemoveCustomSpell(spellID)
 end
 
 function CC:RecordCooldown(unitToken, spellID)
+    -- Every rank records under (and is sent as) its base ID.
+    local castID = spellID
+    spellID = self:BaseSpellID(spellID)
     local data = CC.SpellData[spellID]
     if CC.verbose then
         print(string.format("|cFF54a3ffCDC|r cast seen: unit=%s spellID=%s known=%s",
-            tostring(unitToken), tostring(spellID), tostring(data ~= nil)))
+            tostring(unitToken), tostring(castID), tostring(data ~= nil)))
     end
     if not data then return end
     if data.duration < (self.db.minDuration or 60) then return end
     if self.db.disabledSpells and self.db.disabledSpells[spellID] then return end
 
-    local name = UnitName(unitToken)
-    if not name or name == "" then return end
+    local name = self:FullName(unitToken)
+    if not name then return end
 
     if not self.state[name] then
         local _, classTag = UnitClass(unitToken)
         self.state[name] = { class = classTag or "UNKNOWN", spells = {} }
     end
-    self.state[name].spells[spellID] = GetTime()
+    local now = GetTime()
+    self.state[name].spells[spellID] = now
 
-    self:SendCooldownSync(spellID, name, GetTime())
+    -- Watch our own spell so we can announce "ready now" (talents shorten
+    -- the real cooldown below the base length everyone else assumes). Not
+    -- for a spell whose cooldown sits on an item: its own cooldown reads 0.
+    if unitToken == "player" and not data.consumable and not data.itemCooldown then
+        self.localActive[spellID] = now
+    end
+
+    self:SendCooldownSync(spellID, name, now)
+    self:BridgeStart(name, spellID, now, self.state[name].class)
     self:RefreshAllViews()
 end
 
-function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
+-- A remote player's spell is ready now (their "ready now" announcement).
+function CC:RecordReadyFromComm(playerName, spellID)
+    spellID = self:BaseSpellID(spellID)
     local data = CC.SpellData[spellID]
-    if not data then return end
+    local entry = self.state[playerName]
+    if not data or not entry or not entry.spells[spellID] then return end
+    entry.spells[spellID] = GetTime() - data.duration
+    self:BridgeStop(playerName, spellID)
+    self:RefreshAllViews()
+end
+
+-- Another player's cast, from their addon message or (Era, TBC, MoP) from the
+-- combat log. On those clients the same cast can arrive both ways: a second
+-- report within DUPLICATE_WINDOW seconds of the recorded one is that same cast
+-- and changes nothing.
+local DUPLICATE_WINDOW = 5
+
+function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
+    spellID = self:BaseSpellID(spellID)
+    local data = CC.SpellData[spellID]
+    if not data or not playerName then return end
 
     if not self.state[playerName] then
         self.state[playerName] = { class = classTag or "UNKNOWN", spells = {} }
+    elseif classTag and classTag ~= "UNKNOWN" and self.state[playerName].class == "UNKNOWN" then
+        self.state[playerName].class = classTag
     end
     local cur = self.state[playerName].spells[spellID]
+    if cur and math.abs(usedAt - cur) < DUPLICATE_WINDOW then return end
     if not cur or usedAt > cur then
         self.state[playerName].spells[spellID] = usedAt
+        self:BridgeStart(playerName, spellID, usedAt, self.state[playerName].class)
         self:RefreshAllViews()
     end
 end
@@ -168,16 +302,16 @@ end
 -- Resolve a player's name back to a live unit token, so we can check things
 -- (alive/dead) that GetCapabilityStatus's name-only entries cannot.
 local function FindUnitToken(name)
-    if UnitName("player") == name then return "player" end
+    if CC:FullName("player") == name then return "player" end
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
             local token = "raid" .. i
-            if UnitName(token) == name then return token end
+            if CC:FullName(token) == name then return token end
         end
     elseif IsInGroup() then
         for i = 1, GetNumGroupMembers() - 1 do
             local token = "party" .. i
-            if UnitName(token) == name then return token end
+            if CC:FullName(token) == name then return token end
         end
     end
     return nil
@@ -205,7 +339,7 @@ function CC:RequestRez()
         return
     end
 
-    local targetName = UnitName("target")
+    local targetName = self:FullName("target")
     local status = CC:GetCapabilityStatus("BATTLEREZ")
     local provider = nil
     for _, entry in ipairs(status) do
@@ -227,7 +361,7 @@ function CC:RequestRez()
 
     local data = CC.SpellData[provider.spellID]
     local spellName = data and data.name or "Battle Rez"
-    local msg = string.format("%s, please %s %s!", provider.name, spellName, targetName)
+    local msg = string.format("%s, please %s %s!", self:ShortName(provider.name), spellName, self:ShortName(targetName))
 
     if IsInRaid() then
         SendChatMessage(msg, "RAID")
@@ -266,42 +400,136 @@ end
 -- pcall-guarded: a bare read of a secret value doesn't error, but comparing/using
 -- one does. If any field is still secret here the compare throws, ok is false, and
 -- we return nil so the caller falls back to the observed-cast model (GetRemaining).
-function CC:GetLocalReadiness(spellID)
-    if not C_Spell then return nil end
+--
+-- Retail and Forever read C_Spell (tables with isActive). Era, TBC and MoP read
+-- the legacy GetSpellCooldown / GetSpellCharges: their tables have no isActive,
+-- so the C_Spell path would call every spell ready.
 
-    local known = false
-    pcall(function()
-        known = (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID))
-             or (IsSpellKnown and IsSpellKnown(spellID))
-    end)
-    if not known then return nil end
+-- The highest rank of a tracked spell the player knows (any rank counts as
+-- knowing it), or nil. A spell without ranks is just itself.
+function CC:KnownRank(spellID)
+    local data = CC.SpellData[spellID]
+    local ids = data and data.ranks or { spellID }
+    for i = #ids, 1, -1 do
+        local ok, known = pcall(CC.Compat.IsSpellKnown, ids[i])
+        if ok and known then return ids[i] end
+    end
+    return nil
+end
+
+-- The player's charges of a spell: current, max, recharge start, recharge
+-- length; nothing for a spell without charges. Call inside a pcall.
+local function ReadCharges(id)
+    if CC.retailAPI then
+        local ch = C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(id)
+        if ch then
+            return ch.currentCharges, ch.maxCharges, ch.cooldownStartTime, ch.cooldownDuration
+        end
+    elseif GetSpellCharges then
+        return GetSpellCharges(id)
+    end
+end
+
+function CC:GetLocalReadiness(spellID)
+    local id = self:KnownRank(spellID)
+    if not id then return nil end
 
     local remaining
     local ok = pcall(function()
         -- Charge-based (raid Battle Rez pool): ready while >=1 charge is banked,
         -- otherwise count down to the next charge.
-        local ch = C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(spellID)
-        if ch and ch.maxCharges and ch.maxCharges > 1 then
-            if (ch.currentCharges or 0) >= 1 then
+        local current, maxCharges, chStart, chDuration = ReadCharges(id)
+        if maxCharges and maxCharges > 1 then
+            if (current or 0) >= 1 then
                 remaining = 0
             else
-                local rem = (ch.cooldownStart or 0) + (ch.cooldownDuration or 0) - GetTime()
+                local rem = (chStart or 0) + (chDuration or 0) - GetTime()
                 remaining = rem > 0 and rem or 0
             end
             return
         end
         -- Plain cooldown. duration <= 1.5 is just the GCD → treat as ready.
-        local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(spellID)
-        if cd and cd.isEnabled ~= false and cd.isActive and cd.duration and cd.duration > 1.5 then
-            local rem = (cd.startTime + cd.duration) - GetTime()
-            remaining = rem > 0 and rem or 0
+        if CC.retailAPI then
+            local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(id)
+            if cd and cd.isEnabled ~= false and cd.isActive and cd.duration and cd.duration > 1.5 then
+                local rem = (cd.startTime + cd.duration) - GetTime()
+                remaining = rem > 0 and rem or 0
+            else
+                remaining = 0  -- known and not on a real cooldown → ready
+            end
         else
-            remaining = 0  -- known and not on a real cooldown → ready
+            local start, duration, enabled = GetSpellCooldown(id)
+            -- enabled 0: the cooldown starts when the spell's effect ends; unknown yet
+            if enabled == 0 then return end
+            if start and start > 0 and duration and duration > 1.5 then
+                local rem = (start + duration) - GetTime()
+                remaining = rem > 0 and rem or 0
+            else
+                remaining = 0
+            end
         end
     end)
     if not ok then return nil end
     return remaining
 end
+
+-- Is our own spell off cooldown right now? Returns true / false, or nil when
+-- it can't be read. cd.isActive is never secret; reads are pcall-guarded.
+local function LocalSpellIsReady(spellID)
+    -- A ranked spell reads the rank the player knows; none known: can't tell.
+    local data = CC.SpellData[spellID]
+    local id = spellID
+    if data and data.ranks then
+        id = CC:KnownRank(spellID)
+        if not id then return nil end
+    end
+    local ready
+    local ok = pcall(function()
+        local current, maxCharges = ReadCharges(id)
+        if maxCharges and maxCharges > 1 then
+            ready = (current or 0) >= 1
+            return
+        end
+        if CC.retailAPI then
+            local cd = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(id)
+            if not cd then return end
+            ready = not cd.isActive
+        else
+            local start, duration, enabled = GetSpellCooldown(id)
+            if enabled == 0 then
+                ready = false  -- waiting for its effect to end
+                return
+            end
+            ready = not (start and start > 0 and duration and duration > 1.5)
+        end
+    end)
+    if not ok then return nil end
+    return ready
+end
+
+-- Cheap poll: only the spells we've used and not yet announced. Skipped
+-- entirely (one next() call) when nothing is outstanding.
+function CC:PollLocalReady()
+    if not next(self.localActive) then return end
+    local now = GetTime()
+    for spellID, usedAt in pairs(self.localActive) do
+        -- Grace so the cooldown has actually started before we judge it.
+        if now - usedAt > 3 and LocalSpellIsReady(spellID) == true then
+            self.localActive[spellID] = nil
+            local me = self:FullName("player")
+            local data = CC.SpellData[spellID]
+            local entry = me and self.state[me]
+            if entry and data and entry.spells[spellID] then
+                entry.spells[spellID] = now - data.duration
+            end
+            if me then self:BridgeStop(me, spellID) end
+            self:SendReadySync(spellID)
+            self:RefreshAllViews()
+        end
+    end
+end
+
+C_Timer.NewTicker(1, function() CC:PollLocalReady() end)
 
 -- Event frame
 local ef = CreateFrame("Frame", "CCEventFrame")
@@ -316,8 +544,11 @@ ef:SetScript("OnEvent", function(self, event, ...)
             self:RegisterEvent("ENCOUNTER_START")
             self:RegisterEvent("ENCOUNTER_END")
             self:RegisterEvent("CHAT_MSG_ADDON")
-            self:RegisterEvent("INSPECT_READY")
+            if CC.isRetail then
+                self:RegisterEvent("INSPECT_READY")
+            end
             self:RegisterEvent("PLAYER_LOGOUT")
+            self:RegisterEvent("PLAYER_LOGIN")
         end
     elseif event == "GROUP_ROSTER_UPDATE" then
         CC:PruneState()
@@ -339,10 +570,21 @@ ef:SetScript("OnEvent", function(self, event, ...)
         if unitToken == "player" then
             CC:RecordCooldown(unitToken, spellID)
         end
+    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        -- Era, TBC and MoP only (Events.lua): other players' casts
+        local ok, err = pcall(CC.OnCombatLog, CC)
+        if not ok and CC.verbose then
+            print("|cFF54a3ffCDC|r combat log error: " .. tostring(err))
+        end
     elseif event == "INSPECT_READY" then
         CC:OnInspectReady(...)
     elseif event == "CHAT_MSG_ADDON" then
         CC:OnAddonMessage(...)
+    elseif event == "PLAYER_LOGIN" then
+        -- Every addon is loaded by now, so CDTL3 (if present) is ready.
+        CC:BridgeRegister()
+        -- the minimap has its real size by now (Minimap.lua)
+        CC:PlaceMinimapButton()
     elseif event == "PLAYER_LOGOUT" then
         CC:SavePosition()
     end
@@ -392,14 +634,14 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         end
     elseif cmd == "roster" then
         CC:ScanRoster()
-        print("|cFF54a3ffCooldownCollaborator|r roster (spec refinement queued):")
+        print("|cFF54a3ffCooldownCollaborator|r roster" .. (CC.isRetail and " (spec refinement queued)" or "") .. ":")
         for name, info in pairs(CC.roster or {}) do
             local caps = {}
             for key in pairs(info.capabilities) do caps[#caps + 1] = key end
             local specName = CC:GetSpecName(name)
             local classStr = specName and (specName .. " " .. info.class) or info.class
             print(string.format("    %s [%s] capabilities: %s",
-                name, classStr, #caps > 0 and table.concat(caps, ", ") or "none"))
+                CC:ShortName(name), classStr, #caps > 0 and table.concat(caps, ", ") or "none"))
         end
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
@@ -413,7 +655,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
                 local rem = CC:GetRemaining(name, sid)
                 local spell = CC.SpellData[sid]
                 print(string.format("    %s [%s] %s = %.0fs",
-                    name, entry.class, spell and spell.name or tostring(sid), rem or 0))
+                    CC:ShortName(name), entry.class, spell and spell.name or tostring(sid), rem or 0))
             end
         end
         if not any then
