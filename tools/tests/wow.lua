@@ -262,6 +262,9 @@ function UnitFullName(u)
 end
 function UnitGUID(u) local m = member(u); return m and m.guid end
 function UnitClass(u) local m = member(u); if m then return m.class, m.class, 1 end end
+-- a member's `level`, else the client's level cap
+local LEVEL_CAP = ({ era = 60, forever = 60, tbc = 70, mop = 90, retail = 90 })[FLAVOR] or 60
+function UnitLevel(u) local m = member(u); if m then return m.level or LEVEL_CAP end return 0 end
 function UnitExists(u) return member(u) ~= nil end
 function UnitIsConnected(u) return member(u) ~= nil end
 function UnitIsDeadOrGhost() return false end

@@ -49,7 +49,7 @@ OUT(string.format("[%s %s]", HARNESS_TOCFILE, FLAVOR))
 local tocText = ReadTOC(HARNESS_TOCFILE) or ""
 local function tag(name) return tocText:match("## " .. name .. ":%s*([^\r\n]-)%s*[\r\n]") end
 check("TOC: one Interface number, this client's", tag("Interface") == tostring(HARNESS_TOC), tag("Interface"))
-check("TOC: Version 1.1.0", tag("Version") == "1.1.0", tag("Version"))
+check("TOC: Version 1.1.1", tag("Version") == "1.1.1", tag("Version"))
 check("TOC: SavedVariables CooldownCollaboratorDB", tag("SavedVariables") == "CooldownCollaboratorDB", tag("SavedVariables"))
 check("TOC: CurseForge project 1577127 in the plain, _Camelot and _Mainline TOCs only",
 	(tag("X%-Curse%-Project%-ID") == "1577127") == (CURSE_TOCS[HARNESS_TOCFILE] == true), tag("X%-Curse%-Project%-ID"))
@@ -89,7 +89,7 @@ local dataFiles = {}
 for _, f in ipairs(files) do if f:match("^Data_") then dataFiles[#dataFiles + 1] = f end end
 check("TOC lists only this client's spell data file", #dataFiles == 1 and dataFiles[1] == E.data, table.concat(dataFiles, ","))
 check("every file the TOC lists loaded", #LOADED_FILES == #files, #LOADED_FILES .. "/" .. #files)
-check("CC.version 1.1.0", CC.version == "1.1.0", CC.version)
+check("CC.version 1.1.1", CC.version == "1.1.1", CC.version)
 check("client detection: retailAPI, isForever, isRetail",
 	CC.retailAPI == RETAILAPI and CC.isForever == (FLAVOR == "forever") and CC.isRetail == (FLAVOR == "retail"))
 check("stub: no GetSpecialization on Era, TBC and Forever", (GetSpecialization ~= nil) == (FLAVOR == "retail" or FLAVOR == "mop"))
@@ -178,6 +178,59 @@ for _, row in ipairs(CC.essentialsRows) do
 end
 check("Essentials: a lust header only where lust exists (a shaman is in the party)", lustHeader == (E.lust ~= nil))
 check("CDTL3 bridge registered its type at login", CC.bridgeRegistered and bridge.registered.cdcGroup ~= nil and CC:BridgeActive())
+
+---------------------------------------------------------------- providers: learned levels and our own spellbook
+local function listed(capKey, who)
+	for _, s in ipairs(CC:GetCapabilityStatus(capKey)) do
+		if s.name == who then return s end
+	end
+end
+local rebirthData = CC.SpellData[20484]
+local levelBad
+for _, cap in pairs(CC.CAPABILITIES) do
+	for _, ids in pairs(cap.classes) do
+		for _, id in ipairs(ids) do
+			if type(CC.SpellData[id].level) ~= "number" then levelBad = id end
+		end
+	end
+end
+check("every provider spell has the level it is learned at", levelBad == nil, levelBad)
+check("we (a druid) don't know Rebirth yet: not a Battle Rez provider", listed("BATTLEREZ", ME) == nil)
+check("  a druid in the party at the level cap is", listed("BATTLEREZ", "Tania-Realm") ~= nil
+	and listed("BATTLEREZ", "Tania-Realm").ready)
+local rebirthRank1 = rebirthData.ranks and rebirthData.ranks[1] or 20484
+KNOWN[rebirthRank1] = true
+check("  once we learn it (rank " .. rebirthRank1 .. "), we are, and ready", listed("BATTLEREZ", ME) ~= nil and listed("BATTLEREZ", ME).ready)
+KNOWN[rebirthRank1] = nil
+GROUP[1].level = rebirthData.level - 1
+FireEvent("UNIT_LEVEL", "party1")
+check("  a druid one level short of " .. rebirthData.level .. " is not", CC.roster["Tania-Realm"].capabilities.BATTLEREZ == nil
+	and listed("BATTLEREZ", "Tania-Realm") == nil)
+GROUP[1].level = rebirthData.level
+FireEvent("UNIT_LEVEL", "party1")
+check("  and is once they level up to it", listed("BATTLEREZ", "Tania-Realm") ~= nil)
+GROUP[1].level = rebirthData.level - 1
+FireEvent("GROUP_ROSTER_UPDATE")
+check("  a roster rescan uses the level too", listed("BATTLEREZ", "Tania-Realm") == nil)
+GROUP[1].level = 0
+FireEvent("GROUP_ROSTER_UPDATE")
+check("  a level we can't read (0) counts as learned", listed("BATTLEREZ", "Tania-Realm") ~= nil)
+GROUP[1].level = nil
+FireEvent("GROUP_ROSTER_UPDATE")
+local e0 = #ERRORS
+FireEvent("UNIT_LEVEL", "target")
+FireEvent("UNIT_LEVEL", "nameplate4")
+check("  UNIT_LEVEL for someone outside the group changes nothing", #ERRORS == e0 and listed("BATTLEREZ", "Tania-Realm") ~= nil)
+if E.lust then
+	local shamanLust = CC.CAPABILITIES.BLOODLUST.classes.SHAMAN
+	local need = CC.SpellData[shamanLust[1]].level
+	GROUP[2].level = need - 1
+	FireEvent("UNIT_LEVEL", "party2")
+	check("a shaman below " .. need .. " is not a lust provider", listed("BLOODLUST", "Brannoc-Realm") == nil)
+	GROUP[2].level = nil
+	FireEvent("UNIT_LEVEL", "party2")
+	check("  and at the level cap is", listed("BLOODLUST", "Brannoc-Realm") ~= nil)
+end
 
 ---------------------------------------------------------------- own cast: ranks, wire, bridge
 local rebirth = CC.SpellData[20484]

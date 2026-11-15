@@ -26,17 +26,17 @@ CC.SpellData = {
 
     -- Death Knight
     [51052]  = { name = "Anti-Magic Zone",      duration = 120, icon = 237510, class = "DEATHKNIGHT" },
-    [61999]  = { name = "Raise Ally",           duration = 600, icon = 136143, class = "DEATHKNIGHT" },
+    [61999]  = { name = "Raise Ally",           duration = 600, icon = 136143, class = "DEATHKNIGHT", level = 72 },
 
     -- Shaman
-    [2825]   = { name = "Bloodlust",            duration = 300, icon = 136012, class = "SHAMAN"      },
-    [32182]  = { name = "Heroism",              duration = 300, icon = 132313, class = "SHAMAN"      },
+    [2825]   = { name = "Bloodlust",            duration = 300, icon = 136012, class = "SHAMAN",      level = 70 },
+    [32182]  = { name = "Heroism",              duration = 300, icon = 132313, class = "SHAMAN",      level = 70 },
     [98008]  = { name = "Spirit Link Totem",    duration = 180, icon = 237586, class = "SHAMAN"      },
     [108280] = { name = "Healing Tide Totem",   duration = 180, icon = 538569, class = "SHAMAN"      },
     [120668] = { name = "Stormlash Totem",      duration = 300, icon = 538575, class = "SHAMAN"      },
 
     -- Mage
-    [80353]  = { name = "Time Warp",            duration = 300, icon = 458224, class = "MAGE"        },
+    [80353]  = { name = "Time Warp",            duration = 300, icon = 458224, class = "MAGE",        level = 84 },
 
     -- Warlock (a pre-placed self-resurrect, not a Battle Rez provider)
     [20707]  = { name = "Soulstone",            duration = 600, icon = 136210, class = "WARLOCK"     },
@@ -50,7 +50,7 @@ CC.SpellData = {
     [740]    = { name = "Tranquility",          duration = 480, icon = 136107, class = "DRUID"       },
     [102342] = { name = "Ironbark",             duration = 60,  icon = 572025, class = "DRUID"       },
     [29166]  = { name = "Innervate",            duration = 180, icon = 136048, class = "DRUID"       },
-    [20484]  = { name = "Rebirth",              duration = 600, icon = 136080, class = "DRUID"       },
+    [20484]  = { name = "Rebirth",              duration = 600, icon = 136080, class = "DRUID",       level = 56 },
     [106898] = { name = "Stampeding Roar",      duration = 120, icon = 464343, class = "DRUID"       },
 }
 

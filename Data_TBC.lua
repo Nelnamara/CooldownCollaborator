@@ -18,8 +18,8 @@ CC.SpellData = {
     [724]   = { name = "Lightwell",              duration = 360,  icon = 135980, class = "PRIEST",  ranks = { 724, 27870, 27871, 28275 } },
 
     -- Shaman
-    [2825]  = { name = "Bloodlust",              duration = 600,  icon = 136012, class = "SHAMAN" },
-    [32182] = { name = "Heroism",                duration = 600,  icon = 132313, class = "SHAMAN" },
+    [2825]  = { name = "Bloodlust",              duration = 600,  icon = 136012, class = "SHAMAN", level = 70 },
+    [32182] = { name = "Heroism",                duration = 600,  icon = 132313, class = "SHAMAN", level = 70 },
     [16190] = { name = "Mana Tide Totem",        duration = 300,  icon = 135861, class = "SHAMAN" },
 
     -- Hunter
@@ -32,7 +32,7 @@ CC.SpellData = {
 
     -- Druid
     [29166] = { name = "Innervate",              duration = 360,  icon = 136048, class = "DRUID" },
-    [20484] = { name = "Rebirth",                duration = 1200, icon = 136080, class = "DRUID",   ranks = { 20484, 20739, 20742, 20747, 20748, 26994 } },
+    [20484] = { name = "Rebirth",                duration = 1200, icon = 136080, class = "DRUID",   ranks = { 20484, 20739, 20742, 20747, 20748, 26994 }, level = 20 },
     [740]   = { name = "Tranquility",            duration = 600,  icon = 136107, class = "DRUID",   ranks = { 740, 8918, 9862, 9863, 26983 } },
 }
 

@@ -55,6 +55,49 @@ local SPEC_NAMES = {
 -- Class-level scan (instant)
 -------------------------------------------------------------------------------
 
+-- Is a player of this level past the level their client teaches the spell at
+-- (SpellData `level`, from the SpellLevels game data)? A spell without a level,
+-- or a level we can't read (0, -1, or a hidden value), counts as yes.
+local function LevelAllows(spellID, level)
+    local data = CC.SpellData[spellID]
+    local need = data and data.level
+    if not need then return true end
+    local ok, allowed = pcall(function()
+        return not (level and level > 0) or level >= need
+    end)
+    return not ok or allowed
+end
+
+-- capability key -> the provider spells this unit's class has and its level
+-- has reached. A capability with none left is not there at all.
+function CC:CapabilitiesFor(unit, classTag)
+    local level = UnitLevel and UnitLevel(unit)
+    local capabilities = {}
+    for key, cap in pairs(CC.CAPABILITIES) do
+        local spellIDs = cap.classes[classTag]
+        if spellIDs then
+            local learned = {}
+            for _, id in ipairs(spellIDs) do
+                if LevelAllows(id, level) then learned[#learned + 1] = id end
+            end
+            if #learned > 0 then capabilities[key] = learned end
+        end
+    end
+    return capabilities
+end
+
+-- UNIT_LEVEL: someone in the group (or we) levelled up; redo just their
+-- capabilities. No rescan, so Retail's inspect queue isn't restarted.
+function CC:OnUnitLevel(unit)
+    if type(unit) ~= "string" then return end
+    if unit ~= "player" and not unit:match("^party%d+$") and not unit:match("^raid%d+$") then return end
+    local name = CC:FullName(unit)
+    local info = name and self.roster and self.roster[name]
+    if not info then return end
+    info.capabilities = self:CapabilitiesFor(unit, info.class)
+    if CC.RefreshEssentials then CC:RefreshEssentials() end
+end
+
 function CC:ScanRoster()
     local roster = {}
 
@@ -64,13 +107,7 @@ function CC:ScanRoster()
         local _, classTag = UnitClass(unit)
         if not classTag then return end
 
-        local capabilities = {}
-        for key, cap in pairs(CC.CAPABILITIES) do
-            local spellIDs = cap.classes[classTag]
-            if spellIDs then
-                capabilities[key] = spellIDs
-            end
-        end
+        local capabilities = self:CapabilitiesFor(unit, classTag)
 
         -- Preserve spec info from a previous inspect if we have it
         local prevSpec = self.rosterSpecs and self.rosterSpecs[name]
@@ -210,29 +247,38 @@ function CC:GetCapabilityStatus(capKey)
             local bestRemaining = nil
             local usedSpellID   = nil
             local isLocal       = (name == playerName)
+            local provides      = false
 
             for _, spellID in ipairs(spellIDs) do
-                -- For ourselves, prefer the true live cooldown/charge readout
-                -- (12.0.7 un-secreted these); fall back to the observed-cast
-                -- model if it's unreadable. Remote players: comm only.
-                local remaining = isLocal and self:GetLocalReadiness(spellID) or nil
-                if remaining == nil then
-                    remaining = self:GetRemaining(name, spellID)
-                end
-                if remaining and (not bestRemaining or remaining < bestRemaining) then
-                    bestRemaining = remaining
-                    usedSpellID   = spellID
+                -- Our own spellbook has the final word: a spell we haven't
+                -- learned (too low, or not bought from the trainer yet) never
+                -- makes us a provider. Others go by class and level (CapabilitiesFor).
+                if not isLocal or self:KnownRank(spellID) then
+                    provides = true
+                    -- For ourselves, prefer the true live cooldown/charge readout
+                    -- (12.0.7 un-secreted these); fall back to the observed-cast
+                    -- model if it's unreadable. Remote players: comm only.
+                    local remaining = isLocal and self:GetLocalReadiness(spellID) or nil
+                    if remaining == nil then
+                        remaining = self:GetRemaining(name, spellID)
+                    end
+                    if remaining and (not bestRemaining or remaining < bestRemaining) then
+                        bestRemaining = remaining
+                        usedSpellID   = spellID
+                    end
                 end
             end
 
-            results[#results + 1] = {
-                name      = name,
-                class     = info.class,
-                spec      = info.spec,
-                spellID   = usedSpellID or spellIDs[1],
-                remaining = bestRemaining or 0,
-                ready     = (bestRemaining or 0) <= 0,
-            }
+            if provides then
+                results[#results + 1] = {
+                    name      = name,
+                    class     = info.class,
+                    spec      = info.spec,
+                    spellID   = usedSpellID or spellIDs[1],
+                    remaining = bestRemaining or 0,
+                    ready     = (bestRemaining or 0) <= 0,
+                }
+            end
         end
     end
 

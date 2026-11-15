@@ -70,6 +70,9 @@ Found a bug, or want a spell added? Open an issue at https://github.com/Nelnamar
 
 ## Changelog
 
+### 1.1.1
+- Fixed: you don't show as a ready Battle Rez or Bloodlust before you've learned it. Groupmates who haven't hit the level for it yet don't show either, and they pop in once they ding
+
 ### 1.1.0
 - One download now covers Retail, MoP Classic, TBC Anniversary, Classic Era and WoW: Forever
 - Each client tracks its own spell list, with every rank on Classic Era, TBC Anniversary and WoW: Forever

@@ -195,6 +195,18 @@ Ranking of unverified items overall: Soulstone cooldown on Era/TBC/Forever (item
 | TBC Anniversary | 19 | 1 |
 | MoP Classic | 32 (+5 optional) | 1 |
 
+### B6. Provider spell levels (1.1.1)
+
+The level each Battle Rez and lust spell is learned at, the `level` field in `Data_<client>.lua`: `BaseLevel` of the spell (rank 1 where there are ranks) in each build's SpellLevels table (wago.tools `db2/SpellLevels/csv?build=`, saved beside the spell-list-check cache). None of the Retail ones are talents (no TraitDefinition row), so the level is the real one there too. Re-check after a patch along with the spell lists.
+
+| Client (build) | Rebirth 20484 | Raise Ally 61999 | Bloodlust 2825 / Heroism 32182 | Time Warp 80353 | Fury of the Aspects 390386 |
+|---|---|---|---|---|---|
+| Classic Era (1.15.9.70576) | 20 | – | – | – | – |
+| WoW: Forever (1.60.1.70888) | 20 | – | – | – | – |
+| TBC Anniversary (2.5.6.70577) | 20 | – | 70 / 70 | – | – |
+| MoP Classic (5.5.4.70631) | 56 | 72 | 70 / 70 | 84 | – |
+| Retail (12.1.5.70783) | 19 | 19 | 48 / 48 | 49 | 48 |
+
 ---------------------------------------------------------------------------------------------------
 
 ## C. What cannot work, or needs a different source, per client
