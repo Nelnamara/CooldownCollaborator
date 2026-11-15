@@ -1,10 +1,17 @@
 -- Minimap button for CooldownCollaborator
 -- Left-click: toggle panel | Right-click: open settings | Drag: reposition
 
-local RADIUS = 80
-
+-- The orbit follows the minimap's live size (the Forever minimap is larger than the old one,
+-- and Edit Mode can rescale it): the button's center sits just past the rim, so it rides the
+-- border instead of floating inside the map. Same rule as CooldownTimeline3's button.
 local function AngleToOffset(angle)
-    return RADIUS * math.cos(math.rad(angle)), RADIUS * math.sin(math.rad(angle))
+    local radius = (Minimap:GetWidth() / 2) + 4
+    return radius * math.cos(math.rad(angle)), radius * math.sin(math.rad(angle))
+end
+
+local function Place(btn)
+    btn:ClearAllPoints()
+    btn:SetPoint("CENTER", Minimap, "CENTER", AngleToOffset(CC.db.minimapAngle or 225))
 end
 
 function CC:BuildMinimapButton()
@@ -24,8 +31,9 @@ function CC:BuildMinimapButton()
     icon:SetAllPoints()
     icon:SetTexture("Interface\\AddOns\\CooldownCollaborator\\Media\\minimap.tga")
 
-    -- Initial position
-    btn:SetPoint("CENTER", Minimap, "CENTER", AngleToOffset(db.minimapAngle or 225))
+    -- Initial position, and again whenever the minimap changes size
+    Place(btn)
+    Minimap:HookScript("OnSizeChanged", function() Place(btn) end)
 
     -- Tooltip
     btn:SetScript("OnEnter", function(self)
@@ -57,8 +65,7 @@ function CC:BuildMinimapButton()
             local s = UIParent:GetEffectiveScale()
             local angle = math.deg(math.atan2(py / s - my, px / s - mx))
             CC.db.minimapAngle = angle
-            self:ClearAllPoints()
-            self:SetPoint("CENTER", Minimap, "CENTER", AngleToOffset(angle))
+            Place(self)
         end)
     end)
     btn:SetScript("OnDragStop", function(self)

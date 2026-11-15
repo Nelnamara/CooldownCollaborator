@@ -415,6 +415,26 @@ CC.verbose = false
 Advance(10)
 check("views, options, slash commands and verbose output: no Lua errors", #ERRORS == e0, ERRORS[e0 + 1])
 
+-- the minimap button rides the rim of a minimap of any size (Forever's is larger than the old one)
+do
+	local btn = _G["CCMinimapButton"]
+	local hook = Minimap.__hooks and Minimap.__hooks.OnSizeChanged
+	local function dist()
+		local p = btn and btn.__points[#btn.__points]
+		if not p then return nil end
+		return math.sqrt((p[4] or 0) ^ 2 + (p[5] or 0) ^ 2)
+	end
+	local sizes = {}
+	for _, w in ipairs({ 140, 200 }) do
+		Minimap:SetSize(w, w)
+		if hook then hook(Minimap) end
+		sizes[#sizes + 1] = dist()
+	end
+	check("minimap button: just past the rim, and follows the minimap's size",
+		hook ~= nil and sizes[1] and sizes[2] and math.abs(sizes[1] - 74) < 0.01 and math.abs(sizes[2] - 104) < 0.01,
+		tostring(sizes[1]) .. "/" .. tostring(sizes[2]))
+end
+
 local allowed = { CooldownCollaborator = true, CC = true, CooldownCollaboratorDB = true, SLASH_COOLDOWNCOLLABORATOR1 = true,
 	CCEventFrame = true, CCMainFrame = true, CCEssentialsFrame = true, CCLaneFrame = true, CCMinimapButton = true,
 	CCOptionsFrame = true, CCDefScroll = true, CCSpellInput = true, CCDurInput = true, CCCustScroll = true,

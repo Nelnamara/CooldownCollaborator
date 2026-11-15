@@ -117,6 +117,7 @@ Every rank of a spell counts on Classic Era, TBC Anniversary and WoW: Forever. E
 - Fixed: the Battle Rez charge timer reads the right value
 - Fixed: Anti-Magic Zone is 4 minutes
 - Fixed: a sync that went through is no longer sent again, and one the game refused is retried for about half a minute
+- Fixed: the minimap button sits on the rim of WoW: Forever's larger minimap, and stays there if the minimap is resized
 - Fixed: `/cdc consumable` now saves a trailing `flask` or `food` as the category
 - Fixed: sync uses instance chat in instance groups
 - Interface 120105 (Retail 12.1.5)

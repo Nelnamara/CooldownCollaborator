@@ -155,6 +155,11 @@ Methods.SetShown = function(s, v) s.__shown = v and true or false end
 Methods.IsShown = function(s) return s.__shown end
 Methods.SetScript = function(s, k, f) s.__scripts[k] = f end
 Methods.GetScript = function(s, k) return s.__scripts[k] end
+Methods.HookScript = function(s, k, f)
+	s.__hooks = s.__hooks or {}
+	local prev = s.__hooks[k]
+	s.__hooks[k] = prev and function(...) prev(...); f(...) end or f
+end
 Methods.RegisterEvent = function(s, e)
 	if REFUSED_EVENTS[e] then error("Attempt to register a forbidden event: " .. e) end
 	eventFrames[e] = eventFrames[e] or {}; eventFrames[e][s] = true
