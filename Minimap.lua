@@ -14,6 +14,15 @@ local function Place(btn)
     btn:SetPoint("CENTER", Minimap, "CENTER", AngleToOffset(CC.db.minimapAngle or 225))
 end
 
+-- Placed again at PLAYER_LOGIN: the button is built at ADDON_LOADED, when Forever's minimap
+-- still reports the old size, and it grows without OnSizeChanged reaching the hook (test 3
+-- showed the button where a 140-wide map puts it). CooldownTimeline3 builds its at login.
+function CC:PlaceMinimapButton()
+    if self.minimapBtn then
+        Place(self.minimapBtn)
+    end
+end
+
 function CC:BuildMinimapButton()
     local db = self.db
 

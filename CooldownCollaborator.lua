@@ -583,6 +583,8 @@ ef:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_LOGIN" then
         -- Every addon is loaded by now, so CDTL3 (if present) is ready.
         CC:BridgeRegister()
+        -- the minimap has its real size by now (Minimap.lua)
+        CC:PlaceMinimapButton()
     elseif event == "PLAYER_LOGOUT" then
         CC:SavePosition()
     end

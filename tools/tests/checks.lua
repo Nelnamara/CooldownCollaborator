@@ -433,6 +433,15 @@ do
 	check("minimap button: just past the rim, and follows the minimap's size",
 		hook ~= nil and sizes[1] and sizes[2] and math.abs(sizes[1] - 74) < 0.01 and math.abs(sizes[2] - 104) < 0.01,
 		tostring(sizes[1]) .. "/" .. tostring(sizes[2]))
+	-- Forever: the map grows with no size event reaching the hook; login places the button again
+	Minimap:SetSize(182, 182)
+	local bridge = CC.BridgeRegister
+	CC.BridgeRegister = function() end
+	FireEvent("PLAYER_LOGIN")
+	CC.BridgeRegister = bridge
+	local atLogin = dist()
+	check("minimap button: placed again at login, for a map that grew without a size event",
+		atLogin ~= nil and math.abs(atLogin - 95) < 0.01, tostring(atLogin))
 end
 
 local allowed = { CooldownCollaborator = true, CC = true, CooldownCollaboratorDB = true, SLASH_COOLDOWNCOLLABORATOR1 = true,
