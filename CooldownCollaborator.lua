@@ -6,7 +6,7 @@
 CooldownCollaborator = {}
 CC = CooldownCollaborator
 
-CC.version = "1.1.0"
+CC.version = "1.1.1"
 CC.PREFIX   = "CDCOLLAB"
 
 -------------------------------------------------------------------------------
@@ -541,6 +541,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
         if ... == "CooldownCollaborator" then
             CC:Init()
             self:RegisterEvent("GROUP_ROSTER_UPDATE")
+            self:RegisterEvent("UNIT_LEVEL")
             self:RegisterEvent("ENCOUNTER_START")
             self:RegisterEvent("ENCOUNTER_END")
             self:RegisterEvent("CHAT_MSG_ADDON")
@@ -554,6 +555,9 @@ ef:SetScript("OnEvent", function(self, event, ...)
         CC:PruneState()
         CC:RefreshRows()
         CC:ScanRoster()
+    elseif event == "UNIT_LEVEL" then
+        -- a provider spell may have just come in reach (Roster.lua)
+        CC:OnUnitLevel(...)
     elseif event == "ENCOUNTER_START" then
         CC.inEncounter = true
     elseif event == "ENCOUNTER_END" then
@@ -618,7 +622,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     elseif cmd == "lanes" then
         CC.db.laneEnabled = not CC.db.laneEnabled
         CC:RefreshLanes()
-        print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF"))
+        local soloHint = (CC.db.laneEnabled and not IsInGroup()) and " (it shows when you're in a group)" or ""
+        print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF") .. soloHint)
     elseif cmd == "rez" then
         CC:RequestRez()
     elseif cmd == "consumable" then

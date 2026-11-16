@@ -25,7 +25,7 @@ CC.SpellData = {
 
     -- Druid
     [29166] = { name = "Innervate",              duration = 360,  icon = 136048, class = "DRUID" },
-    [20484] = { name = "Rebirth",                duration = 1800, icon = 136080, class = "DRUID",   ranks = { 20484, 20739, 20742, 20747, 20748 } },
+    [20484] = { name = "Rebirth",                duration = 1800, icon = 136080, class = "DRUID",   ranks = { 20484, 20739, 20742, 20747, 20748 }, level = 20 },
     [740]   = { name = "Tranquility",            duration = 300,  icon = 136107, class = "DRUID",   ranks = { 740, 8918, 9862, 9863 } },
 }
 

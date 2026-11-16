@@ -17,17 +17,17 @@ CC.SpellData = {
 
     -- Death Knight
     [51052]  = { name = "Anti-Magic Zone",          duration = 240, icon = 135826,  class = "DEATHKNIGHT" },
-    [61999]  = { name = "Raise Ally",                duration = 600, icon = 136144,  class = "DEATHKNIGHT" },
+    [61999]  = { name = "Raise Ally",                duration = 600, icon = 136144,  class = "DEATHKNIGHT", level = 19 },
 
     -- Shaman
-    [32182]  = { name = "Heroism",                   duration = 300, icon = 135978,  class = "SHAMAN"      },
-    [2825]   = { name = "Bloodlust",                 duration = 300, icon = 136012,  class = "SHAMAN"      },
+    [32182]  = { name = "Heroism",                   duration = 300, icon = 135978,  class = "SHAMAN",      level = 48 },
+    [2825]   = { name = "Bloodlust",                 duration = 300, icon = 136012,  class = "SHAMAN",      level = 48 },
     [98008]  = { name = "Spirit Link Totem",         duration = 180, icon = 237586,  class = "SHAMAN"      },
     [207399] = { name = "Ancestral Prot. Totem",    duration = 300, icon = 1038468, class = "SHAMAN"      },
     [108280] = { name = "Healing Tide Totem",        duration = 120, icon = 538569,  class = "SHAMAN"      },
 
     -- Mage
-    [80353]  = { name = "Time Warp",                 duration = 300, icon = 458223,  class = "MAGE"        },
+    [80353]  = { name = "Time Warp",                 duration = 300, icon = 458223,  class = "MAGE",        level = 49 },
     [45438]  = { name = "Ice Block",                 duration = 300, icon = 135841,  class = "MAGE"        },
 
     -- Warlock
@@ -39,7 +39,7 @@ CC.SpellData = {
 
     -- Druid
     [740]    = { name = "Tranquility",               duration = 180, icon = 136107,  class = "DRUID"       },
-    [20484]  = { name = "Rebirth",                   duration = 600, icon = 136080,  class = "DRUID"       },
+    [20484]  = { name = "Rebirth",                   duration = 600, icon = 136080,  class = "DRUID",       level = 19 },
     [29166]  = { name = "Innervate",                 duration = 180, icon = 136048,  class = "DRUID"       },
 
     -- Demon Hunter
@@ -50,7 +50,7 @@ CC.SpellData = {
     [370665] = { name = "Rescue",                    duration = 60,  icon = 4638349, class = "EVOKER"      },
     [374227] = { name = "Zephyr",                    duration = 120, icon = 4643463, class = "EVOKER"      },
     [357170] = { name = "Time Dilation",             duration = 90,  icon = 4622460, class = "EVOKER"      },
-    [390386] = { name = "Fury of the Aspects",       duration = 300, icon = 4723908, class = "EVOKER"      },
+    [390386] = { name = "Fury of the Aspects",       duration = 300, icon = 4723908, class = "EVOKER",      level = 48 },
 }
 
 -- Who can provide each raid-wide capability (Roster.lua).
