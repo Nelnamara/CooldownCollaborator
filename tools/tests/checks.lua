@@ -160,6 +160,10 @@ end
 check("every provider spell is a tracked spell; Soulstone never a Battle Rez provider", providerBad == nil, providerBad)
 
 ---------------------------------------------------------------- group, roster, specs
+local laneWas = CC.db.laneEnabled
+CC.db.laneEnabled = true
+CC:RefreshLanes()
+check("lane view on while solo: stays hidden", not CC.laneFrame:IsShown())
 GROUP = {
 	{ unit = "party1", name = "Tania",   realm = "Realm", class = "DRUID",  guid = "Player-1-0000002" },
 	{ unit = "party2", name = "Brannoc", realm = "Realm", class = "SHAMAN", guid = "Player-1-0000003" },
@@ -167,6 +171,9 @@ GROUP = {
 }
 local ME = "Tester-Realm"
 FireEvent("GROUP_ROSTER_UPDATE")
+check("joining a group with the lane view on opens it", CC.laneFrame:IsShown())
+CC.db.laneEnabled = laneWas
+CC:RefreshLanes()
 check("roster: player and three party members", CC.roster and CC.roster[ME] and CC.roster["Tania-Realm"] and CC.roster["Odrin-Other"] ~= nil)
 check("inspect (spec labels) on Retail only", (INSPECTS > 0) == (FLAVOR == "retail") and IsEventRegisteredAnywhere("INSPECT_READY") == (FLAVOR == "retail"),
 	"NotifyInspect calls " .. INSPECTS)

@@ -622,7 +622,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     elseif cmd == "lanes" then
         CC.db.laneEnabled = not CC.db.laneEnabled
         CC:RefreshLanes()
-        print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF"))
+        local soloHint = (CC.db.laneEnabled and not IsInGroup()) and " (it shows when you're in a group)" or ""
+        print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF") .. soloHint)
     elseif cmd == "rez" then
         CC:RequestRez()
     elseif cmd == "consumable" then

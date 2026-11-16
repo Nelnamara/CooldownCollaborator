@@ -72,6 +72,7 @@ Found a bug, or want a spell added? Open an issue at https://github.com/Nelnamar
 
 ### 1.1.1
 - Fixed: you don't show as a ready Battle Rez or Bloodlust before you've learned it. Groupmates who haven't hit the level for it yet don't show either, and they pop in once they ding
+- Fixed: the Lane view opens when you join a group, if you've turned it on. Turn it on while solo and `/cdc lanes` tells you it shows up once you're in a group
 
 ### 1.1.0
 - One download now covers Retail, MoP Classic, TBC Anniversary, Classic Era and WoW: Forever

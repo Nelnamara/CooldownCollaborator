@@ -134,6 +134,8 @@ function CC:ScanRoster()
     end
 
     if CC.RefreshEssentials then CC:RefreshEssentials() end
+    -- the Lane view only opens in a group: joining one with it on shows it
+    if CC.RefreshLanes then CC:RefreshLanes() end
 end
 
 -------------------------------------------------------------------------------
