@@ -24,31 +24,12 @@ local MIN_DURATIONS = { 30, 60, 90, 120, 180 }
 
 -- ── Helpers ──────────────────────────────────────────────────────────────────
 
-local function MakeLabel(parent, text, size, anchor, ox, oy)
-    local fs = parent:CreateFontString(nil, "OVERLAY", size or "GameFontHighlight")
-    fs:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", ox or 0, oy or -8)
-    fs:SetText(text)
-    return fs
-end
-
 local function MakeLine(parent, anchor, oy)
     local t = parent:CreateTexture(nil, "ARTWORK")
     t:SetSize(FRAME_W - 32, 1)
     t:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -4)
     t:SetColorTexture(0.3, 0.3, 0.4, 0.6)
     return t
-end
-
-local function MakeCB(parent, label, anchor, ox, oy, getter, setter)
-    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    cb:SetSize(22, 22)
-    cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", ox or 0, oy or -4)
-    cb:SetChecked(getter())
-    cb:SetScript("OnClick", function(self) setter(self:GetChecked()) end)
-    local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lbl:SetPoint("LEFT", cb, "RIGHT", 2, 0)
-    lbl:SetText(label)
-    return cb, lbl
 end
 
 local function ResolveSpell(text)
@@ -257,7 +238,6 @@ function CC:OpenOptions()
     MakeLine(f, hdrDisp, -2)
     yOff = yOff - 6
 
-    local anchor = f   -- for relative positioning below
     local anchorY = yOff
 
     local cbReady = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")

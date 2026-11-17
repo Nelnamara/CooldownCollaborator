@@ -268,10 +268,12 @@ function UnitLevel(u) local m = member(u); if m then return m.level or LEVEL_CAP
 function UnitExists(u) return member(u) ~= nil end
 function UnitIsConnected(u) return member(u) ~= nil end
 function UnitIsDeadOrGhost() return false end
-function UnitIsGroupLeader(u) return u == "player" end
-function IsRaidLeader() return false end
-function IsRaidOfficer() return false end
-function IsInRaid() return false end
+-- RAID_GROUP: the group is a raid; LEADER / ASSIST: the player leads it / is a raid assistant.
+-- IsRaidLeader and IsRaidOfficer are gone on every client (Blizzard's function lists), so no stub.
+RAID_GROUP, LEADER, ASSIST = false, true, false
+function UnitIsGroupLeader(u) return u == "player" and LEADER end
+function UnitIsGroupAssistant(u) return u == "player" and ASSIST end
+function IsInRaid() return RAID_GROUP end
 function IsInGroup(category)
 	if category == LE_PARTY_CATEGORY_INSTANCE then return INSTANCE_GROUP end
 	return #GROUP > 0 or INSTANCE_GROUP
@@ -295,7 +297,8 @@ if FLAVOR == "retail" then
 	C_SpecializationInfo = { GetSpecialization = function() return 2 end }
 end
 CHATSENT = {}
-function SendChatMessage(msg, chan) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan } end
+-- the bare global is one of Blizzard's deprecation fallbacks (on by default); C_ChatInfo's is on every client
+function SendChatMessage(msg, chan) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, via = "global" } end
 
 ---------------------------------------------------------------- addon messages
 SENT = {}      -- { prefix, msg, channel }
@@ -308,6 +311,7 @@ C_ChatInfo = {
 		SENT[#SENT + 1] = { prefix = prefix, msg = msg, channel = channel }
 		return SendResult()
 	end,
+	SendChatMessage = function(msg, chan) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, via = "C_ChatInfo" } end,
 }
 if FLAVOR == "retail" then
 	C_ChatInfo.AreOutgoingAddonChatMessagesRestricted = function() return false end

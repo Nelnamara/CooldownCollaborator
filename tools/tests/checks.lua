@@ -504,6 +504,54 @@ do
 		atLogin ~= nil and math.abs(atLogin - 95) < 0.01, tostring(atLogin))
 end
 
+---------------------------------------------------------------- Request Rez in a raid
+-- raid leader or assist may ask (UnitIsGroupLeader / UnitIsGroupAssistant: IsRaidLeader and
+-- IsRaidOfficer are gone on every client), a plain raid member may not, the party leader may;
+-- the Essentials bar refreshes in a raid with no Lua error; the request goes out through
+-- C_ChatInfo.SendChatMessage
+do
+	local function can()
+		local ok, res = pcall(CC.CanRequestRez, CC)
+		if not ok then return "error", tostring(res) end
+		return res and true or false, ""
+	end
+	local party, e1 = can()
+	RAID_GROUP, LEADER, ASSIST = true, false, false
+	local member, e2 = can()
+	ASSIST = true
+	local assist, e3 = can()
+	ASSIST, LEADER = false, true
+	local lead, e4 = can()
+	check("request rez: party leader yes; in a raid, leader yes, assist yes, plain member no",
+		party == true and lead == true and assist == true and member == false,
+		table.concat({ tostring(party), tostring(lead), tostring(assist), tostring(member), e1, e2, e3, e4 }, " "))
+
+	local essWas = CC.db.essentialsEnabled
+	CC.db.essentialsEnabled = true
+	if CC.essentialsRezBtn then CC.essentialsRezBtn:Hide() end
+	local okRefresh, errRefresh = pcall(CC.RefreshEssentials, CC)
+	check("  Essentials bar in a raid (leader): refreshes with no Lua error and shows Request Rez",
+		okRefresh and CC.essentialsRezBtn ~= nil and CC.essentialsRezBtn:IsShown(), tostring(errRefresh))
+	CC.db.essentialsEnabled = essWas
+
+	local saved = { UnitExists, UnitIsDeadOrGhost, UnitFullName, CC.GetCapabilityStatus }
+	UnitExists = function(u) if u == "target" then return true end return saved[1](u) end
+	UnitIsDeadOrGhost = function(u) return u == "target" end
+	UnitFullName = function(u) if u == "target" then return "Odrin", "Other" end return saved[3](u) end
+	CC.GetCapabilityStatus = function() return { { ready = true, name = "Tania-Realm" } } end
+	local c0 = #CHATSENT
+	local okReq, errReq = pcall(CC.RequestRez, CC)
+	UnitExists, UnitIsDeadOrGhost, UnitFullName, CC.GetCapabilityStatus = saved[1], saved[2], saved[3], saved[4]
+	local a, b = CHATSENT[c0 + 1], CHATSENT[c0 + 2]
+	check("  Request Rez in a raid: RAID and RAID_WARNING through C_ChatInfo.SendChatMessage",
+		okReq and #CHATSENT == c0 + 2 and a.chan == "RAID" and b.chan == "RAID_WARNING"
+			and a.via == "C_ChatInfo" and b.via == "C_ChatInfo"
+			and a.msg:find("Tania", 1, true) ~= nil and a.msg:find("Odrin", 1, true) ~= nil,
+		okReq and (a and (a.chan .. " " .. a.via .. " " .. a.msg) or "nothing sent") or tostring(errReq))
+	RAID_GROUP, LEADER, ASSIST = false, true, false
+	pcall(CC.RefreshEssentials, CC)
+end
+
 local allowed = { CooldownCollaborator = true, CC = true, CooldownCollaboratorDB = true, SLASH_COOLDOWNCOLLABORATOR1 = true,
 	CCEventFrame = true, CCMainFrame = true, CCEssentialsFrame = true, CCLaneFrame = true, CCMinimapButton = true,
 	CCOptionsFrame = true, CCDefScroll = true, CCSpellInput = true, CCDurInput = true, CCCustScroll = true,

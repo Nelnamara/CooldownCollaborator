@@ -299,6 +299,13 @@ function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
     end
 end
 
+-- Every client has C_ChatInfo.SendChatMessage; the bare SendChatMessage now lives only in
+-- Blizzard's deprecation fallbacks (on unless a player turns them off).
+local function SendChat(msg, chatType)
+    local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
+    if send then send(msg, chatType) end
+end
+
 -- Resolve a player's name back to a live unit token, so we can check things
 -- (alive/dead) that GetCapabilityStatus's name-only entries cannot.
 local function FindUnitToken(name)
@@ -320,9 +327,10 @@ end
 -- Raid lead / assist only: target a dead player and announce who should
 -- rez them, naming the specific provider whose Battle Rez is ready right
 -- now rather than a generic "someone rez" callout.
+-- (IsRaidLeader / IsRaidOfficer are gone on every client; these two are on all five.)
 function CC:CanRequestRez()
     if IsInRaid() then
-        return IsRaidLeader() or IsRaidOfficer()
+        return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
     elseif IsInGroup() then
         return UnitIsGroupLeader("player")
     end
@@ -364,10 +372,10 @@ function CC:RequestRez()
     local msg = string.format("%s, please %s %s!", self:ShortName(provider.name), spellName, self:ShortName(targetName))
 
     if IsInRaid() then
-        SendChatMessage(msg, "RAID")
-        SendChatMessage(msg, "RAID_WARNING")
+        SendChat(msg, "RAID")
+        SendChat(msg, "RAID_WARNING")
     else
-        SendChatMessage(msg, "PARTY")
+        SendChat(msg, "PARTY")
     end
 end
 

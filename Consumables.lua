@@ -190,7 +190,7 @@ function CC:PollConsumables()
     end
 
     -- Check user-registered consumables
-    for idStr, data in pairs(self.db.consumableBuffs or {}) do
+    for idStr in pairs(self.db.consumableBuffs or {}) do
         local spellID = tonumber(idStr)
         if spellID then
             local present
