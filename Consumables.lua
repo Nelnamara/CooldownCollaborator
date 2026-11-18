@@ -136,7 +136,8 @@ local function ScanPlayerBuffs()
             local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
             if not aura then break end
             name, spellID = aura.name, aura.spellId
-        -- UnitAura: Classic clients only; Retail and Forever take the branch above.
+        -- UnitAura: a fallback only. Every current client has the call above; on Era, TBC and MoP
+        -- UnitAura is Blizzard's deprecation copy of it.
         ---@diagnostic disable-next-line: undefined-global
         elseif UnitAura then
             ---@diagnostic disable-next-line: undefined-global
