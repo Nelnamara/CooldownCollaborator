@@ -18,13 +18,9 @@ local function FormatTime(secs)
     return string.format("%ds", s)
 end
 
-function CC:BuildEssentialsBar()
-    local db = self.db
-
-    local f = CreateFrame("Frame", "CCEssentialsFrame", UIParent, CC.BackdropTemplate)
-    f:SetSize(FRAME_WIDTH, HEADER_HEIGHT + ROW_HEIGHT)
-    f:SetPoint("CENTER", UIParent, "CENTER", db.essentialsX or 220, db.essentialsY or 200)
-    f:SetScale(db.essentialsScale or 1.0)
+-- Shared by the Essentials bar and the Lane view: strata, dragging, clamping and the
+-- dark backdrop; only the border colour differs.
+function CC:StylePanelFrame(f, borderR, borderG, borderB)
     f:SetFrameStrata("MEDIUM")
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -36,7 +32,17 @@ function CC:BuildEssentialsBar()
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
     f:SetBackdropColor(0.05, 0.05, 0.08, 0.9)
-    f:SetBackdropBorderColor(0.6, 0.5, 0.1, 0.85)
+    f:SetBackdropBorderColor(borderR, borderG, borderB, 0.85)
+end
+
+function CC:BuildEssentialsBar()
+    local db = self.db
+
+    local f = CreateFrame("Frame", "CCEssentialsFrame", UIParent, CC.BackdropTemplate)
+    f:SetSize(FRAME_WIDTH, HEADER_HEIGHT + ROW_HEIGHT)
+    f:SetPoint("CENTER", UIParent, "CENTER", db.essentialsX or 220, db.essentialsY or 200)
+    f:SetScale(db.essentialsScale or 1.0)
+    self:StylePanelFrame(f, 0.6, 0.5, 0.1)
 
     f:SetScript("OnMouseDown", function(widget, btn)
         if btn == "LeftButton" and not CC.db.essentialsLocked then

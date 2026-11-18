@@ -19,18 +19,7 @@ function CC:BuildLaneView()
     f:SetSize(LANE_WIDTH + 16, LANE_HEIGHT * laneCount + LANE_GAP * (laneCount - 1) + 30)
     f:SetPoint("CENTER", UIParent, "CENTER", db.laneX or 0, db.laneY or -200)
     f:SetScale(db.laneScale or 1.0)
-    f:SetFrameStrata("MEDIUM")
-    f:SetMovable(true)
-    f:EnableMouse(true)
-    f:SetClampedToScreen(true)
-    f:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 32, edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    f:SetBackdropColor(0.05, 0.05, 0.08, 0.9)
-    f:SetBackdropBorderColor(0.3, 0.5, 0.7, 0.85)
+    self:StylePanelFrame(f, 0.3, 0.5, 0.7)
 
     f:SetScript("OnMouseDown", function(widget, btn)
         if btn == "LeftButton" and not CC.db.laneLocked then
