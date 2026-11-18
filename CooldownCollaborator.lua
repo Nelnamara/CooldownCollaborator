@@ -37,9 +37,15 @@ end
 
 CC.Compat = {
     IsSpellKnown = function(spellID)
+        -- Deliberate shim: these globals are deprecated on Retail but are the
+        -- only spellbook check on the Classic clients. The second argument
+        -- (isPetSpell) defaults to false, so passing it changes nothing.
+        ---@diagnostic disable-next-line: deprecated
         if IsSpellKnownOrOverridesKnown or IsSpellKnown then
-            return (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID))
-                or (IsSpellKnown and IsSpellKnown(spellID)) or false
+            ---@diagnostic disable-next-line: deprecated
+            return (IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellID, false))
+                ---@diagnostic disable-next-line: deprecated
+                or (IsSpellKnown and IsSpellKnown(spellID, false)) or false
         end
         if C_SpellBook and C_SpellBook.IsSpellKnown then
             return C_SpellBook.IsSpellKnown(spellID, PlayerSpellBank()) or false
@@ -52,7 +58,10 @@ CC.Compat = {
             local info = C_Spell.GetSpellInfo(spell)
             if info and info.name then return info.name, info.iconID, info.spellID end
         end
+        -- The bare GetSpellInfo exists only on the Classic clients.
+        ---@diagnostic disable-next-line: undefined-global
         if GetSpellInfo then
+            ---@diagnostic disable-next-line: undefined-global
             local name, _, icon, _, _, _, spellID = GetSpellInfo(spell)
             if name then return name, icon, spellID end
         end
@@ -302,6 +311,8 @@ end
 -- Every client has C_ChatInfo.SendChatMessage; the bare SendChatMessage now lives only in
 -- Blizzard's deprecation fallbacks (on unless a player turns them off).
 local function SendChat(msg, chatType)
+    -- Deliberate fallback to the old global.
+    ---@diagnostic disable-next-line: deprecated
     local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
     if send then send(msg, chatType) end
 end
@@ -433,7 +444,10 @@ local function ReadCharges(id)
         if ch then
             return ch.currentCharges, ch.maxCharges, ch.cooldownStartTime, ch.cooldownDuration
         end
+    -- GetSpellCharges: the Classic clients' global; Retail and Forever use C_Spell above.
+    ---@diagnostic disable-next-line: undefined-global
     elseif GetSpellCharges then
+        ---@diagnostic disable-next-line: undefined-global
         return GetSpellCharges(id)
     end
 end

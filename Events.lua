@@ -6,6 +6,7 @@
 
 -- The Classic clients call it C_CombatLog.GetCurrentEventInfo; the old global is
 -- a deprecated alias there (and a stub on Retail).
+---@diagnostic disable-next-line: undefined-global
 local GetCombatLogInfo = (C_CombatLog and C_CombatLog.GetCurrentEventInfo) or CombatLogGetCurrentEventInfo
 local PARTY_OR_RAID = (COMBATLOG_OBJECT_AFFILIATION_PARTY or 0x2) + (COMBATLOG_OBJECT_AFFILIATION_RAID or 0x4)
 local TYPE_PLAYER   = COMBATLOG_OBJECT_TYPE_PLAYER or 0x400

@@ -120,8 +120,8 @@ function CC:RefreshDefaultSpellList()
                     local a = (CC.db.disabledSpells and CC.db.disabledSpells[sid]) and 0.35 or 1.0
                     ico:SetAlpha(a); nm:SetAlpha(a); dur:SetAlpha(a)
                 end
-                cb:SetScript("OnClick", function(self)
-                    if self:GetChecked() then CC.db.disabledSpells[sid] = nil
+                cb:SetScript("OnClick", function(widget)
+                    if widget:GetChecked() then CC.db.disabledSpells[sid] = nil
                     else CC.db.disabledSpells[sid] = true end
                     CC:RefreshRows()
                     Dim()
@@ -244,8 +244,8 @@ function CC:OpenOptions()
     cbReady:SetSize(22, 22)
     cbReady:SetPoint("TOPLEFT", f, "TOPLEFT", 16, anchorY)
     cbReady:SetChecked(CC.db.showReady)
-    cbReady:SetScript("OnClick", function(self)
-        CC.db.showReady = self:GetChecked(); CC:RefreshRows()
+    cbReady:SetScript("OnClick", function(widget)
+        CC.db.showReady = widget:GetChecked(); CC:RefreshRows()
     end)
     local lReady = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lReady:SetPoint("LEFT", cbReady, "RIGHT", 2, 0)
@@ -256,8 +256,8 @@ function CC:OpenOptions()
     cbLock:SetSize(22, 22)
     cbLock:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
     cbLock:SetChecked(CC.db.locked)
-    cbLock:SetScript("OnClick", function(self)
-        CC.db.locked = self:GetChecked(); CC:UpdateLock()
+    cbLock:SetScript("OnClick", function(widget)
+        CC.db.locked = widget:GetChecked(); CC:UpdateLock()
     end)
     local lLock = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lLock:SetPoint("LEFT", cbLock, "RIGHT", 2, 0)
@@ -268,8 +268,8 @@ function CC:OpenOptions()
     cbMM:SetSize(22, 22)
     cbMM:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
     cbMM:SetChecked(CC.db.minimapHide)
-    cbMM:SetScript("OnClick", function(self)
-        CC.db.minimapHide = self:GetChecked()
+    cbMM:SetScript("OnClick", function(widget)
+        CC.db.minimapHide = widget:GetChecked()
         if CC.minimapBtn then CC.minimapBtn:SetShown(not CC.db.minimapHide) end
     end)
     local lMM = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -282,14 +282,14 @@ function CC:OpenOptions()
     cbBridge:SetSize(22, 22)
     cbBridge:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
     cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
-    cbBridge:SetScript("OnClick", function(self)
-        CC:SetShowOnCDTL3(self:GetChecked())
+    cbBridge:SetScript("OnClick", function(widget)
+        CC:SetShowOnCDTL3(widget:GetChecked())
     end)
     local lBridge = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lBridge:SetPoint("LEFT", cbBridge, "RIGHT", 2, 0)
     lBridge:SetText("Show group cooldowns on CooldownTimeline3's lanes")
-    cbBridge:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    cbBridge:SetScript("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
         GameTooltip:SetText("Show group cooldowns on CooldownTimeline3's lanes")
         GameTooltip:AddLine("Your cooldowns and your group's show as icons with a countdown on CooldownTimeline3's lanes. CooldownTimeline3 decides which lane. Change it in CooldownTimeline3 under Filters > Defaults > Group cooldowns.", 1, 1, 1, true)
         GameTooltip:Show()
@@ -349,7 +349,7 @@ function CC:OpenOptions()
     local alphaVal = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     alphaVal:SetPoint("LEFT", alphaSlider, "RIGHT", 6, 0)
     alphaVal:SetText(string.format("%.0f%%", (CC.db.alpha or 0.9) * 100))
-    alphaSlider:SetScript("OnValueChanged", function(self, v)
+    alphaSlider:SetScript("OnValueChanged", function(_, v)
         CC.db.alpha = v
         alphaVal:SetText(string.format("%.0f%%", v * 100))
         if CC.frame then CC.frame:SetAlpha(v) end
@@ -373,7 +373,7 @@ function CC:OpenOptions()
     local scaleVal = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     scaleVal:SetPoint("LEFT", scaleSlider, "RIGHT", 6, 0)
     scaleVal:SetText(string.format("%.1fx", CC.db.scale or 1.0))
-    scaleSlider:SetScript("OnValueChanged", function(self, v)
+    scaleSlider:SetScript("OnValueChanged", function(_, v)
         CC.db.scale = v
         scaleVal:SetText(string.format("%.1fx", v))
         if CC.frame then CC.frame:SetScale(v) end
@@ -451,7 +451,7 @@ function CC:OpenOptions()
     spellInput:SetAutoFocus(false)
     spellInput:SetNumeric(false)
     spellInput:SetMaxLetters(128)
-    spellInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    spellInput:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
 
     local preview = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     preview:SetPoint("LEFT", spellInput, "RIGHT", 8, 0)
@@ -468,7 +468,7 @@ function CC:OpenOptions()
     durInput:SetAutoFocus(false)
     durInput:SetNumeric(true)
     durInput:SetMaxLetters(5)
-    durInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    durInput:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
 
     local addBtn = CreateFrame("Button", nil, custPanel, "UIPanelButtonTemplate")
     addBtn:SetSize(80, 22)
@@ -477,13 +477,13 @@ function CC:OpenOptions()
 
     local pendingID = nil
 
-    spellInput:SetScript("OnTextChanged", function(self, userInput)
+    spellInput:SetScript("OnTextChanged", function(widget, userInput)
         if not userInput then return end
-        local text = self:GetText()
+        local text = widget:GetText()
         local linkID = text:match("|Hspell:(%d+)")
         if linkID then
             pendingID = tonumber(linkID)
-            self:SetText(linkID)
+            widget:SetText(linkID)
             local name = LookupSpellName(pendingID)
             preview:SetText(name or "|cFFFF4444Unknown|r")
             return
@@ -575,8 +575,11 @@ function CC:BuildOptionsPanel()
             pcall(Settings.RegisterAddOnCategory, category)
             self.optionsCategoryID = category.ID
         end
+    -- Older clients without the Settings API (Classic) use the interface options list.
+    ---@diagnostic disable-next-line: undefined-global
     elseif InterfaceOptions_AddCategory then
         panel.name = "CooldownCollaborator"
+        ---@diagnostic disable-next-line: undefined-global
         pcall(InterfaceOptions_AddCategory, panel)
     end
 end

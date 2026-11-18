@@ -47,13 +47,13 @@ function CC:BuildUI()
     frame:SetBackdropColor(0.05, 0.05, 0.08, 0.88)
     frame:SetBackdropBorderColor(0.35, 0.35, 0.55, 0.85)
 
-    frame:SetScript("OnMouseDown", function(self, btn)
+    frame:SetScript("OnMouseDown", function(widget, btn)
         if btn == "LeftButton" and not CC.db.locked then
-            self:StartMoving()
+            widget:StartMoving()
         end
     end)
-    frame:SetScript("OnMouseUp", function(self)
-        self:StopMovingOrSizing()
+    frame:SetScript("OnMouseUp", function(widget)
+        widget:StopMovingOrSizing()
         CC:SavePosition()
     end)
 
@@ -119,14 +119,14 @@ function CC:BuildUI()
         row.timeText = timeText
 
         -- Hover highlight
-        row:SetScript("OnEnter", function(self)
-            self.classBar:SetColorTexture(1, 1, 1, 0.35)
+        row:SetScript("OnEnter", function(widget)
+            widget.classBar:SetColorTexture(1, 1, 1, 0.35)
         end)
-        row:SetScript("OnLeave", function(self)
-            local entry = CC.state[self._playerName]
+        row:SetScript("OnLeave", function(widget)
+            local entry = CC.state[widget._playerName]
             local classTag = entry and entry.class or "UNKNOWN"
             local c = CC.ClassColors[classTag] or CC.ClassColors.UNKNOWN
-            self.classBar:SetColorTexture(c[1], c[2], c[3], 1)
+            widget.classBar:SetColorTexture(c[1], c[2], c[3], 1)
         end)
 
         row:Hide()

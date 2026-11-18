@@ -45,8 +45,8 @@ function CC:BuildMinimapButton()
     Minimap:HookScript("OnSizeChanged", function() Place(btn) end)
 
     -- Tooltip
-    btn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    btn:SetScript("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget, "ANCHOR_LEFT")
         GameTooltip:AddLine("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
         GameTooltip:AddLine("Left-click: Toggle panel", 1, 1, 1)
         GameTooltip:AddLine("Right-click: Open settings", 1, 1, 1)
@@ -56,7 +56,7 @@ function CC:BuildMinimapButton()
     btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Click
-    btn:SetScript("OnClick", function(self, button)
+    btn:SetScript("OnClick", function(_, button)
         if button == "RightButton" then
             CC:OpenOptions()
         else
@@ -67,18 +67,18 @@ function CC:BuildMinimapButton()
     end)
 
     -- Drag to reposition around minimap edge
-    btn:SetScript("OnDragStart", function(self)
-        self:SetScript("OnUpdate", function(self)
+    btn:SetScript("OnDragStart", function(widget)
+        widget:SetScript("OnUpdate", function(dragged)
             local mx, my = Minimap:GetCenter()
             local px, py = GetCursorPosition()
             local s = UIParent:GetEffectiveScale()
             local angle = math.deg(math.atan2(py / s - my, px / s - mx))
             CC.db.minimapAngle = angle
-            Place(self)
+            Place(dragged)
         end)
     end)
-    btn:SetScript("OnDragStop", function(self)
-        self:SetScript("OnUpdate", nil)
+    btn:SetScript("OnDragStop", function(widget)
+        widget:SetScript("OnUpdate", nil)
     end)
 
     if db.minimapHide then btn:Hide() end

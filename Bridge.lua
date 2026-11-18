@@ -9,6 +9,8 @@ local ICON_PATH  = "Interface\\AddOns\\CooldownCollaborator\\Media\\icon.tga"
 CC.bridgeRegistered = false
 
 local function Api()
+    -- CDTL3 is another addon's global, absent when it is not installed.
+    ---@diagnostic disable-next-line: undefined-field
     local api = _G.CDTL3
     if type(api) ~= "table" then return nil end
     return api
@@ -28,7 +30,7 @@ end
 -- Called from PLAYER_LOGIN, once both addons have loaded.
 function CC:BridgeRegister()
     if self.bridgeRegistered or not self:BridgeAvailable() then return end
-    local api = Api()
+    local api = Api() --[[@as table]] -- BridgeAvailable just checked it
     local ok = pcall(api.RegisterTimerType, api, TIMER_TYPE, {
         name = "Group cooldowns",
         icon = ICON_PATH,

@@ -136,7 +136,10 @@ local function ScanPlayerBuffs()
             local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
             if not aura then break end
             name, spellID = aura.name, aura.spellId
+        -- UnitAura: Classic clients only; Retail and Forever take the branch above.
+        ---@diagnostic disable-next-line: undefined-global
         elseif UnitAura then
+            ---@diagnostic disable-next-line: undefined-global
             local n, _, _, _, _, _, _, _, _, id = UnitAura("player", i, "HELPFUL")
             if not n then break end
             name, spellID = n, id

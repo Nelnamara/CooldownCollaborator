@@ -32,13 +32,13 @@ function CC:BuildLaneView()
     f:SetBackdropColor(0.05, 0.05, 0.08, 0.9)
     f:SetBackdropBorderColor(0.3, 0.5, 0.7, 0.85)
 
-    f:SetScript("OnMouseDown", function(self, btn)
+    f:SetScript("OnMouseDown", function(widget, btn)
         if btn == "LeftButton" and not CC.db.laneLocked then
-            self:StartMoving()
+            widget:StartMoving()
         end
     end)
-    f:SetScript("OnMouseUp", function(self)
-        self:StopMovingOrSizing()
+    f:SetScript("OnMouseUp", function(widget)
+        widget:StopMovingOrSizing()
         CC:SaveLanePosition()
     end)
 

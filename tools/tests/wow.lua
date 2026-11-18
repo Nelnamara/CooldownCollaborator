@@ -268,12 +268,12 @@ function UnitLevel(u) local m = member(u); if m then return m.level or LEVEL_CAP
 function UnitExists(u) return member(u) ~= nil end
 function UnitIsConnected(u) return member(u) ~= nil end
 function UnitIsDeadOrGhost() return false end
--- RAID_GROUP: the group is a raid; LEADER / ASSIST: the player leads it / is a raid assistant.
+-- STUB_IN_RAID: the group is a raid; STUB_IS_LEADER / STUB_IS_ASSIST: the player leads it / is a raid assistant.
 -- IsRaidLeader and IsRaidOfficer are gone on every client (Blizzard's function lists), so no stub.
-RAID_GROUP, LEADER, ASSIST = false, true, false
-function UnitIsGroupLeader(u) return u == "player" and LEADER end
-function UnitIsGroupAssistant(u) return u == "player" and ASSIST end
-function IsInRaid() return RAID_GROUP end
+STUB_IN_RAID, STUB_IS_LEADER, STUB_IS_ASSIST = false, true, false
+function UnitIsGroupLeader(u) return u == "player" and STUB_IS_LEADER end
+function UnitIsGroupAssistant(u) return u == "player" and STUB_IS_ASSIST end
+function IsInRaid() return STUB_IN_RAID end
 function IsInGroup(category)
 	if category == LE_PARTY_CATEGORY_INSTANCE then return INSTANCE_GROUP end
 	return #GROUP > 0 or INSTANCE_GROUP
