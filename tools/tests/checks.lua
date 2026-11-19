@@ -34,8 +34,8 @@ local function countSent(prefix, pattern)
 end
 
 local EXPECT = {
-	retail  = { data = "Data_Retail.lua",  spells = 43, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN", log = false },
-	mop     = { data = "Data_Mists.lua",   spells = 41, lust = "MAGE,SHAMAN",               rez = "DEATHKNIGHT,DRUID",         log = true  },
+	retail  = { data = "Data_Retail.lua",  spells = 43, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN,WARLOCK", log = false },
+	mop     = { data = "Data_Mists.lua",   spells = 41, lust = "MAGE,SHAMAN",               rez = "DEATHKNIGHT,DRUID,WARLOCK", log = true  },
 	tbc     = { data = "Data_TBC.lua",     spells = 22, lust = "SHAMAN",                    rez = "DRUID",                     log = true  },
 	era     = { data = "Data_Era.lua",     spells = 15, lust = nil,                         rez = "DRUID",                     log = true  },
 	forever = { data = "Data_Forever.lua", spells = 16, lust = nil,                         rez = "DRUID",                     log = false },
@@ -223,11 +223,12 @@ local providerBad
 for _, cap in pairs(CC.CAPABILITIES) do
 	for _, ids in pairs(cap.classes) do
 		for _, id in ipairs(ids) do
-			if not CC.SpellData[id] or CC.SpellData[id].consumable or id == 20707 then providerBad = id end
+			if not CC.SpellData[id] or CC.SpellData[id].consumable
+				or (id == 20707 and FLAVOR ~= "retail" and FLAVOR ~= "mop") then providerBad = id end
 		end
 	end
 end
-check("every provider spell is a tracked spell; Soulstone never a Battle Rez provider", providerBad == nil, providerBad)
+check("every provider spell is a tracked spell; Soulstone a Battle Rez provider on Retail and MoP only", providerBad == nil, providerBad)
 
 ---------------------------------------------------------------- group, roster, specs
 local laneWas = CC.db.laneEnabled
@@ -318,10 +319,6 @@ if FLAVOR == "retail" then
 	GROUP[4].level = 18
 	FireEvent("UNIT_LEVEL", "party4")
 	check("  one below 19 is not", listed("BATTLEREZ", "Aldren-Realm") == nil)
-	GROUP[4] = { unit = "party4", name = "Morwen", realm = "Realm", class = "WARLOCK", guid = "Player-1-0000007" }
-	FireEvent("GROUP_ROSTER_UPDATE")
-	check("a warlock groupmate is not a Battle Rez provider (Soulstone is tracked only)",
-		CC.roster["Morwen-Realm"] ~= nil and CC.roster["Morwen-Realm"].capabilities.BATTLEREZ == nil and listed("BATTLEREZ", "Morwen-Realm") == nil)
 	GROUP[4] = { unit = "party4", name = "Vessa", realm = "Realm", class = "HUNTER", guid = "Player-1-0000006" }
 	FireEvent("GROUP_ROSTER_UPDATE")
 	check("a hunter groupmate whose spec we don't know is not a lust provider",
@@ -352,6 +349,25 @@ if FLAVOR == "retail" then
 	local raidSelf = CC:CapabilitiesFor("raid9", "HUNTER")
 	GROUP[#GROUP] = nil
 	check("  the same when we are read as a raid unit", raidSelf.BLOODLUST ~= nil)
+end
+if CC.SpellData[20707] then
+	-- owner, 19 Nov: Soulstone cast on a dead player is a combat rez on Retail and MoP; on Era,
+	-- TBC and Forever it is a stone placed beforehand, tracked only
+	GROUP[4] = { unit = "party4", name = "Morwen", realm = "Realm", class = "WARLOCK", guid = "Player-1-0000007" }
+	FireEvent("GROUP_ROSTER_UPDATE")
+	local w = listed("BATTLEREZ", "Morwen-Realm")
+	if FLAVOR == "retail" or FLAVOR == "mop" then
+		local need = CC.SpellData[20707].level
+		check("a warlock groupmate at the level cap is a Battle Rez provider (Soulstone)", w ~= nil and w.spellID == 20707)
+		GROUP[4].level = need - 1
+		FireEvent("UNIT_LEVEL", "party4")
+		check("  one below " .. need .. " is not", listed("BATTLEREZ", "Morwen-Realm") == nil)
+	else
+		check("a warlock groupmate is not a Battle Rez provider (Soulstone is tracked only)",
+			CC.roster["Morwen-Realm"] ~= nil and CC.roster["Morwen-Realm"].capabilities.BATTLEREZ == nil and w == nil)
+	end
+	table.remove(GROUP, 4)
+	FireEvent("GROUP_ROSTER_UPDATE")
 end
 
 ---------------------------------------------------------------- own cast: ranks, wire, bridge

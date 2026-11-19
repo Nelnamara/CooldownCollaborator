@@ -47,8 +47,9 @@ CC.SpellData = {
     -- Mage
     [80353]  = { name = "Time Warp",            duration = 300, icon = 458224, class = "MAGE",        level = 84 },
 
-    -- Warlock (a pre-placed self-resurrect, not a Battle Rez provider)
-    [20707]  = { name = "Soulstone",            duration = 600, icon = 136210, class = "WARLOCK"     },
+    -- Warlock. Soulstone can also be cast on a dead player: a Battle Rez provider
+    -- (owner, 19 Nov 2026). Category 831 "Soulstone", 10 min; level = BaseLevel 18.
+    [20707]  = { name = "Soulstone",            duration = 600, icon = 136210, class = "WARLOCK",     level = 18 },
 
     -- Monk
     [115310] = { name = "Revival",              duration = 180, icon = 237573, class = "MONK"        },
@@ -74,6 +75,7 @@ CC.Providers = {
     BATTLEREZ = {
         DRUID       = { 20484 },
         DEATHKNIGHT = { 61999 },
+        WARLOCK     = { 20707 },
     },
 }
 

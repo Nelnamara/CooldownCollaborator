@@ -186,7 +186,7 @@ No ranks on MoP. Core list (every id found with this cooldown):
 | Shaman | Healing Tide Totem | 108280 | 180 |
 | Shaman | Stormlash Totem | 120668 | 300 |
 | Mage | Time Warp | 80353 | 300 |
-| Warlock | Soulstone | 20707 | 600 |
+| Warlock | Soulstone (Battle Rez provider from 19 Nov, level 18) | 20707 | 600 |
 | Monk | Revival | 115310 | 180 |
 | Monk | Life Cocoon | 116849 | 120 |
 | Monk | Avert Harm | 115213 | 180 |
@@ -218,13 +218,15 @@ Ranking of unverified items overall: Soulstone cooldown on Era/TBC/Forever (item
 
 The level each Battle Rez and lust spell is learned at, the `level` field in `Data_<client>.lua`: `BaseLevel` of the spell (rank 1 where there are ranks) in each build's SpellLevels table (wago.tools `db2/SpellLevels/csv?build=`, saved beside the spell-list-check cache). None of the Retail ones are talents (no TraitDefinition row), so the level is the real one there too. Re-check after a patch along with the spell lists.
 
-| Client (build) | Rebirth 20484 | Raise Ally 61999 | Intercession 391054 | Bloodlust 2825 / Heroism 32182 | Time Warp 80353 | Fury of the Aspects 390386 | Harrier's Cry 466904 |
-|---|---|---|---|---|---|---|---|
-| Classic Era (1.15.9.70576) | 20 | – | – | – | – | – | – |
-| WoW: Forever (1.60.1.70888) | 20 | – | – | – | – | – | – |
-| TBC Anniversary (2.5.6.70577) | 20 | – | – | 70 / 70 | – | – | – |
-| MoP Classic (5.5.4.70631) | 56 | 72 | – | 70 / 70 | 84 | – | – |
-| Retail (12.1.5.70783) | 19 | 19 | 19 | 48 / 48 | 49 | 48 | 48 (Marksmanship only) |
+| Client (build) | Rebirth 20484 | Raise Ally 61999 | Intercession 391054 | Soulstone 20707 | Bloodlust 2825 / Heroism 32182 | Time Warp 80353 | Fury of the Aspects 390386 | Harrier's Cry 466904 |
+|---|---|---|---|---|---|---|---|---|
+| Classic Era (1.15.9.70576) | 20 | – | – | – | – | – | – | – |
+| WoW: Forever (1.60.1.70888) | 20 | – | – | – | – | – | – | – |
+| TBC Anniversary (2.5.6.70577) | 20 | – | – | – | 70 / 70 | – | – | – |
+| MoP Classic (5.5.4.70631) | 56 | 72 | – | 18 | 70 / 70 | 84 | – | – |
+| Retail (12.1.5.70783) | 19 | 19 | 19 | 14 | 48 / 48 | 49 | 48 | 48 (Marksmanship only) |
+
+Soulstone as a Battle Rez provider on Retail and MoP is the owner's ruling (19 Nov 2026): there it can be cast on a dead player, and on Retail every combat rez (Rebirth, Raise Ally, Intercession, Soulstone) draws from one shared charge pool in raids and Mythic+. The game tables don't show that: Soulstone is in its own cooldown category (831 "Soulstone", CategoryRecoveryTime 600000 on both), not Rebirth's 26 "Resurrection (Full)", and no combat rez has a charge category. Its levels are `SpellLevels.BaseLevel` of 20707 (14 on 12.1.5.70783, 18 on 5.5.4.70631). On Era, TBC and Forever it stays tracked only (a stone placed beforehand; the item's 30 min cooldown).
 
 ### B7. Retail rows added 18 Nov 2026 (build 12.1.5.70783)
 
@@ -245,7 +247,7 @@ Retail's list predates section B; these are the rows the review added, checked t
 | Death Knight | Vampiric Blood | 55233 | 90 | RecoveryTime 90000 | TraitDefinition |
 | Druid | Survival Instincts | 61336 | 180 | charge (category 1469) | TraitDefinition (two talent entries) |
 | Monk | Fortifying Brew | 115203 | 360 | RecoveryTime 360000 | TraitDefinition 388917 shows it as 115203 |
-| Warlock | Soulstone (19 Nov; tracked, not a Battle Rez provider) | 20707 | 600 | CategoryRecoveryTime 600000, category 831 "Soulstone" (Rebirth and Intercession are category 26 "Resurrection (Full)", Raise Ally its own 1555; none of the four has a charge category); icon 136210 | SkillLineAbility Warlock; BaseLevel 14 |
+| Warlock | Soulstone (19 Nov; Battle Rez provider, see B6) | 20707 | 600 | CategoryRecoveryTime 600000, category 831 "Soulstone" (Rebirth and Intercession are category 26 "Resurrection (Full)", Raise Ally its own 1555; none of the four has a charge category); icon 136210 | SkillLineAbility Warlock; BaseLevel 14 |
 | Demon Hunter | Metamorphosis (Vengeance) | 187827 | 120 | charge (category 2469 "Metamorphosis (Vengeance)") | SpecializationSpells 581 Vengeance |
 
 Not on Retail: Challenging Roar, Mocking Banner. Not added: other IDs with the same names and charge categories (Guardian of Ancient Kings 212641, Survival Instincts 236156) have no class, talent or spec tie, so nothing shows a player casts them.

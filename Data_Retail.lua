@@ -51,10 +51,10 @@ CC.SpellData = {
     [80353]  = { name = "Time Warp",                 duration = 300, icon = 458224,  class = "MAGE",        level = 49 },
     [45438]  = { name = "Ice Block",                 duration = 240, icon = 135841,  class = "MAGE"        },
 
-    -- Warlock. Soulstone: a pre-placed self-resurrect, tracked but not a Battle Rez
-    -- provider. In 12.1.5 it has its own cooldown category (831 "Soulstone", 10 min),
-    -- not Rebirth's and Intercession's 26 "Resurrection (Full)".
-    [20707]  = { name = "Soulstone",                 duration = 600, icon = 136210,  class = "WARLOCK"     },
+    -- Warlock. Soulstone is a Battle Rez provider here (Providers below). In 12.1.5
+    -- it has its own cooldown category (831 "Soulstone", 10 min), not Rebirth's and
+    -- Intercession's 26 "Resurrection (Full)"; level = its SpellLevels BaseLevel.
+    [20707]  = { name = "Soulstone",                 duration = 600, icon = 136210,  class = "WARLOCK",     level = 14 },
 
     -- Monk
     [115310] = { name = "Revival",                   duration = 180, icon = 1020466, class = "MONK"        },
@@ -92,6 +92,10 @@ CC.Providers = {
         DRUID       = { 20484 },
         DEATHKNIGHT = { 61999 },
         PALADIN     = { 391054 },
+        -- Retail's Soulstone can be cast on a dead player in combat and uses a Battle Rez charge
+        -- (owner, 19 Nov 2026: "a soul stone and raise ally still count as a combat rez"); MoP's
+        -- too. On Era, TBC and Forever it's a stone placed beforehand, so it stays tracked only there
+        WARLOCK     = { 20707 },
     },
 }
 
