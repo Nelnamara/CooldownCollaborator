@@ -68,17 +68,35 @@ local function LevelAllows(spellID, level)
     return not ok or allowed
 end
 
--- capability key -> the provider spells this unit's class has and its level
--- has reached. A capability with none left is not there at all.
+-- A provider spell only one specialization has (SpellData `spec`, its
+-- ChrSpecialization ID, the number GetInspectSpecialization returns: Harrier's
+-- Cry is Marksmanship's, 254) counts for a groupmate only once CC.rosterSpecs
+-- holds that ID for them. Ourselves: yes here, and the spellbook decides
+-- (GetCapabilityStatus asks KnownRank).
+local function SpecAllows(spellID, name, isSelf)
+    local data = CC.SpellData[spellID]
+    local need = data and data.spec
+    if not need or isSelf then return true end
+    -- a spec we can't read (none yet, or a hidden value that throws) is not known
+    local ok, same = pcall(function() return CC.rosterSpecs[name] == need end)
+    return ok and same == true
+end
+
+-- capability key -> the provider spells this unit's class has, its level has
+-- reached and (spec-only spells) its known spec has. A capability with none
+-- left is not there at all.
 function CC:CapabilitiesFor(unit, classTag)
     local level = UnitLevel and UnitLevel(unit)
+    -- in a raid we are also a raidN unit, so go by name
+    local name = CC:FullName(unit)
+    local isSelf = name ~= nil and name == CC:FullName("player")
     local capabilities = {}
     for key, cap in pairs(CC.CAPABILITIES) do
         local spellIDs = cap.classes[classTag]
         if spellIDs then
             local learned = {}
             for _, id in ipairs(spellIDs) do
-                if LevelAllows(id, level) then learned[#learned + 1] = id end
+                if LevelAllows(id, level) and SpecAllows(id, name, isSelf) then learned[#learned + 1] = id end
             end
             if #learned > 0 then capabilities[key] = learned end
         end

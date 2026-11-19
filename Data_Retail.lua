@@ -1,23 +1,41 @@
 -- Retail (12.1.5): tracked spells. No ranks on this client.
--- duration = base cooldown in seconds (no talent reduction applied)
+-- duration = base cooldown in seconds (no talent reduction applied). Shield
+-- Wall, Guardian of Ancient Kings, Survival Instincts and Metamorphosis hold
+-- one charge: their length is the charge's recharge (SpellCategory
+-- ChargeRecoveryTime), checked against build 12.1.5.70783.
+-- spec = the one specialization (ChrSpecialization ID) that has the spell
+-- (Roster.lua: a groupmate counts only once we know they are that spec).
 CC.SpellData = {
     -- Warrior
     [97462]  = { name = "Rallying Cry",              duration = 180, icon = 132351,  class = "WARRIOR"     },
+    [871]    = { name = "Shield Wall",               duration = 180, icon = 132362,  class = "WARRIOR"     },
+    [12975]  = { name = "Last Stand",                duration = 180, icon = 135871,  class = "WARRIOR"     },
+    [1161]   = { name = "Challenging Shout",         duration = 120, icon = 132091,  class = "WARRIOR"     },
 
     -- Paladin
     [31821]  = { name = "Aura Mastery",              duration = 180, icon = 135872,  class = "PALADIN"     },
     [633]    = { name = "Lay on Hands",              duration = 600, icon = 135928,  class = "PALADIN"     },
     [1022]   = { name = "Blessing of Protection",   duration = 300, icon = 135964,  class = "PALADIN"     },
+    [6940]   = { name = "Blessing of Sacrifice",     duration = 120, icon = 135966,  class = "PALADIN"     },
+    [391054] = { name = "Intercession",              duration = 600, icon = 4726195, class = "PALADIN",     level = 19 },
+    [86659]  = { name = "Guardian of Ancient Kings", duration = 180, icon = 135919,  class = "PALADIN"     },
+    [31850]  = { name = "Ardent Defender",           duration = 90,  icon = 135870,  class = "PALADIN"     },
     [47788]  = { name = "Guardian Spirit",           duration = 180, icon = 237542,  class = "PRIEST"      },
 
     -- Priest
     [33206]  = { name = "Pain Suppression",         duration = 90,  icon = 135936,  class = "PRIEST"      },
     [62618]  = { name = "Power Word: Barrier",       duration = 180, icon = 135940,  class = "PRIEST"      },
     [73325]  = { name = "Leap of Faith",             duration = 90,  icon = 463835,  class = "PRIEST"      },
+    [10060]  = { name = "Power Infusion",            duration = 120, icon = 135939,  class = "PRIEST"      },
 
     -- Death Knight
     [51052]  = { name = "Anti-Magic Zone",          duration = 240, icon = 135826,  class = "DEATHKNIGHT" },
     [61999]  = { name = "Raise Ally",                duration = 600, icon = 136144,  class = "DEATHKNIGHT", level = 19 },
+    [48792]  = { name = "Icebound Fortitude",        duration = 120, icon = 237525,  class = "DEATHKNIGHT" },
+    [55233]  = { name = "Vampiric Blood",            duration = 90,  icon = 136168,  class = "DEATHKNIGHT" },
+
+    -- Hunter (Marksmanship's lust)
+    [466904] = { name = "Harrier's Cry",             duration = 360, icon = 6352455, class = "HUNTER",      level = 48, spec = 254 },
 
     -- Shaman
     [32182]  = { name = "Heroism",                   duration = 300, icon = 135978,  class = "SHAMAN",      level = 48 },
@@ -36,14 +54,17 @@ CC.SpellData = {
     -- Monk
     [115310] = { name = "Revival",                   duration = 180, icon = 627485,  class = "MONK"        },
     [116849] = { name = "Life Cocoon",               duration = 120, icon = 627487,  class = "MONK"        },
+    [115203] = { name = "Fortifying Brew",           duration = 360, icon = 615341,  class = "MONK"        },
 
     -- Druid
     [740]    = { name = "Tranquility",               duration = 180, icon = 136107,  class = "DRUID"       },
     [20484]  = { name = "Rebirth",                   duration = 600, icon = 136080,  class = "DRUID",       level = 19 },
     [29166]  = { name = "Innervate",                 duration = 180, icon = 136048,  class = "DRUID"       },
+    [61336]  = { name = "Survival Instincts",        duration = 180, icon = 236169,  class = "DRUID"       },
 
     -- Demon Hunter
     [196718] = { name = "Darkness",                  duration = 180, icon = 1305149, class = "DEMONHUNTER" },
+    [187827] = { name = "Metamorphosis",             duration = 120, icon = 1247263, class = "DEMONHUNTER" },
 
     -- Evoker
     [363534] = { name = "Rewind",                    duration = 240, icon = 4622462, class = "EVOKER"      },
@@ -53,16 +74,19 @@ CC.SpellData = {
     [390386] = { name = "Fury of the Aspects",       duration = 300, icon = 4723908, class = "EVOKER",      level = 48 },
 }
 
--- Who can provide each raid-wide capability (Roster.lua).
+-- Who can provide each raid-wide capability (Roster.lua). A hunter's pet lust
+-- (Primal Rage) is cast by the pet and is not tracked.
 CC.Providers = {
     BLOODLUST = {
         SHAMAN = { 2825, 32182 },
         MAGE   = { 80353 },
         EVOKER = { 390386 },
+        HUNTER = { 466904 },
     },
     BATTLEREZ = {
         DRUID       = { 20484 },
         DEATHKNIGHT = { 61999 },
+        PALADIN     = { 391054 },
     },
 }
 

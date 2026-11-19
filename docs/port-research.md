@@ -72,32 +72,36 @@ Double-feed hazard: on Era/TBC/MoP, CDTL3's own raid-cooldown listener (timer ty
 
 Method: for each candidate name, every SpellID in that client's `SpellName` whose class is tied to it by `SkillLineAbility.ClassMask` or `Talent` (SpellID and SpellRank_0..8) was listed with its `SpellCooldowns` (difficulty 0) value = max(RecoveryTime, CategoryRecoveryTime), in seconds. Plus a direct lookup of every ID in CDTL3's RAID/BURST. "V" = id found in that client's table with that cooldown. "U" = unverified (reason given). Cooldowns are the BASE cooldown (talents/glyphs ignored), like `CC.SpellData.duration`.
 
+18 Nov 2026 additions (review cards R3, R13, R14, P18, P28, P32), same builds and cache: the cooldown is max(`RecoveryTime`, `CategoryRecoveryTime`) as above, except a spell that holds one charge (Retail Shield Wall, Guardian of Ancient Kings, Survival Instincts, Vengeance Metamorphosis), whose length is its charge category's `SpellCategory.ChargeRecoveryTime` (its `RecoveryTime` is only the 1 to 8 s gap between uses). Icons are `SpellMisc.SpellIconFileDataID`; the class tie is `SkillLineAbility.ClassMask`, `Talent`, `TraitDefinition` or `SpecializationSpells`; provider levels are `SpellLevels.BaseLevel`. Item cooldowns come from `ItemEffect` (`CoolDownMSec` / `CategoryCoolDownMSec`), fetched from wago.tools `db2/ItemEffect/csv?build=` for the three Classic builds (it is not in the spell-list-check cache). "variant" = another ID the same spell casts with; it records under the base ID like a rank (`variants` in `Data_<client>.lua`).
+
 CC's `minDuration` default is 60 s, so spells with a shorter base cooldown (Blessing of Sacrifice 30 s on TBC, Fear Ward 30 s on Era, Misdirection 30 s on MoP, Innervate etc. are fine) are not listed. Suggested data shape: `{ [baseID] = { name, duration, class, ranks = {id,...}, icon } }` plus a client-gated `CC.RankToBase`.
 
 Suggested file layout, copying CDTL3's per-TOC pattern: keep `Data.lua` for shared things (class colors, consumables structure), add `Data_Retail.lua`, `Data_Era.lua`, `Data_TBC.lua`, `Data_Mists.lua`, `Data_Forever.lua`, each listed only in its own TOC (CDTL3 does this with `FlightData\<client>.lua`, TOCs `_Mainline/_Vanilla/_TBC/_Mists/_Camelot` + plain `.toc`).
 
-### B1. Classic Era (build 1.15.9.70576; 12 verified, 1 unverified)
+### B1. Classic Era (build 1.15.9.70576; 15 tracked, all verified)
 
 | Class | Spell | ID(s), all ranks | CD s | Status |
 |---|---|---|---|---|
 | Druid | Innervate | 29166 | 360 | V |
 | Druid | Rebirth | 20484, 20739, 20742, 20747, 20748 | 1800 | V |
 | Druid | Tranquility | 740, 8918, 9862, 9863 | 300 | V |
-| Druid | Challenging Roar (optional) | 5209 | 600 | V |
+| Druid | Challenging Roar (tracked from 18 Nov, R13) | 5209 | 600 | V |
 | Paladin | Lay on Hands | 633, 2800, 10310 | 3600 | V |
 | Paladin | Divine Intervention | 19752 | 3600 | V |
 | Paladin | Blessing of Protection | 1022, 5599, 10278 | 300 | V |
 | Priest | Power Infusion (talent) | 10060 | 180 | V |
 | Priest | Lightwell (talent) | 724, 27870, 27871 | 600 | V |
 | Shaman | Mana Tide Totem (talent) | 16190, 17354, 17359 | 300 | V |
+| Shaman | Reincarnation (18 Nov) | 20608 (the passive in the spellbook); the rez casts 21169, a variant | 3600 (category 1161 "Reincarnation", both IDs) | V |
 | Warrior | Shield Wall | 871 | 1800 | V |
 | Warrior | Challenging Shout | 1161 | 600 | V |
-| Warlock | Soulstone Resurrection | 20707, 20762, 20763, 20764, 20765 | 1800 (CDTL3) | U: name found for every id, no row in SpellCooldowns (the 30 min comes from the item), so the cooldown cannot be proven from this cache |
+| Warrior | Last Stand (talent, 18 Nov) | 12975 | 600 | V |
+| Warlock | Soulstone Resurrection | 20707, 20762, 20763, 20764, 20765 | 1800 | V: no SpellCooldowns row (the cooldown is the item's); `ItemEffect` gives every soulstone item's effect for these IDs `CategoryCoolDownMSec` 1800000 (category 831). `itemCooldown = true` |
 
-Not tracked: Lust (does not exist: 2825 / 32182 are not in the Era SpellName table), Misdirection (not yet), Fear Ward (30 s < 60 s filter). Season of Discovery rune spells ARE in the Era table with class ties and cooldowns (Pain Suppression 402004 180 s, Power Word: Barrier 425207 180 s, Rallying Cry 426490 180 s, Shadowfiend 401977 300 s): realm-specific, listed here only so nobody mistakes them for errors; treat as optional and unverified in play.
+Not tracked: Lust (does not exist: 2825 / 32182 are not in the Era SpellName table), Misdirection (not yet), Fear Ward (30 s < 60 s filter), Tranquilizing Shot 19801 (20 s on Era, TBC and Forever, under the filter), Mind Control 605 / 10911 / 10912 (no cooldown: RecoveryTime and CategoryRecoveryTime 0 on all three Classic builds). Goblin Sapper Charge 13241 (item 10646): no SpellCooldowns row; `ItemEffect` 98888 gives `CoolDownMSec` 300000 and a 60 s shared category (24) on Era, TBC and Forever, icon 135826, so its row would be 300 s with `itemCooldown = true`. Not added yet: an item has no class, and Settings > Default Spells lists rows only under a class header (Options.lua `CLASS_ORDER`), so it could never be unticked there. Season of Discovery rune spells ARE in the Era table with class ties and cooldowns (Pain Suppression 402004 180 s, Power Word: Barrier 425207 180 s, Rallying Cry 426490 180 s, Shadowfiend 401977 300 s): realm-specific, listed here only so nobody mistakes them for errors; treat as optional and unverified in play.
 CDTL3's `RAID.era` (12 rows) is covered row-for-row: every row V except 20707 (U).
 
-### B2. WoW: Forever (build 1.60.1.70888; 13 verified, 1 unverified)
+### B2. WoW: Forever (build 1.60.1.70888; 16 tracked, all verified)
 
 Forever = Era's content with its own changes (CDTL3 Data.lua `foreverChanges` 2995-3111, `GetForeverData`). Start from B1 and apply:
 
@@ -105,27 +109,31 @@ Forever = Era's content with its own changes (CDTL3 Data.lua `foreverChanges` 29
 |---|---|---|
 | Lay on Hands 633, 2800, 10310 | 1200 s (Era 3600) | V |
 | Shield Wall 871 | 900 s (Era 1800) | V |
-| Fear Ward 6346 | 180 s (Era 30), group-useful, optional add | V |
+| Fear Ward 6346 | 180 s (Era 30), tracked from 18 Nov | V |
+| Last Stand 12975 | 180 s (Era 600), tracked from 18 Nov | V |
+| Challenging Roar 5209 | 600 s, as Era, tracked from 18 Nov | V |
+| Reincarnation 20608 (rez cast 21169, a variant) | 3600 s (category 1161), as Era, tracked from 18 Nov | V |
 | Mana Tide Totem | adds id 1325256 (300 s) next to 16190, 17354, 17359 | V (new id; check which one the cast reports: add all four to ranks) |
 | Lightwell 724 / 27870 / 27871 | 600 s, same as Era | V |
 | Rebirth (5 ranks) 1800, Tranquility (4 ranks) 300, Innervate 360, DI 3600, BoP (3 ranks) 300, PI 180, Challenging Shout 600, Challenging Roar 600 | unchanged from Era | V |
-| Soulstone Resurrection 20707, 20762-20765 | 1800 (CDTL3) | U (same reason as Era) |
+| Soulstone Resurrection 20707, 20762-20765 | 1800 | V (`ItemEffect` category cooldown 1800000, as Era) |
 
-Forever-only class spells with a 60 s+ cooldown in the data that nobody has evaluated for CC: Priest Dark Sacrifice (1277324-1277328, 600 s), Divine Grace (1277370-1277378, 600 s), Contingency Plan (1277462, 1277634, 1277638-1277640, 600 s), Chastise (1277331-35, 120 s); Paladin Swift Judgement 1310994 (60 s, personal). They look like Forever's priest redesign; I did not decide whether they are group-relevant (owner call; needs Forever tooltips). Also on Forever: Last Stand 12975 = 180 s (personal, skip), Totemic Call 437009 = 30 s (below filter), no Bloodlust/Heroism, no Time Warp.
+Forever-only class spells with a 60 s+ cooldown in the data that nobody has evaluated for CC: Priest Dark Sacrifice (1277324-1277328, 600 s), Divine Grace (1277370-1277378, 600 s), Contingency Plan (1277462, 1277634, 1277638-1277640, 600 s), Chastise (1277331-35, 120 s); Paladin Swift Judgement 1310994 (60 s, personal). They look like Forever's priest redesign; I did not decide whether they are group-relevant (owner call; needs Forever tooltips). Also on Forever: Totemic Call 437009 = 30 s (below filter), Tranquilizing Shot 19801 = 20 s (below filter), no Bloodlust/Heroism, no Time Warp. Goblin Sapper Charge: as Era (`ItemEffect` 98888, linked to item 10646 by `ItemXItemEffect`, 300 s), not added for the same reason.
 Forever has no combat log and secret remote spellIDs: every non-local entry arrives only by CC addon message.
 
-### B3. TBC Anniversary (build 2.5.6.70577; 19 verified, 1 unverified)
+### B3. TBC Anniversary (build 2.5.6.70577; 22 tracked, all verified)
 
 | Class | Spell | ID(s), all ranks | CD s | Status |
 |---|---|---|---|---|
 | Shaman | Bloodlust (Horde) | 2825 | 600 | V |
 | Shaman | Heroism (Alliance) | 32182 | 600 | V |
 | Shaman | Mana Tide Totem | 16190 | 300 | V |
-| Shaman | Earth Elemental Totem (optional) | 2062 | 1200 | V |
+| Shaman | Earth Elemental Totem (tracked from 18 Nov, R13) | 2062 | 1200 | V |
+| Shaman | Reincarnation (18 Nov) | 20608; the rez casts 21169, a variant | 3600 (category 1161) | V |
 | Druid | Innervate | 29166 | 360 | V |
 | Druid | Rebirth | 20484, 20739, 20742, 20747, 20748, 26994 | 1200 | V |
 | Druid | Tranquility | 740, 8918, 9862, 9863, 26983 | 600 | V |
-| Druid | Challenging Roar (optional) | 5209 | 600 | V |
+| Druid | Challenging Roar (tracked from 18 Nov) | 5209 | 600 | V |
 | Paladin | Lay on Hands | 633, 2800, 10310, 27154 | 3600 | V |
 | Paladin | Divine Intervention | 19752 | 3600 | V |
 | Paladin | Blessing of Protection | 1022, 5599, 10278 | 300 | V |
@@ -133,15 +141,16 @@ Forever has no combat log and secret remote spellIDs: every non-local entry arri
 | Priest | Pain Suppression | 33206 | 120 | V |
 | Priest | Shadowfiend | 34433 | 300 | V |
 | Priest | Lightwell | 724, 27870, 27871, 28275 | 360 | V |
-| Priest | Fear Ward (optional) | 6346 | 180 | V |
+| Priest | Fear Ward (tracked from 18 Nov) | 6346 | 180 | V |
 | Hunter | Misdirection | 34477 | 120 | V |
 | Warrior | Shield Wall | 871 | 1800 | V |
 | Warrior | Challenging Shout | 1161 | 600 | V |
-| Warlock | Soulstone Resurrection | 20707, 20762, 20763, 20764, 20765, 27239 | 1800 (CDTL3) | U (item cooldown, as Era) |
+| Warrior | Last Stand (talent, 18 Nov) | 12975 | 480 | V |
+| Warlock | Soulstone Resurrection | 20707, 20762, 20763, 20764, 20765, 27239 | 1800 | V (`ItemEffect` category cooldown 1800000 for all six, category 831) |
 
-Under 60 s, not listed: Blessing of Sacrifice 6940/20729/27147/27148 (30 s), Intervene 3411 (30 s). `RAID.tbc` (15 rows) is covered: every row V except 27239 (U). Note `BURST.tbc` has Bloodlust/Heroism as auras only (40 s buff), no Sated; this is the aura, not the cooldown. (The "Aura Mastery" 31821 hit for TBC is a 0 s row that CDTL3 also does not list; ignore.)
+Under 60 s, not listed: Blessing of Sacrifice 6940/20729/27147/27148 (30 s), Intervene 3411 (30 s), Tranquilizing Shot 19801 (20 s). Mind Control has no cooldown; Goblin Sapper Charge as Era (300 s item cooldown, not added). `RAID.tbc` (15 rows) is covered: every row V except 27239 (U). Note `BURST.tbc` has Bloodlust/Heroism as auras only (40 s buff), no Sated; this is the aura, not the cooldown. (The "Aura Mastery" 31821 hit for TBC is a 0 s row that CDTL3 also does not list; ignore.)
 
-### B4. MoP Classic (build 5.5.4.70631; 32 verified + 5 optional verified, 1 unverified)
+### B4. MoP Classic (build 5.5.4.70631; 41 tracked + 4 optional, all verified; 1 unverified)
 
 No ranks on MoP. Core list (every id found with this cooldown):
 
@@ -150,11 +159,16 @@ No ranks on MoP. Core list (every id found with this cooldown):
 | Warrior | Rallying Cry | 97462 | 180 |
 | Warrior | Skull Banner | 114207 | 180 |
 | Warrior | Demoralizing Banner | 114203 | 180 |
+| Warrior | Mocking Banner (mass taunt, 18 Nov) | 114192 | 180 |
+| Warrior | Shield Wall (18 Nov) | 871 | 180 |
+| Warrior | Last Stand (18 Nov; Protection) | 12975 | 180 |
 | Paladin | Lay on Hands | 633 | 600 |
 | Paladin | Hand of Protection | 1022 | 300 |
 | Paladin | Hand of Sacrifice | 6940 | 120 |
 | Paladin | Hand of Salvation | 1038 | 120 |
 | Paladin | Devotion Aura | 31821 | 180 |
+| Paladin | Guardian of Ancient Kings (18 Nov; Protection's, not Holy's 86669 or Retribution's 86698) | 86659 | 180 |
+| Paladin | Ardent Defender (18 Nov) | 31850 | 180 (CategoryRecoveryTime) |
 | Priest | Power Word: Barrier | 62618 | 180 |
 | Priest | Divine Hymn | 64843 | 180 |
 | Priest | Hymn of Hope | 64901 | 360 |
@@ -164,6 +178,8 @@ No ranks on MoP. Core list (every id found with this cooldown):
 | Priest | Power Infusion | 10060 | 120 |
 | Death Knight | Anti-Magic Zone | 51052 | 120 |
 | Death Knight | Raise Ally | 61999 | 600 |
+| Death Knight | Icebound Fortitude (18 Nov) | 48792 | 180 |
+| Death Knight | Vampiric Blood (18 Nov; Blood) | 55233 | 60 |
 | Shaman | Bloodlust | 2825 | 300 |
 | Shaman | Heroism | 32182 | 300 |
 | Shaman | Spirit Link Totem | 98008 | 180 |
@@ -174,13 +190,15 @@ No ranks on MoP. Core list (every id found with this cooldown):
 | Monk | Revival | 115310 | 180 |
 | Monk | Life Cocoon | 116849 | 120 |
 | Monk | Avert Harm | 115213 | 180 |
+| Monk | Fortifying Brew (18 Nov) | 115203 | 180 |
 | Druid | Tranquility | 740 | 480 |
 | Druid | Ironbark | 102342 | 60 |
 | Druid | Innervate | 29166 | 180 |
 | Druid | Rebirth | 20484 | 600 |
-| Druid | Stampeding Roar | 106898 | 120 |
+| Druid | Stampeding Roar | 106898; in Bear Form it casts 77761, in Cat Form 77764 (variants, 18 Nov R14: same name, CategoryRecoveryTime 120000 and category 1257 "Stampeding Roar"; 77764 has the 1 s cat GCD) | 120 |
+| Druid | Survival Instincts (18 Nov; Feral and Guardian) | 61336 | 180 |
 
-(32 rows.) Optional, also V: Mocking Banner 114192 (180), Shattering Throw 64382 (300), Vigilance 114030 (120), Gorefiend's Grasp 108199 (60), Ancestral Guidance 108281 (120). `RAID.mop` (21 rows) is covered: all 21 V, same cooldowns.
+(41 rows.) No Challenging Shout or Challenging Roar on MoP (1161 and 5209 are not in its SpellName). Optional, also V: Shattering Throw 64382 (300), Vigilance 114030 (120), Gorefiend's Grasp 108199 (60), Ancestral Guidance 108281 (120). `RAID.mop` (21 rows) is covered: all 21 V, same cooldowns.
 Unverified (1): hunter pet lust 90355 (listed as "Ancient Hysteria" in CDTL3's BURST comment; the MoP table names it "Primal Rage", 360 s). It is cast by the PET, so `UNIT_SPELLCAST_SUCCEEDED` fires with unit "pet" and CC's handler only accepts "player" (CooldownCollaborator.lua:455); the CLEU path would see it as a pet source (type flag 0x1000, not 0x400), so it needs its own handling. Sated family (57724 / 57723 / 80354 / 95809) are aura-only debuffs with no cooldown, not spells to track.
 Not on MoP: Time Warp exists (above); no Evoker/Demon Hunter; Retail-only Fury of the Aspects.
 
@@ -188,24 +206,50 @@ Ranking of unverified items overall: Soulstone cooldown on Era/TBC/Forever (item
 
 ### B5. Counts (spells tracked by default; rank ids counted once)
 
-| Client | Verified | Unverified |
+| Client | Tracked (18 Nov 2026) | Before |
 |---|---|---|
-| Classic Era | 12 | 1 |
-| WoW: Forever | 13 | 1 |
-| TBC Anniversary | 19 | 1 |
-| MoP Classic | 32 (+5 optional) | 1 |
+| Retail | 43 | 29 |
+| MoP Classic | 41 (+4 optional) | 32 |
+| TBC Anniversary | 22 | 17 |
+| Classic Era | 15 | 12 |
+| WoW: Forever | 16 | 12 |
 
 ### B6. Provider spell levels (1.1.1)
 
 The level each Battle Rez and lust spell is learned at, the `level` field in `Data_<client>.lua`: `BaseLevel` of the spell (rank 1 where there are ranks) in each build's SpellLevels table (wago.tools `db2/SpellLevels/csv?build=`, saved beside the spell-list-check cache). None of the Retail ones are talents (no TraitDefinition row), so the level is the real one there too. Re-check after a patch along with the spell lists.
 
-| Client (build) | Rebirth 20484 | Raise Ally 61999 | Bloodlust 2825 / Heroism 32182 | Time Warp 80353 | Fury of the Aspects 390386 |
+| Client (build) | Rebirth 20484 | Raise Ally 61999 | Intercession 391054 | Bloodlust 2825 / Heroism 32182 | Time Warp 80353 | Fury of the Aspects 390386 | Harrier's Cry 466904 |
+|---|---|---|---|---|---|---|---|
+| Classic Era (1.15.9.70576) | 20 | – | – | – | – | – | – |
+| WoW: Forever (1.60.1.70888) | 20 | – | – | – | – | – | – |
+| TBC Anniversary (2.5.6.70577) | 20 | – | – | 70 / 70 | – | – | – |
+| MoP Classic (5.5.4.70631) | 56 | 72 | – | 70 / 70 | 84 | – | – |
+| Retail (12.1.5.70783) | 19 | 19 | 19 | 48 / 48 | 49 | 48 | 48 (Marksmanship only) |
+
+### B7. Retail rows added 18 Nov 2026 (build 12.1.5.70783)
+
+Retail's list predates section B; these are the rows the review added, checked the same way. "charge" = one charge, the length is the charge category's `ChargeRecoveryTime`.
+
+| Class | Spell | ID | CD s | Where the number comes from | Class tie |
 |---|---|---|---|---|---|
-| Classic Era (1.15.9.70576) | 20 | – | – | – | – |
-| WoW: Forever (1.60.1.70888) | 20 | – | – | – | – |
-| TBC Anniversary (2.5.6.70577) | 20 | – | 70 / 70 | – | – |
-| MoP Classic (5.5.4.70631) | 56 | 72 | 70 / 70 | 84 | – |
-| Retail (12.1.5.70783) | 19 | 19 | 48 / 48 | 49 | 48 |
+| Paladin | Intercession (Battle Rez provider) | 391054 | 600 | RecoveryTime 600000; category 26 "Resurrection (Full)", the same as Rebirth | SkillLineAbility Paladin; BaseLevel 19 |
+| Hunter | Harrier's Cry (lust provider, `spec = 254`) | 466904 | 360 | RecoveryTime 360000; the same SpellCategories row (dispel, prevention) as Bloodlust, Heroism, Time Warp and Fury of the Aspects | SpecializationSpells 254 Marksmanship only; BaseLevel 48 |
+| Priest | Power Infusion (P28) | 10060 | 120 | RecoveryTime 120000 | TraitDefinition (talent) |
+| Paladin | Blessing of Sacrifice (P32) | 6940 | 120 | RecoveryTime 120000 | SkillLineAbility Paladin, talent |
+| Warrior | Shield Wall | 871 | 180 | charge (category 1929) | TraitDefinition |
+| Warrior | Last Stand | 12975 | 180 | RecoveryTime 180000 | TraitDefinition |
+| Warrior | Challenging Shout (mass taunt) | 1161 | 120 | RecoveryTime 120000 | SpecializationSpells 73 Protection, talent |
+| Paladin | Guardian of Ancient Kings | 86659 | 180 | charge (category 2424) | TraitDefinition |
+| Paladin | Ardent Defender | 31850 | 90 | RecoveryTime 90000 | TraitDefinition |
+| Death Knight | Icebound Fortitude | 48792 | 120 | RecoveryTime 120000 | TraitDefinition |
+| Death Knight | Vampiric Blood | 55233 | 90 | RecoveryTime 90000 | TraitDefinition |
+| Druid | Survival Instincts | 61336 | 180 | charge (category 1469) | TraitDefinition (two talent entries) |
+| Monk | Fortifying Brew | 115203 | 360 | RecoveryTime 360000 | TraitDefinition 388917 shows it as 115203 |
+| Demon Hunter | Metamorphosis (Vengeance) | 187827 | 120 | charge (category 2469 "Metamorphosis (Vengeance)") | SpecializationSpells 581 Vengeance |
+
+Not on Retail: Challenging Roar, Mocking Banner. Not added: other IDs with the same names and charge categories (Guardian of Ancient Kings 212641, Survival Instincts 236156) have no class, talent or spec tie, so nothing shows a player casts them.
+
+Hunter pet lust (not tracked): Primal Rage 264667 has the lust SpellCategories row and RecoveryTime 360000, BaseLevel 48, and is tied only to the Ferocity pet specializations (74, 535), so it is the pet's spell. A second "Primal Rage", 272678 (RecoveryTime 360000, a different SpellCategories row, no class tie), looks like the hunter-side button of Command Pet 272651 (Hunter skill line) with a Ferocity pet; nothing in these tables links the two, so that is unverified. A third 360 s "Primal Rage", 357650, has the lust row and no tie. Seeing it (untested): the hunter's own client should get `UNIT_SPELLCAST_SUCCEEDED` for "pet" with 264667, and for "player" with 272678 if that is the button (CC listens to "player" only, and whether a pet's spell ID is hidden on Midnight is unknown); other clients see nothing (no combat log on Retail, remote IDs hidden), so only the hunter's own addon could send it. A hunter counts only if their pet is a Ferocity one, which other players can't read either.
 
 ---------------------------------------------------------------------------------------------------
 

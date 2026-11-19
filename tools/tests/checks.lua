@@ -34,11 +34,11 @@ local function countSent(prefix, pattern)
 end
 
 local EXPECT = {
-	retail  = { data = "Data_Retail.lua",  spells = 29, lust = "EVOKER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID", log = false },
-	mop     = { data = "Data_Mists.lua",   spells = 32, lust = "MAGE,SHAMAN",        rez = "DEATHKNIGHT,DRUID", log = true  },
-	tbc     = { data = "Data_TBC.lua",     spells = 17, lust = "SHAMAN",             rez = "DRUID",             log = true  },
-	era     = { data = "Data_Era.lua",     spells = 12, lust = nil,                  rez = "DRUID",             log = true  },
-	forever = { data = "Data_Forever.lua", spells = 12, lust = nil,                  rez = "DRUID",             log = false },
+	retail  = { data = "Data_Retail.lua",  spells = 43, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN", log = false },
+	mop     = { data = "Data_Mists.lua",   spells = 41, lust = "MAGE,SHAMAN",               rez = "DEATHKNIGHT,DRUID",         log = true  },
+	tbc     = { data = "Data_TBC.lua",     spells = 22, lust = "SHAMAN",                    rez = "DRUID",                     log = true  },
+	era     = { data = "Data_Era.lua",     spells = 15, lust = nil,                         rez = "DRUID",                     log = true  },
+	forever = { data = "Data_Forever.lua", spells = 16, lust = nil,                         rez = "DRUID",                     log = false },
 }
 local E = EXPECT[FLAVOR]
 local CURSE_TOCS = { ["CooldownCollaborator.toc"] = true, ["CooldownCollaborator_Camelot.toc"] = true,
@@ -125,10 +125,13 @@ for id, d in pairs(CC.SpellData) do
 		for _, r in ipairs(d.ranks or {}) do
 			if CC.RankToBase[r] ~= id then badRow = r end
 		end
+		for _, v in ipairs(d.variants or {}) do
+			if CC.RankToBase[v] ~= id or CC.SpellData[v] ~= nil then badRow = v end
+		end
 	end
 end
 check(string.format("%d tracked spells (%d expected)", tracked, E.spells), tracked == E.spells)
-check("every tracked spell: name, icon, class, base cooldown >= 60 s; each rank maps to its base", badRow == nil, badRow)
+check("every tracked spell: name, icon, class, base cooldown >= 60 s; each rank and variant maps to its base", badRow == nil, badRow)
 check("ranks only on Era, TBC and Forever", rankless == (FLAVOR == "mop" or FLAVOR == "retail"))
 if FLAVOR == "retail" then
 	check("Fury of the Aspects is 390386 (391215 is Initiative)",
@@ -139,6 +142,55 @@ if CC.SpellData[20707] then
 	local ss = CC.SpellData[20707]
 	check("Soulstone tracked; no ready-now poll where its cooldown is the item's", (ss.itemCooldown == true) == (FLAVOR ~= "mop"))
 end
+
+-- rows from the 18 Nov review (R3, R13, P18, P28, P32): base ID -> its base cooldown on each client
+-- whose game data has it (docs/port-research.md B); on a client not named it must not be listed
+local NEW_ROWS = {
+	[391054] = { "Intercession", retail = 600 },
+	[466904] = { "Harrier's Cry", retail = 360 },
+	[10060]  = { "Power Infusion", retail = 120, mop = 120, tbc = 180, era = 180, forever = 180 },
+	[6940]   = { "Blessing (MoP: Hand) of Sacrifice", retail = 120, mop = 120 },
+	[871]    = { "Shield Wall", retail = 180, mop = 180, tbc = 1800, era = 1800, forever = 900 },
+	[12975]  = { "Last Stand", retail = 180, mop = 180, tbc = 480, era = 600, forever = 180 },
+	[1161]   = { "Challenging Shout", retail = 120, tbc = 600, era = 600, forever = 600 },
+	[5209]   = { "Challenging Roar", tbc = 600, era = 600, forever = 600 },
+	[114192] = { "Mocking Banner", mop = 180 },
+	[86659]  = { "Guardian of Ancient Kings", retail = 180, mop = 180 },
+	[31850]  = { "Ardent Defender", retail = 90, mop = 180 },
+	[48792]  = { "Icebound Fortitude", retail = 120, mop = 180 },
+	[55233]  = { "Vampiric Blood", retail = 90, mop = 60 },
+	[61336]  = { "Survival Instincts", retail = 180, mop = 180 },
+	[115203] = { "Fortifying Brew", retail = 360, mop = 180 },
+	[187827] = { "Metamorphosis (Vengeance)", retail = 120 },
+	[2062]   = { "Earth Elemental Totem", tbc = 1200 },
+	[6346]   = { "Fear Ward", tbc = 180, forever = 180 },         -- Era's is 30 s
+	[20608]  = { "Reincarnation", tbc = 3600, era = 3600, forever = 3600 },
+	[19801]  = { "Tranquilizing Shot (20 s on Era, TBC and Forever)" },
+	[605]    = { "Mind Control (no cooldown)" },
+}
+local newBad = {}
+for id, row in pairs(NEW_ROWS) do
+	local want, d = row[FLAVOR], CC.SpellData[id]
+	if (want == nil) ~= (d == nil) or (d and d.duration ~= want) then
+		newBad[#newBad + 1] = row[1] .. " " .. id .. "=" .. tostring(d and d.duration)
+	end
+end
+table.sort(newBad)
+check("new rows: each on the clients whose game data has it, with that client's cooldown, and nowhere else",
+	#newBad == 0, table.concat(newBad, ", "))
+local specRows = {}
+for id, d in pairs(CC.SpellData) do if d.spec then specRows[#specRows + 1] = id .. ":" .. d.spec end end
+check("spec markers: only Retail's Harrier's Cry (Marksmanship, 254)",
+	table.concat(specRows, ",") == (FLAVOR == "retail" and "466904:254" or ""), table.concat(specRows, ","))
+local VARIANTS = ({
+	mop = { [77761] = 106898, [77764] = 106898 },   -- Stampeding Roar in Bear and Cat Form
+	tbc = { [21169] = 20608 }, era = { [21169] = 20608 }, forever = { [21169] = 20608 },   -- Reincarnation's rez
+})[FLAVOR] or {}
+local variantBad
+for v, base in pairs(VARIANTS) do
+	if CC:BaseSpellID(v) ~= base then variantBad = v end
+end
+check("variant IDs record under their base", variantBad == nil, variantBad)
 
 ---------------------------------------------------------------- capabilities
 local lust, rez = CC.CAPABILITIES.BLOODLUST, CC.CAPABILITIES.BATTLEREZ
@@ -237,6 +289,47 @@ if E.lust then
 	GROUP[2].level = nil
 	FireEvent("UNIT_LEVEL", "party2")
 	check("  and at the level cap is", listed("BLOODLUST", "Brannoc-Realm") ~= nil)
+end
+if FLAVOR == "retail" then
+	-- R3: Intercession is a paladin's Battle Rez. Harrier's Cry is Marksmanship's lust: a hunter
+	-- groupmate counts only once their spec is known to be Marksmanship (254); ourselves by spellbook.
+	GROUP[4] = { unit = "party4", name = "Aldren", realm = "Realm", class = "PALADIN", guid = "Player-1-0000005" }
+	FireEvent("GROUP_ROSTER_UPDATE")
+	local a = listed("BATTLEREZ", "Aldren-Realm")
+	check("Retail: a paladin groupmate at the level cap is a Battle Rez provider (Intercession)", a ~= nil and a.spellID == 391054)
+	GROUP[4].level = 18
+	FireEvent("UNIT_LEVEL", "party4")
+	check("  one below 19 is not", listed("BATTLEREZ", "Aldren-Realm") == nil)
+	GROUP[4] = { unit = "party4", name = "Vessa", realm = "Realm", class = "HUNTER", guid = "Player-1-0000006" }
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("a hunter groupmate whose spec we don't know is not a lust provider",
+		CC.roster["Vessa-Realm"] ~= nil and CC.roster["Vessa-Realm"].capabilities.BLOODLUST == nil and listed("BLOODLUST", "Vessa-Realm") == nil)
+	CC.rosterSpecs["Vessa-Realm"] = 253
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("  nor a known Beast Mastery one (253)", listed("BLOODLUST", "Vessa-Realm") == nil)
+	CC.rosterSpecs["Vessa-Realm"] = 254
+	FireEvent("GROUP_ROSTER_UPDATE")
+	local v = listed("BLOODLUST", "Vessa-Realm")
+	check("  a known Marksmanship one (254) is, with Harrier's Cry", v ~= nil and v.spellID == 466904 and v.ready)
+	GROUP[4].level = 47
+	FireEvent("UNIT_LEVEL", "party4")
+	check("  but not below level 48", listed("BLOODLUST", "Vessa-Realm") == nil)
+	CC.rosterSpecs["Vessa-Realm"] = nil
+	table.remove(GROUP, 4)
+	FireEvent("GROUP_ROSTER_UPDATE")
+	-- ourselves as a hunter: our own roster spec is GetSpecialization's index (2), never matched; the spellbook decides
+	local keep = CC.roster[ME]
+	CC.roster[ME] = { class = "HUNTER", capabilities = CC:CapabilitiesFor("player", "HUNTER") }
+	check("we as a hunter: Harrier's Cry is left for our spellbook to decide", CC.roster[ME].capabilities.BLOODLUST ~= nil)
+	check("  not in our spellbook (another spec): not a lust provider", listed("BLOODLUST", ME) == nil)
+	KNOWN[466904] = true
+	check("  in our spellbook (Marksmanship): a lust provider", listed("BLOODLUST", ME) ~= nil)
+	KNOWN[466904] = nil
+	CC.roster[ME] = keep
+	GROUP[#GROUP + 1] = { unit = "raid9", name = PLAYER.name, realm = PLAYER.realm, class = "HUNTER" }
+	local raidSelf = CC:CapabilitiesFor("raid9", "HUNTER")
+	GROUP[#GROUP] = nil
+	check("  the same when we are read as a raid unit", raidSelf.BLOODLUST ~= nil)
 end
 
 ---------------------------------------------------------------- own cast: ranks, wire, bridge
@@ -399,6 +492,33 @@ else
 	local n = cleu("SPELL_CAST_SUCCESS", TANIA.guid, "Tania", PARTY, tranqCast, tranq.name)
 	check("  a party member's combat-log cast is ignored", n == 0 and CC.state["Tania-Realm"] == nil)
 end
+
+---------------------------------------------------------------- variants: other IDs of one spell
+if FLAVOR == "mop" then
+	-- R14: Stampeding Roar cast in Cat or Bear Form has its own ID; it records and goes out as 106898
+	for i, form in ipairs({ 77764, 77761 }) do
+		Advance(10)
+		local sent0 = #SENT
+		FireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-SR" .. i, form)
+		local me, w = CC.state[ME], lastSent("CDCOLLAB")
+		check("own Stampeding Roar in a form (" .. form .. "): recorded and sent as 106898",
+			me.spells[106898] == NOW and me.spells[form] == nil and #SENT == sent0 + 1 and w.msg:match("^106898:") ~= nil,
+			w and w.msg)
+	end
+	cleu("SPELL_CAST_SUCCESS", TANIA.guid, "Tania", PARTY, 77761, "Stampeding Roar")
+	check("  a party member's Bear Form one, from the combat log, records under 106898",
+		CC.state["Tania-Realm"].spells[106898] == NOW and CC.state["Tania-Realm"].spells[77761] == nil)
+elseif CC.SpellData[20608] then
+	FireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-RI", 21169)
+	local w = lastSent("CDCOLLAB")
+	check("own Reincarnation rez (21169): recorded and sent as 20608", CC.state[ME].spells[20608] == NOW
+		and CC.state[ME].spells[21169] == nil and w.msg:match("^20608:") ~= nil, w and w.msg)
+	if E.log then
+		cleu("SPELL_CAST_SUCCESS", GROUP[2].guid, "Brannoc", PARTY, 21169, "Reincarnation")
+		local b2 = CC.state["Brannoc-Realm"]
+		check("  a party shaman's, from the combat log, records under 20608", b2 ~= nil and b2.spells[20608] == NOW and b2.spells[21169] == nil)
+	end
+end
 check("no Lua errors so far", #ERRORS == 0, ERRORS[1])
 
 ---------------------------------------------------------------- consumables
@@ -470,6 +590,58 @@ for _, d in pairs(CC.SpellData) do if not d.consumable and not d.custom then cla
 local nClasses = 0
 for _ in pairs(classes) do nClasses = nClasses + 1 end
 check("options: Default Spells shows every class with tracked spells", headers == nClasses, headers .. "/" .. nClasses)
+-- the longer lists: one row per tracked spell, A to Z within its class, each class's rows together,
+-- nothing overlapping, and the scroll child as tall as everything on it
+do
+	local content, realCreateFrame = CC.defaultSpellContent, CreateFrame
+	local function fontStringsInto(list)
+		return function(self)
+			local fs = realCreateFrame("FontString", nil, self)
+			list[#list + 1] = fs
+			return fs
+		end
+	end
+	local hdrs, items = {}, {}
+	rawset(content, "CreateFontString", fontStringsInto(hdrs))
+	CreateFrame = function(otype, name, parent, template)
+		local f = realCreateFrame(otype, name, parent, template)
+		if parent == content and otype == "Frame" then
+			local texts = {}
+			items[#items + 1] = { row = f, texts = texts }
+			rawset(f, "CreateFontString", fontStringsInto(texts))
+		end
+		return f
+	end
+	local ok, err = pcall(CC.RefreshDefaultSpellList, CC)
+	CreateFrame = realCreateFrame
+	rawset(content, "CreateFontString", nil)
+	local placed, bad = {}, nil
+	for _, h in ipairs(hdrs) do placed[#placed + 1] = { y = -h.__points[1][5], h = 20, header = h.__text } end
+	for _, it in ipairs(items) do
+		local name = it.texts[1] and it.texts[1].__text
+		local id = name and CC.SpellByName[name]
+		placed[#placed + 1] = { y = -it.row.__points[1][5], h = 22, name = name, class = id and CC.SpellData[id].class }
+		if not id then bad = bad or ("row without a tracked spell: " .. tostring(name)) end
+	end
+	table.sort(placed, function(a, b) return a.y < b.y end)
+	local seen, cur, prevName = {}, nil, nil
+	for i, p in ipairs(placed) do
+		local nextItem = placed[i + 1]
+		if nextItem and nextItem.y < p.y + p.h then bad = bad or ("overlap at " .. p.y) end
+		if p.header then
+			cur, prevName = p.header, nil
+		elseif p.class then
+			if seen[p.class] and seen[p.class] ~= cur then bad = bad or (p.class .. " rows split") end
+			seen[p.class] = cur
+			if prevName and p.name < prevName then bad = bad or (p.name .. " after " .. prevName) end
+			prevName = p.name
+		end
+	end
+	local last = placed[#placed]
+	check("  Default Spells: one row per tracked spell, A to Z per class, none overlapping or past the list's end",
+		ok and #items == tracked and bad == nil and last ~= nil and content:GetHeight() >= last.y + last.h,
+		ok and (#items .. "/" .. tracked .. " rows, list " .. content:GetHeight() .. " px, " .. tostring(bad)) or tostring(err))
+end
 for _, cmd in ipairs({ "verbose", "roster", "debug", "lanes", "essentials", "", "", "verbose" }) do
 	SlashCmdList["COOLDOWNCOLLABORATOR"](cmd)
 end
