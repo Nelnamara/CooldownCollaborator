@@ -154,11 +154,16 @@ end
 
 -- ── Ready alerts per spell (P1) ──────────────────────────────────────────────
 
+-- The game's named sound constants, with the plain number where a client lacks the name.
+local function Sound(name, number)
+    local kit = _G.SOUNDKIT
+    return type(kit) == "table" and kit[name] or number
+end
 CC.ALERT_SOUNDS = {
-    { id = 8959,  label = "Raid warning" },
-    { id = 8960,  label = "Ready check" },
-    { id = 12867, label = "Alarm clock" },
-    { id = 5274,  label = "Auction bell" },
+    { id = Sound("RAID_WARNING", 8959),             label = "Raid warning" },
+    { id = Sound("READY_CHECK", 8960),              label = "Ready check" },
+    { id = Sound("ALARM_CLOCK_WARNING_3", 12867),   label = "Alarm clock" },
+    { id = Sound("AUCTION_WINDOW_OPEN", 5274),      label = "Auction bell" },
 }
 
 function CC:GetAlert(spellID)

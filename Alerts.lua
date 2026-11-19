@@ -11,7 +11,7 @@
 -- middle of the screen, fading after 2 s. warn = N fires the same alert N
 -- seconds before it is back (the mid-screen text then says "in Ns").
 
-local DEFAULT_SOUND  = 8959   -- SOUNDKIT.RAID_WARNING
+local DEFAULT_SOUND  = (type(_G.SOUNDKIT) == "table" and _G.SOUNDKIT.RAID_WARNING) or 8959
 local MIDSCREEN_TIME = 2
 local FADE_TIME      = 0.5
 local CHECK_EVERY    = 0.2
