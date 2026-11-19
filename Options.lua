@@ -1744,7 +1744,7 @@ function CC:OpenOptions()
     NewCheck(pr, 4, y, "After a boss, say the pull's log is ready", function() return CC.db.lastPullOffer == true end,
         function(v) CC.db.lastPullOffer = v end, "/cdc lastpull lists the tracked cooldowns used in the last pull.")
     y = y - 26
-    NewCheck(pr, 4, y, "A new key or dungeon sets reset cooldowns back to ready", function() return CC.db.resetOnNewRun ~= false end,
+    NewCheck(pr, 4, y, "On a key start, ask the group for its cooldowns again", function() return CC.db.resetOnNewRun ~= false end,
         function(v) CC.db.resetOnNewRun = v end)
     y = y - 30
     NewButton(pr, 4, y, 110, "Last pull", function() CC:PrintLastPull() end)

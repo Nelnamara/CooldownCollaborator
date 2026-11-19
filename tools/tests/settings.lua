@@ -393,13 +393,23 @@ do
 	-- key start
 	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - 1, "DRUID")
 	check("key start: a running timer to start with", CC.state["Aaa-Realm"] and CC.state["Aaa-Realm"].spells[rb] ~= nil)
-	CC:ResetForNewRun(true)
-	check("  a new key sends it back to ready", CC.state["Aaa-Realm"] == nil or CC.state["Aaa-Realm"].spells[rb] == nil)
-	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - 1, "DRUID")
-	db.resetOnNewRun = false
+	CC.state["Gone-Realm"] = { class = "DRUID", spells = { [rb] = GetTime() - 1 } }
+	local s0 = #SENT
 	local e1 = #ERRORS
 	pcall(FireEvent, "CHALLENGE_MODE_START")
-	check("  the setting turns it off", CC.state["Aaa-Realm"] and CC.state["Aaa-Realm"].spells[rb] ~= nil and #ERRORS == e1)
+	Advance(6)
+	local asked = false
+	for i = s0 + 1, #SENT do if SENT[i].msg == "Q:2" then asked = true end end
+	check("  a key start drops players who left and keeps timers (the game's resets come from their own clients)",
+		CC.state["Gone-Realm"] == nil and CC.state["Aaa-Realm"] and CC.state["Aaa-Realm"].spells[rb] ~= nil and #ERRORS == e1)
+	check("  and asks the group for its state", asked)
+	db.resetOnNewRun = false
+	s0 = #SENT
+	pcall(FireEvent, "CHALLENGE_MODE_START")
+	Advance(6)
+	asked = false
+	for i = s0 + 1, #SENT do if SENT[i].msg == "Q:2" then asked = true end end
+	check("  the setting turns it off", not asked)
 	db.resetOnNewRun = true
 
 	-- support

@@ -208,7 +208,7 @@ local DEFAULTS = {
     setupNever       = {},            -- [Name-Realm] = true: no officer setups from them
     lastPullOffer    = false,         -- say after a boss that the pull's log is there (P33)
     postSpells       = {},            -- [spellID] = true: what /cdc post lists (none: rez and lust)
-    resetOnNewRun    = true,          -- a new key or dungeon sends the game-reset cooldowns back to ready (P45)
+    resetOnNewRun    = true,          -- a key start drops players who left and asks the group for its state again (P45)
     rezSkip          = {},            -- [name] = "last" or "never": players the rez call and dead list pass over (P40)
 }
 CC.DEFAULTS = DEFAULTS

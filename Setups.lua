@@ -644,28 +644,16 @@ function CC:PostReady()
 end
 
 -------------------------------------------------------------------------------
--- A new key or dungeon (P45)
+-- A new key (P45)
 -------------------------------------------------------------------------------
 
-local INSTANCE_RESET_MAX = 600   -- entering a dungeon: cooldowns of 10 minutes or less come back
-
--- allLengths: a key start resets every cooldown; entering a dungeon resets those of 10 minutes or less.
-function CC:ResetForNewRun(allLengths)
-    for _, entry in pairs(self.state or {}) do
-        for id in pairs(entry.spells or {}) do
-            local d = CC.SpellData[id]
-            if d and not d.consumable and not d.itemCooldown and (allLengths or (d.duration or 0) <= INSTANCE_RESET_MAX) then
-                entry.spells[id] = nil
-            end
-        end
-    end
-    for id in pairs(self.localActive or {}) do
-        local d = CC.SpellData[id]
-        if d and not d.consumable and (allLengths or (d.duration or 0) <= INSTANCE_RESET_MAX) then self.localActive[id] = nil end
-    end
+-- A key starts: players who left are dropped, and after a short wait we ask for everyone's state, so
+-- each owner's own client reports its real cooldowns (a cooldown the game itself resets is announced by
+-- that owner's ready-now poll). Nothing is guessed about what the game resets.
+function CC:OnKeyStart()
     self:PruneState()
     self:RefreshAllViews()
-    if self.BridgeResync then pcall(self.BridgeResync, self) end
+    self:SendStateRequest(2 + math.random() * 2)
 end
 
 -------------------------------------------------------------------------------
@@ -807,7 +795,6 @@ end
 -- Retail only; a client without it just doesn't take the registration
 pcall(ev.RegisterEvent, ev, "CHALLENGE_MODE_START")
 
-local lastInstance
 ev:SetScript("OnEvent", function(_, event, ...)
     local db = CC.db
     if not db then return end
@@ -834,16 +821,8 @@ ev:SetScript("OnEvent", function(_, event, ...)
         CC:CheckLayoutChange()
     elseif event == "PLAYER_ENTERING_WORLD" then
         CC:CheckLayoutChange()
-        if db.resetOnNewRun ~= false and GetInstanceInfo then
-            local _, kind, _, _, _, _, _, instanceID = GetInstanceInfo()
-            local isReload = select(2, ...)
-            if kind == "party" and not isReload and instanceID and instanceID ~= lastInstance then
-                CC:ResetForNewRun(false)
-            end
-            lastInstance = instanceID
-        end
     elseif event == "CHALLENGE_MODE_START" then
-        if db.resetOnNewRun ~= false then CC:ResetForNewRun(true) end
+        if db.resetOnNewRun ~= false then CC:OnKeyStart() end
     elseif event == "PLAYER_LOGOUT" then
         if CC.layoutKind then
             db.layouts = db.layouts or {}
