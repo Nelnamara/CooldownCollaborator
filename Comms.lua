@@ -133,7 +133,7 @@ function CC:QueueSend(prefix, build, opts)
     self.sendQueue[#self.sendQueue + 1] = {
         prefix = prefix, build = build, at = GetTime() + (opts.delay or 0), key = opts.key,
         kind = opts.kind, spellID = opts.spellID, tries = opts.tries or 0,
-        onSent = opts.onSent, onRefused = opts.onRefused, channel = opts.channel,
+        onSent = opts.onSent, onRefused = opts.onRefused, channel = opts.channel, always = opts.always,
     }
     self:DrainSendQueue()
 end
@@ -145,7 +145,7 @@ function CC:DrainSendQueue()
     -- cooldowns go out with the state message on joining), guild sends with guild sharing off
     for i = #self.sendQueue, 1, -1 do
         local q = self.sendQueue[i]
-        if (q.channel == "GUILD" and not guildOn) or (q.channel == nil and not group) then
+        if (q.channel == "GUILD" and not guildOn and not q.always) or (q.channel == nil and not group) then
             table.remove(self.sendQueue, i)
         end
     end
@@ -600,6 +600,7 @@ local function OnChunk(self, kind, owner, body)
     local byOwner = self.payloads[kind][owner] or {}
     self.payloads[kind][owner] = byOwner
     byOwner[id] = { data = table.concat(c.list), at = now }
+    if kind == "O" and self.OnOfficerSetup then self:OnOfficerSetup(owner, id) end
     -- a rotation order (P:2:rot-<spellID>, UI.lua) shows at once
     if kind == "P" and id:match("^rot%-%d+$") and self.ReadSharedRotations then
         self:ReadSharedRotations()

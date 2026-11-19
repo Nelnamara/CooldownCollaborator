@@ -28,3 +28,4 @@ Plan.lua
 Consumables.lua
 Minimap.lua
 Options.lua
+Setups.lua

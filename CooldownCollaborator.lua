@@ -200,6 +200,15 @@ local DEFAULTS = {
     spellGroupBy     = "class",       -- Default Spells tab: "class" or "kind"
     showWindows      = "always",      -- "always", "combat" or "boss": when the three main windows show (P30)
     lighterMode      = false,         -- slower refresh for the panel, Essentials bar and Lane view (P31)
+    profiles         = {},            -- [name] = a setup (Setups.lua)
+    charProfile      = {},            -- [Name-Realm] = the profile that character follows
+    defaultProfile   = false,         -- the profile characters follow until they pick
+    charPlaces       = {},            -- [Name-Realm] = window places that character keeps over its profile's
+    layouts          = {},            -- ["party" or "raid"] = window places for that group type (P21)
+    setupNever       = {},            -- [Name-Realm] = true: no officer setups from them
+    lastPullOffer    = false,         -- say after a boss that the pull's log is there (P33)
+    postSpells       = {},            -- [spellID] = true: what /cdc post lists (none: rez and lust)
+    resetOnNewRun    = true,          -- a new key or dungeon sends the game-reset cooldowns back to ready (P45)
     rezSkip          = {},            -- [name] = "last" or "never": players the rez call and dead list pass over (P40)
 }
 CC.DEFAULTS = DEFAULTS
@@ -222,6 +231,7 @@ function CC:Init()
     end
     self:LoadCustomSpells()
     self:LoadConsumableBuffs()
+    self:ApplyCharacterProfile()
 
     C_ChatInfo.RegisterAddonMessagePrefix(self.PREFIX)
     C_ChatInfo.RegisterAddonMessagePrefix(self.BUFF_PREFIX)
@@ -1162,6 +1172,12 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF") .. soloHint)
     elseif cmd == "rez" then
         CC:RequestRez()
+    elseif cmd == "lastpull" then
+        CC:PrintLastPull()
+    elseif cmd == "post" then
+        CC:PostReady()
+    elseif cmd == "support" then
+        CC:ShowCopyBox("Support: copy this into your report", CC:SupportText())
     elseif cmd == "nexthit" then
         -- /cdc nexthit <seconds or M:SS> | off: the Lane view's look-ahead (Lanes.lua)
         CC:NextHitCommand(msg:match("^%s*%S+%s*(.-)%s*$") or "")
