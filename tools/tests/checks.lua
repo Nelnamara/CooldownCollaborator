@@ -253,8 +253,8 @@ check("inspect (spec labels) on Retail only", (INSPECTS > 0) == (FLAVOR == "reta
 CC.db.essentialsEnabled = true
 CC:RefreshEssentials()
 local lustHeader = false
-for _, row in ipairs(CC.essentialsRows) do
-	if row.__shown and row.isHeader and row.headerText.__text == "Bloodlust/Heroism" then lustHeader = true end
+for _, line in ipairs(CC.essentialsShown) do
+	if line.__shown and line.lineKind == "heading" and line.label.__text == "Bloodlust/Heroism" then lustHeader = true end
 end
 check("Essentials: a lust header only where lust exists (a shaman is in the party)", lustHeader == (E.lust ~= nil))
 check("CDTL3 bridge registered its type at login", CC.bridgeRegistered and bridge.registered.cdcGroup ~= nil and CC:BridgeActive())
@@ -988,6 +988,7 @@ end
 
 local allowed = { CooldownCollaborator = true, CC = true, CooldownCollaboratorDB = true, SLASH_COOLDOWNCOLLABORATOR1 = true,
 	CCEventFrame = true, CCMainFrame = true, CCEssentialsFrame = true, CCLaneFrame = true, CCMinimapButton = true,
+	CCBuffMissingFrame = true,
 	CCOptionsFrame = true, CCDefScroll = true, CCSpellInput = true, CCDurInput = true, CCCustScroll = true,
 	SETTINGS_CATEGORY = true, INTERFACE_OPTIONS_PANEL = true }
 local leaked = {}
