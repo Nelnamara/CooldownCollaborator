@@ -23,7 +23,9 @@
 --
 -- A message belongs to its sender (the game's Name-Realm): nothing in a body
 -- can name someone else. Only the group's own channels and current members are
--- heard; whispers are dropped.
+-- heard; whispers are dropped. With guild sharing on (db.guildSync, P41), H, Q
+-- and S also go over GUILD and are read into the guild's own tables, never the
+-- group's (the guild channel, below).
 
 CC.peers        = CC.peers or {}        -- [Name-Realm] = { version, client, proto, heardAt }
 CC.pendingSyncs = CC.pendingSyncs or {} -- sends the game refused, tried again every 2 s
@@ -119,7 +121,8 @@ local function ScheduleDrain(at)
 end
 
 -- opts: delay (seconds), kind, spellID, tries, key (one queued item per key: a
--- second one joins the first), onSent(), onRefused(item).
+-- second one joins the first), onSent(), onRefused(item), channel ("GUILD";
+-- nil = the group's channel when it goes out).
 function CC:QueueSend(prefix, build, opts)
     opts = opts or {}
     if opts.key then
@@ -130,38 +133,41 @@ function CC:QueueSend(prefix, build, opts)
     self.sendQueue[#self.sendQueue + 1] = {
         prefix = prefix, build = build, at = GetTime() + (opts.delay or 0), key = opts.key,
         kind = opts.kind, spellID = opts.spellID, tries = opts.tries or 0,
-        onSent = opts.onSent, onRefused = opts.onRefused,
+        onSent = opts.onSent, onRefused = opts.onRefused, channel = opts.channel,
     }
     self:DrainSendQueue()
 end
 
 function CC:DrainSendQueue()
-    local channel = self:GroupChannel()
-    if not channel then
-        -- solo: nobody to tell (our running cooldowns go out with the state message on joining)
-        wipe(self.sendQueue)
-        return
+    local group = self:GroupChannel()
+    local guildOn = self:GuildSyncOn()
+    -- what has nowhere to go is dropped: group sends while solo (our running
+    -- cooldowns go out with the state message on joining), guild sends with guild sharing off
+    for i = #self.sendQueue, 1, -1 do
+        local q = self.sendQueue[i]
+        if (q.channel == "GUILD" and not guildOn) or (q.channel == nil and not group) then
+            table.remove(self.sendQueue, i)
+        end
     end
     local now = GetTime()
     while true do
+        -- the first item whose time has come and whose channel is free
         local idx, nextAt
         for i, q in ipairs(self.sendQueue) do
-            if q.at <= now then idx = i break end
-            if not nextAt or q.at < nextAt then nextAt = q.at end
+            local at = math.max(q.at, (lastSendAt[q.channel or group] or -math.huge) + SPACING)
+            if at <= now then idx = i break end
+            if not nextAt or at < nextAt then nextAt = at end
         end
         if not idx then
             if nextAt then ScheduleDrain(nextAt) end
             return
         end
-        local free = (lastSendAt[channel] or -math.huge) + SPACING
-        if now < free then
-            ScheduleDrain(free)
-            return
-        end
         local q = table.remove(self.sendQueue, idx)
+        -- (a group send while solo was dropped above, so there is always a channel)
+        local channel = q.channel or group
         local text = q.build
         if type(text) == "function" then text = text() end
-        if type(text) == "string" and text ~= "" then
+        if channel and type(text) == "string" and text ~= "" then
             local seen = q.prefix .. "\t" .. channel .. "\t" .. text
             local last = recent[seen]
             if last and now - last < REPEAT_WINDOW then
@@ -214,6 +220,7 @@ end)
 -- The wire carries the bare name so older copies read it; identity (name and
 -- realm) comes from the sender.
 function CC:SendCooldownSync(spellID, playerName, usedAt, tries)
+    self:GuildStateChanged()
     if not self:GroupChannel() then
         if CC.verbose then print("|cFF54a3ffCDC|r sync skipped: not in a group") end
         return
@@ -234,6 +241,7 @@ end
 -- read "R" as the spell ID, get nil from tonumber and drop it. One refused
 -- during a boss is sent again once when the boss ends (BroadcastState).
 function CC:SendReadySync(spellID, tries)
+    self:GuildStateChanged()
     if not self:GroupChannel() then return end
     self:QueueSend(self.PREFIX, "R:" .. spellID, {
         kind = "ready", spellID = spellID, tries = tries,
@@ -242,14 +250,16 @@ function CC:SendReadySync(spellID, tries)
     })
 end
 
-function CC:SendHello(delay)
+-- channel: nil for the group's, or "GUILD" (guild sharing, below)
+function CC:SendHello(delay, channel)
     self:QueueSend(self.PREFIX, function()
         return string.format("H:2:%s:%s", self.version, self:ClientTag())
-    end, { kind = "hello", key = "hello", delay = delay })
+    end, { kind = "hello", key = channel and ("hello:" .. channel) or "hello", delay = delay, channel = channel })
 end
 
-function CC:SendStateRequest(delay)
-    self:QueueSend(self.PREFIX, "Q:2", { kind = "request", key = "request", delay = delay })
+function CC:SendStateRequest(delay, channel)
+    self:QueueSend(self.PREFIX, "Q:2", { kind = "request", key = channel and ("request:" .. channel) or "request",
+        delay = delay, channel = channel })
 end
 
 -- Our own running cooldowns, as one S message or more (each but the last ends
@@ -291,14 +301,15 @@ function CC:StateMessages()
 end
 
 -- Built when it goes out; a list too long for one message queues its other parts right behind.
-function CC:SendState(delay)
+function CC:SendState(delay, channel)
     self:QueueSend(self.PREFIX, function()
         local parts = CC:StateMessages()
         for i = #parts, 2, -1 do
-            table.insert(CC.sendQueue, 1, { prefix = CC.PREFIX, build = parts[i], at = 0, kind = "state", tries = 0 })
+            table.insert(CC.sendQueue, 1, { prefix = CC.PREFIX, build = parts[i], at = 0, kind = "state", tries = 0,
+                channel = channel })
         end
         return parts[1]
-    end, { kind = "state", key = "state", delay = delay })
+    end, { kind = "state", key = channel and ("state:" .. channel) or "state", delay = delay, channel = channel })
 end
 
 -- Our flask and food status again (in answer to Q, and on joining a group).
@@ -359,6 +370,7 @@ end
 -- instance group and the home group. A new group hears our hello, a state
 -- request, our own running cooldowns and our flask/food status.
 function CC:CheckGroupChange()
+    self:CheckGuildSync()
     local channel = self:GroupChannel()
     local was = self.syncChannel
     self.syncChannel = channel
@@ -476,10 +488,10 @@ end
 -- owns them, and it beats a restored one); a built-in spell of theirs that we
 -- hold as running but they leave out is ready (one from the combat log stays:
 -- their copy may not track it).
-local pendingState = {}  -- [owner] = { ids = {}, at = } while a ";+" list is still arriving
-local function OnState(self, owner, body)
+-- An S body: the sender's class, its sane entries { id = base ID, ago }, and
+-- whether more of the list follows (";+").
+local function ReadStateBody(self, body)
     local classField, listField = strsplit(":", body, 2)
-    local classTag = ClassOrNil(classField)
     local list = listField or ""
     local more = false
     if list:sub(-2) == ";+" then
@@ -487,21 +499,29 @@ local function OnState(self, owner, body)
     elseif list == "+" then
         more, list = true, ""
     end
-    local now = GetTime()
-    local pend = pendingState[owner]
-    local listed = (pend and now - pend.at < 5) and pend.ids or {}
-    local changed = false
+    local items = {}
     for item in list:gmatch("[^;]+") do
         local idStr, agoStr = item:match("^(%d+),([%d%.]+)$")
         local id, ago = tonumber(idStr), tonumber(agoStr)
         if id and ago then
             local base = self:BaseSpellID(id)
             local data = CC.SpellData[base]
-            if data and ValidAgo(ago, data.duration) then
-                listed[base] = true
-                if self:SetRemoteCooldown(owner, base, now - ago, classTag, "state") then changed = true end
-            end
+            if data and ValidAgo(ago, data.duration) then items[#items + 1] = { id = base, ago = ago } end
         end
+    end
+    return ClassOrNil(classField), items, more
+end
+
+local pendingState = {}  -- [owner] = { ids = {}, at = } while a ";+" list is still arriving
+local function OnState(self, owner, body)
+    local classTag, items, more = ReadStateBody(self, body)
+    local now = GetTime()
+    local pend = pendingState[owner]
+    local listed = (pend and now - pend.at < 5) and pend.ids or {}
+    local changed = false
+    for _, item in ipairs(items) do
+        listed[item.id] = true
+        if self:SetRemoteCooldown(owner, item.id, now - item.ago, classTag, "state") then changed = true end
     end
     if more then
         pendingState[owner] = { ids = listed, at = now }
@@ -556,7 +576,7 @@ local function OnStone(self, owner, body)
 end
 
 -- P and O: parts of one id are kept 30 s; the whole text is stored once every part is in
--- (CC.payloads[kind][sender][id]). The features that read them come later.
+-- (CC.payloads[kind][sender][id]). Rotation orders (rot-<spellID>) are read by UI.lua.
 local chunks = {}  -- kind \t sender \t id -> { total, got, list, at }
 local function OnChunk(self, kind, owner, body)
     local id, partStr, data = strsplit(":", body, 3)
@@ -580,6 +600,11 @@ local function OnChunk(self, kind, owner, body)
     local byOwner = self.payloads[kind][owner] or {}
     self.payloads[kind][owner] = byOwner
     byOwner[id] = { data = table.concat(c.list), at = now }
+    -- a rotation order (P:2:rot-<spellID>, UI.lua) shows at once
+    if kind == "P" and id:match("^rot%-%d+$") and self.ReadSharedRotations then
+        self:ReadSharedRotations()
+        self:RefreshView("RefreshRows")
+    end
 end
 
 function CC:ExpireChunks()
@@ -600,11 +625,16 @@ function CC:OnAddonMessage(prefix, message, channel, sender)
             prefix, tostring(sender), tostring(channel), message))
     end
 
-    -- The guild's own messages (officer setups) go to their own table, never the group's.
+    -- The guild's own messages go to their own tables, never the group's: officer
+    -- setups (O) always, and with guild sharing on hellos, state requests and states.
     if channel == "GUILD" then
         if prefix == self.PREFIX then
             local kind, rest = message:match("^(%u):2:(.*)$")
-            if kind == "O" then OnChunk(self, "O", owner, rest) end
+            if kind == "O" then
+                OnChunk(self, "O", owner, rest)
+            elseif self:GuildSyncOn() then
+                self:OnGuildMessage(owner, message)
+            end
         end
         return
     end
@@ -654,4 +684,172 @@ function CC:OnAddonMessage(prefix, message, channel, sender)
     elseif kind == "P" then
         OnChunk(self, "P", owner, body)
     end
+end
+
+-------------------------------------------------------------------------------
+-- The guild channel (P41): optional, off by default (db.guildSync). The same
+-- format 2 H, Q and S messages over GUILD, read into the guild's own tables,
+-- never the group's:
+--   CC.guildPeers[name] = { version, client, proto, heardAt }
+--   CC.guildState[name] = { class, spells = { [id] = usedAt (local GetTime()) }, heardAt }
+-- With it on: a hello, a state request and our state a few seconds after login
+-- (or after turning it on); our state again after our casts and ready-nows (one
+-- message for a burst); a hello every 5 minutes; a Q answered with H and S after
+-- a random 0 to 5 s, once per 30 s. A guildmate not heard for 11 minutes is
+-- forgotten. Off: nothing goes out over GUILD and GUILD H, Q and S are dropped.
+-------------------------------------------------------------------------------
+
+CC.guildPeers = CC.guildPeers or {}
+CC.guildState = CC.guildState or {}
+
+local GUILD_START_DELAY   = 3     -- seconds, plus a random 0 to 3
+local GUILD_HELLO_EVERY   = 300
+local GUILD_FORGET        = 660
+local GUILD_ANSWER_EVERY  = 30
+local GUILD_ANSWER_JITTER = 5
+local GUILD_STATE_DELAY   = 1     -- casts in a burst share one state message
+
+local guildStarted, guildTicker = false, nil
+local guildAnswerAt = -math.huge
+local pendingGuild = {}   -- [owner] = { spells, at } while a ";+" list is still arriving
+
+function CC:GuildSyncOn()
+    return self.db ~= nil and self.db.guildSync == true and IsInGuild ~= nil and IsInGuild() and true or false
+end
+
+-- Turned on (or in a guild at login with it on): say hello, ask, and tell. Turned
+-- off: the guild's tables are let go.
+function CC:CheckGuildSync()
+    local on = self:GuildSyncOn()
+    if on and not guildStarted then
+        guildStarted = true
+        local delay = GUILD_START_DELAY + math.random() * 3
+        self:SendHello(delay, "GUILD")
+        self:SendStateRequest(delay, "GUILD")
+        self:SendState(delay, "GUILD")
+        if not guildTicker then
+            guildTicker = C_Timer.NewTicker(GUILD_HELLO_EVERY, function()
+                if CC:GuildSyncOn() then CC:SendHello(math.random() * 5, "GUILD") end
+            end)
+        end
+    elseif not on and guildStarted then
+        guildStarted = false
+        wipe(self.guildPeers)
+        wipe(self.guildState)
+        wipe(pendingGuild)
+    end
+end
+
+-- The settings lane's switch.
+function CC:SetGuildSync(on)
+    self.db.guildSync = on and true or false
+    if not self.db.guildSync and self.db.panelTab == "guild" then self.db.panelTab = "all" end
+    self:CheckGuildSync()
+    self:RefreshView("RefreshRows")
+end
+
+-- Our own cooldowns changed: the guild hears our state (one message for a burst).
+function CC:GuildStateChanged()
+    if self:GuildSyncOn() then self:SendState(GUILD_STATE_DELAY, "GUILD") end
+end
+
+-- A guild Q: our hello and state after a random wait, once per 30 s (a request
+-- inside that window is answered when it ends; one still queued answers it too).
+function CC:AnswerGuildRequest()
+    for _, q in ipairs(self.sendQueue) do
+        if q.key == "state:GUILD" then return end
+    end
+    local now = GetTime()
+    local delay = math.max(0, guildAnswerAt + GUILD_ANSWER_EVERY - now) + math.random() * GUILD_ANSWER_JITTER
+    guildAnswerAt = now + delay
+    self:SendHello(delay, "GUILD")
+    self:SendState(delay, "GUILD")
+end
+
+local function HeardInGuild(self, owner, now)
+    local peer = self.guildPeers[owner] or { proto = 2 }
+    peer.heardAt = now
+    self.guildPeers[owner] = peer
+    return peer
+end
+
+-- A guild S: the sender's whole running list replaces what we held for them.
+local function OnGuildState(self, owner, body)
+    local classTag, items, more = ReadStateBody(self, body)
+    local now = GetTime()
+    local pend = pendingGuild[owner]
+    local spells = (pend and now - pend.at < 5) and pend.spells or {}
+    for _, item in ipairs(items) do spells[item.id] = now - item.ago end
+    if more then
+        pendingGuild[owner] = { spells = spells, at = now }
+        return
+    end
+    pendingGuild[owner] = nil
+    local old = self.guildState[owner]
+    self.guildState[owner] = { class = classTag or (old and old.class) or "UNKNOWN", spells = spells, heardAt = now }
+    HeardInGuild(self, owner, now)
+end
+
+function CC:OnGuildMessage(owner, message)
+    local kind, proto, tail = message:match("^(%u):(%d+)(.*)$")
+    if not kind then return end   -- 1.x lines never go over GUILD
+    proto = tonumber(proto)
+    local body = tail:sub(1, 1) == ":" and tail:sub(2) or tail
+    if kind == "H" then
+        local version, client = strsplit(":", body, 2)
+        if proto >= 2 and version and version ~= "" then
+            local peer = HeardInGuild(self, owner, GetTime())
+            peer.version, peer.client, peer.proto = version, client, proto
+        end
+    elseif proto == 2 and kind == "Q" then
+        self:AnswerGuildRequest()
+    elseif proto == 2 and kind == "S" then
+        OnGuildState(self, owner, body)
+    end
+end
+
+-- The Guild tab's rows: each guildmate outside our group heard in the last 11
+-- minutes, their lust and Battle Rez (by class, CC.Providers) with the time
+-- left from their last state (not listed = ready): { name, class, spellID,
+-- data, remaining, capKey, old }, lust first, ready first. Also how many
+-- guildmates outside the group run it.
+function CC:GuildRows()
+    local rows, runners = {}, 0
+    if not self:GuildSyncOn() then return rows, 0 end
+    local now = GetTime()
+    local inGroup = self:GetActiveGroupNames()
+    for name, peer in pairs(self.guildPeers) do
+        if now - (peer.heardAt or 0) > GUILD_FORGET then
+            self.guildPeers[name] = nil
+            self.guildState[name] = nil
+        elseif not inGroup[name] then
+            runners = runners + 1
+            local st = self.guildState[name]
+            local old = peer.version ~= nil and self:IsOlderVersion(peer.version)
+            for order, capKey in ipairs({ "BLOODLUST", "BATTLEREZ" }) do
+                local ids = st and CC.Providers[capKey] and CC.Providers[capKey][st.class]
+                if ids then
+                    -- a shaman has Bloodlust or Heroism: the one they used, else the first
+                    local pick, usedAt = ids[1], nil
+                    for _, id in ipairs(ids) do
+                        local at = st.spells[id]
+                        if at and (not usedAt or at > usedAt) then pick, usedAt = id, at end
+                    end
+                    local data = CC.SpellData[pick]
+                    if data then
+                        local remaining = usedAt and (usedAt + data.duration - now) or 0
+                        rows[#rows + 1] = { name = name, class = st.class, spellID = pick, data = data,
+                            remaining = remaining > 0 and remaining or 0, capKey = capKey, order = order, old = old }
+                    end
+                end
+            end
+        end
+    end
+    table.sort(rows, function(a, b)
+        if a.order ~= b.order then return a.order < b.order end
+        if (a.remaining > 0) ~= (b.remaining > 0) then return a.remaining <= 0 end
+        if a.remaining ~= b.remaining then return a.remaining < b.remaining end
+        return a.name < b.name
+    end)
+    return rows, runners
 end
