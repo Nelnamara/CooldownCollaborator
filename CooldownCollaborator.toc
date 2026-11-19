@@ -18,6 +18,8 @@ Events.lua
 Comms.lua
 Bridge.lua
 UI.lua
+Tooltip.lua
+Alerts.lua
 Roster.lua
 Essentials.lua
 Lanes.lua

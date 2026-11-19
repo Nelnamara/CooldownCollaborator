@@ -263,10 +263,19 @@ check("/cdc lanes while solo: OFF, then ON with the solo hint, the view waits fo
 
 party({ "DRUID", LUST or "DRUID" })
 FireEvent("GROUP_ROSTER_UPDATE")
-check("joining a party opens all three again", CC.frame:IsShown() and CC.essentialsFrame:IsShown() and CC.laneFrame:IsShown())
+check("joining a party opens the Essentials bar and Lane view; the panel, closed with /cdc, stays shut (R19)",
+	not CC.frame:IsShown() and CC.essentialsFrame:IsShown() and CC.laneFrame:IsShown() and CC.db.panelClosed == true)
+SlashCmdList["COOLDOWNCOLLABORATOR"]("")
+check("  /cdc opens it again", CC.frame:IsShown() and CC.db.panelClosed == false)
 solo()
 FireEvent("GROUP_ROSTER_UPDATE")
 check("leaving the party closes them", not CC.frame:IsShown() and not CC.essentialsFrame:IsShown() and not CC.laneFrame:IsShown())
+check("  leaving isn't the player closing it", CC.db.panelClosed == false)
+party({ "DRUID", LUST or "DRUID" })
+FireEvent("GROUP_ROSTER_UPDATE")
+check("joining a party opens all three again", CC.frame:IsShown() and CC.essentialsFrame:IsShown() and CC.laneFrame:IsShown())
+solo()
+FireEvent("GROUP_ROSTER_UPDATE")
 check("no Lua errors", #ERRORS == 0, ERRORS[1])
 
 OUT(string.format("RESULT groups %s %s: checks %d, fails %d, lua errors %d",

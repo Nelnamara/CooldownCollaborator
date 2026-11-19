@@ -285,9 +285,26 @@ function UnitIsPlayer(u) return member(u) ~= nil end
 function UnitIsFriend(a, b) return member(a) ~= nil and member(b) ~= nil end
 -- STUB_IN_RAID: the group is a raid; STUB_IS_LEADER / STUB_IS_ASSIST: the player leads it / is a raid assistant.
 -- IsRaidLeader and IsRaidOfficer are gone on every client (Blizzard's function lists), so no stub.
+-- A GROUP member's `leader` / `assist` says the same of them (while the player isn't the leader).
 STUB_IN_RAID, STUB_IS_LEADER, STUB_IS_ASSIST = false, true, false
-function UnitIsGroupLeader(u) return u == "player" and STUB_IS_LEADER end
-function UnitIsGroupAssistant(u) return u == "player" and STUB_IS_ASSIST end
+function UnitIsGroupLeader(u)
+	if u == "player" then return STUB_IS_LEADER end
+	local m = member(u)
+	return m ~= nil and m.leader == true and not STUB_IS_LEADER
+end
+function UnitIsGroupAssistant(u)
+	if u == "player" then return STUB_IS_ASSIST end
+	local m = member(u)
+	return m ~= nil and m.assist == true
+end
+-- STUB_IN_GUILD: the player is in a guild; STUB_SHIFT: Shift is held
+STUB_IN_GUILD, STUB_SHIFT = false, false
+function IsInGuild() return STUB_IN_GUILD end
+function IsShiftKeyDown() return STUB_SHIFT end
+-- sounds played: { id = SoundKit ID } or { file = path }
+SOUNDS = {}
+function PlaySound(id, channel) SOUNDS[#SOUNDS + 1] = { id = id, channel = channel }; return true end
+function PlaySoundFile(path, channel) SOUNDS[#SOUNDS + 1] = { file = path, channel = channel }; return true end
 function IsInRaid() return STUB_IN_RAID end
 function IsInGroup(category)
 	if category == LE_PARTY_CATEGORY_INSTANCE then return INSTANCE_GROUP end
@@ -330,7 +347,7 @@ if FLAVOR == "retail" then
 end
 CHATSENT = {}
 -- the bare global is one of Blizzard's deprecation fallbacks (on by default); C_ChatInfo's is on every client
-function SendChatMessage(msg, chan) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, via = "global" } end
+function SendChatMessage(msg, chan, lang, target) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, target = target, via = "global" } end
 
 ---------------------------------------------------------------- addon messages
 SENT = {}      -- { prefix, msg, channel, refused = true when SendResult() said no }
@@ -345,7 +362,7 @@ C_ChatInfo = {
 			refused = not (result == nil or result == true or result == 0) or nil }
 		return result
 	end,
-	SendChatMessage = function(msg, chan) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, via = "C_ChatInfo" } end,
+	SendChatMessage = function(msg, chan, lang, target) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, target = target, via = "C_ChatInfo" } end,
 }
 if FLAVOR == "retail" then
 	C_ChatInfo.AreOutgoingAddonChatMessagesRestricted = function() return false end
