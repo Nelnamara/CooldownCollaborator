@@ -439,7 +439,8 @@ local function FillReadyRow(row, ready)
         if e then
             CC:SetRingIcon(w, {
                 spellID = e.spellID, owner = e.name, class = e.class, ring = "ready",
-                state = CC:OwnerState(e), guessed = e.guessed,
+                -- an empty Battle Rez pool greys the icon like a dead owner's
+                state = CC:OwnerState(e) or (e.noCharges and "nocharge" or nil), guessed = e.guessed,
             })
         else
             w:Hide()
@@ -452,7 +453,13 @@ local function FillReadyRow(row, ready)
     else
         row.more:Hide()
     end
-    row.label:SetText(#ready > 0 and L["Ready"] or L["none ready"])
+    local usable = 0
+    for _, e in ipairs(ready) do if not e.noCharges then usable = usable + 1 end end
+    if #ready > 0 and usable == 0 and ready[1].noCharges then
+        row.label:SetText(L["No charge"])
+    else
+        row.label:SetText(#ready > 0 and L["Ready"] or L["none ready"])
+    end
 end
 
 function CC:RefreshLanes()

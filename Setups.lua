@@ -642,13 +642,14 @@ function CC:PostLines()
     for _, id in ipairs(self:PostSpellIDs()) do
         local data = CC.SpellData[id]
         local who = {}
+        local empty = data.kind == "rez" and self:RezPool() == 0   -- no Battle Rez charges left
         for name in pairs(self:GetActiveGroupNames()) do
             local info = self.roster and self.roster[name]
             local has = info and info.class == data.class
             if has and name == me then has = self:KnownRank(id) ~= nil and self:KnownRank(id) ~= false end
             if has then
                 local rem = self:GetRemaining(name, id)
-                who[#who + 1] = self:ShortName(name) .. " " .. ((rem and rem > 0) and self:LookClock(math.ceil(rem)) or L["ready"])
+                who[#who + 1] = self:ShortName(name) .. " " .. ((rem and rem > 0) and self:LookClock(math.ceil(rem)) or (empty and L["no charge"] or L["ready"]))
             end
         end
         table.sort(who)

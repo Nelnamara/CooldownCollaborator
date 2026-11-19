@@ -123,6 +123,64 @@ do
 	check("  and only the S state when every member has said a format 2 hello", s and not line)
 end
 
+---------------------------------------------------------------- F3 and F4: an empty rez pool, and who may report one
+do
+	local c = Fresh(function(env)
+		env.PLAYER.class = "PRIEST"
+		env.GROUP = {
+			{ unit = "party1", name = "Dru", realm = "Realm", class = "DRUID", guid = "Player-1-21" },
+			{ unit = "party2", name = "Pri", realm = "Realm", class = "PRIEST", guid = "Player-1-22" },
+			{ unit = "party3", name = "War", realm = "Realm", class = "WARRIOR", guid = "Player-1-24" },
+		}
+	end)
+	c.Login()
+	c.CC.db.laneEnabled = true
+	c.FireEvent("GROUP_ROSTER_UPDATE")
+	c.Advance(5)
+	From(c, "H:2:1.2.0:retail", "PARTY", "Dru")
+	-- F4: a priest can't read a pool; nor can anyone outside the group
+	From(c, "C:2:0:5:0", "PARTY", "Pri")
+	From(c, "C:2:0:2:100", "PARTY", "Stranger")
+	check("F4: a C from a member who isn't a Battle Rez provider is dropped", c.CC.rezCharges == nil and c.CC:NoRezChargesText() == nil)
+	-- a provider's C: clamped, the newest wins
+	From(c, "C:2:9:99:99999", "PARTY", "Dru")
+	local p = c.CC.rezCharges
+	check("  a provider's values are clamped (charges 0..max, max 1..5, wait 0..1800 s)",
+		p and p.max == 5 and p.charges == 5 and p.nextAt and p.nextAt - c.GetTime() <= 1800.01)
+	From(c, "C:2:0:3:99999", "PARTY", "Dru")
+	p = c.CC.rezCharges
+	check("  max 3, wait capped at 30 minutes", p and p.charges == 0 and p.max == 3 and p.nextAt and p.nextAt - c.GetTime() <= 1800.01
+		and p.nextAt - c.GetTime() > 1799)
+	From(c, "C:2:0:2:120", "PARTY", "Dru")
+	-- F3: nothing says READY while the pool is empty
+	local states = {}
+	for _, m in ipairs(c.CC:EssentialsModel()) do
+		if m.kind == "provider" and m.cap == "BATTLEREZ" then states[#states + 1] = m.state end
+		if m.kind == "text" and m.key == "you" and m.cap == "BATTLEREZ" then states[#states + 1] = "you" end
+	end
+	check("F3: Essentials names the rez providers NO CHARGE, not ready", #states >= 1 and states[1] == "nocharge", table.concat(states, ","))
+	local readyIcons = 0
+	for _, m in ipairs(c.CC:EssentialsModel()) do
+		if m.kind == "icons" then for _, ic in ipairs(m.icons) do readyIcons = readyIcons + ic.count end end
+	end
+	check("  the rez icons count none ready", readyIcons == 0, readyIcons)
+	c.CC:RefreshLanes()
+	local lane = c.CC.lanes.BATTLEREZ
+	local row = lane.readyRow
+	local greyed = false
+	for _, w in ipairs(row.icons) do if w.__shown and w.look and w.look.state == "nocharge" then greyed = true end end
+	check("  the Lane view greys them and its row says No charge", greyed and row.label.__text == "No charge", row.label.__text)
+	local post = table.concat(c.CC:PostLines(), " | ")
+	check("  /cdc post says no charge for Rebirth", post:find("Dru no charge", 1, true) ~= nil and not post:find("Dru ready", 1, true), post)
+	-- it lapses 10 minutes after it was last heard
+	c.Advance(130)
+	check("  at its own time to the next charge the pool counts it back", c.CC:NoRezChargesText() == nil)
+	From(c, "C:2:0:5:0", "PARTY", "Dru")
+	check("  an empty pool with no known next charge blocks", c.CC:NoRezChargesText() ~= nil)
+	c.Advance(601)
+	check("F4: and lapses after 10 minutes without a refresh", c.CC:NoRezChargesText() == nil and c.CC.rezCharges == nil)
+end
+
 ---------------------------------------------------------------- the whole run
 check("no Lua errors in any copy", Errors() == 0, FirstError())
 OUTPUT(string.format("RESULT final %s %s: checks %d, fails %d, lua errors %d",

@@ -320,6 +320,8 @@ function Makers.provider()
         local lines = { { text = data and data.name or "", r = COLORS.head[1], g = COLORS.head[2], b = COLORS.head[3] } }
         if m.state == "dead" or m.state == "offline" then
             lines[#lines + 1] = { text = m.state == "dead" and L["Dead: can't use it now."] or L["Offline."] }
+        elseif m.state == "nocharge" then
+            lines[#lines + 1] = { text = L["No Battle Rez charges."] }
         elseif m.guessed then
             lines[#lines + 1] = { text = L["Doesn't run CooldownCollaborator and hasn't been seen casting."] }
             lines[#lines + 1] = { text = L["Ready as far as we know."], r = COLORS.soon[1], g = COLORS.soon[2], b = COLORS.soon[3] }
@@ -334,7 +336,7 @@ function Painters.provider(line, m)
     local entry = m.entry
     local c = CC.ClassColors[entry.class] or CC.ClassColors.UNKNOWN
     local data = CC.SpellData[entry.spellID]
-    local greyed = m.state == "dead" or m.state == "offline"
+    local greyed = m.state == "dead" or m.state == "offline" or m.state == "nocharge"
     line.owner, line.cap = entry.name, m.cap
     if greyed then c = COLORS.greyed end
     Paint(line.classBar, c)
@@ -349,6 +351,8 @@ function Painters.provider(line, m)
         t, tc = L["DEAD"], COLORS.greyed
     elseif m.state == "offline" then
         t, tc = L["OFFLINE"], COLORS.greyed
+    elseif m.state == "nocharge" then
+        t, tc = L["NO CHARGE"], COLORS.greyed
     elseif m.state == "ready" then
         t, tc = L["READY"], COLORS.ready
     else
@@ -746,7 +750,11 @@ end
 local function StateOf(entry)
     if entry.online == false then return "offline" end
     if entry.alive == false then return "dead" end
-    if (entry.remaining or 0) <= 0 then return "ready" end
+    if (entry.remaining or 0) <= 0 then
+        -- Battle Rez with the raid's pool empty: nobody can be brought back, so it isn't ready
+        if entry.noCharges then return "nocharge" end
+        return "ready"
+    end
     return "cool"
 end
 
@@ -795,7 +803,7 @@ local function MoreText(rest)
     for _, e in ipairs(rest) do
         if IsLive(e) then
             if (e.remaining or 0) <= 0 then
-                ready = ready + 1
+                if not e.noCharges then ready = ready + 1 end
             elseif not nextIn or e.remaining < nextIn then
                 nextIn = e.remaining
             end
@@ -1208,7 +1216,7 @@ function CC:EssentialsModel()
             if IsLive(e) then live = live + 1 end
             if e.name == me then mine = e end
         end
-        if mine and IsLive(mine) then
+        if mine and IsLive(mine) and not mine.noCharges then
             local noun = NOUNS[capKey] or CC.CAPABILITIES[capKey].label
             lines[#lines + 1] = live <= 1
                 and { kind = "text", key = "you", cap = capKey, only = true, color = COLORS.amber,
