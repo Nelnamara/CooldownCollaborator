@@ -63,17 +63,26 @@ function CC:LoadConsumableBuffs()
     end
 end
 
--- /cdc consumable <spellID> <duration> <name> [flask|food]
--- The last word of the name, if it is "flask" or "food", is treated as the
--- category flag so users can type: /cdc consumable 12345 3600 Haste Flask flask
-function CC:AddConsumableBuff(spellID, duration, name)
+-- /cdc consumable <spellID> <seconds> <flask|food|other> <name>
+-- The category is explicit. Called without one (the old form, /cdc consumable <spellID>
+-- <seconds> <name>), it is guessed from the name: "flask" or "food" as a word anywhere in it,
+-- in any case, and a trailing lowercase flask / food word is taken as the category and dropped.
+local function GuessCategory(name)
+    local lower = name:lower()
+    if lower:find("%f[%a]flask%f[%A]") then return "flask" end
+    if lower:find("%f[%a]food%f[%A]") then return "food" end
+    return nil
+end
+
+function CC:AddConsumableBuff(spellID, duration, name, category)
     spellID = tonumber(spellID)
     if not spellID or not duration or duration <= 0 then return false end
 
-    -- Parse optional trailing category keyword
-    local category = nil
-    if name then
-        -- two matches in turn: "a or b" would keep only the first capture
+    if category == "other" or category == "" then
+        category = nil
+    elseif category == nil and name then
+        -- the old form: a trailing lowercase flask / food word is the category flag
+        -- (two matches in turn: "a or b" would keep only the first capture)
         local stripped, trailing = name:match("^(.-)%s+(flask)$")
         if not stripped then
             stripped, trailing = name:match("^(.-)%s+(food)$")
@@ -81,9 +90,11 @@ function CC:AddConsumableBuff(spellID, duration, name)
         if stripped and trailing then
             name     = stripped ~= "" and stripped or nil
             category = trailing
+        else
+            category = GuessCategory(name)
         end
     end
-    name = name ~= "" and name or ("Consumable " .. spellID)
+    name = (name and name ~= "") and name or ("Consumable " .. spellID)
 
     self.db.consumableBuffs[tostring(spellID)] = {
         name     = name,
@@ -102,18 +113,35 @@ function CC:AddConsumableBuff(spellID, duration, name)
     local catStr = category and (" [" .. category .. "]") or ""
     print(string.format("|cFF54a3ffCooldownCollaborator|r tracking consumable: %s (%ds)%s",
         name, duration, catStr))
+    if self.RefreshSpellList then self:RefreshSpellList() end
     return true
 end
 
-function CC:RemoveConsumableBuff(spellID)
+-- /cdc consumable remove <spellID>, and the Remove buttons in Settings. Built-ins aren't
+-- in the saved list and stay.
+function CC:RemoveConsumableBuff(spellID, say)
     spellID = tonumber(spellID)
     if not spellID then return end
-    self.db.consumableBuffs[tostring(spellID)] = nil
-    if CC.SpellData[spellID] and CC.SpellData[spellID].consumable then
+    local key = tostring(spellID)
+    if not self.db.consumableBuffs[key] then
+        if say then
+            print("|cFF54a3ffCooldownCollaborator|r no consumable you added has spell ID " .. spellID
+                .. " (the built-in ones can't be removed).")
+        end
+        return
+    end
+    local was = self.db.consumableBuffs[key].name
+    self.db.consumableBuffs[key] = nil
+    if CC.SpellData[spellID] and CC.SpellData[spellID].consumable
+        and not (CC.BuiltinConsumables and CC.BuiltinConsumables[spellID]) then
         CC.SpellData[spellID] = nil
     end
     self.consumableActive[spellID] = nil
+    if say then
+        print("|cFF54a3ffCooldownCollaborator|r stopped tracking consumable: " .. tostring(was))
+    end
     self:RefreshAllViews()
+    if self.RefreshSpellList then self:RefreshSpellList() end
 end
 
 -------------------------------------------------------------------------------
@@ -257,6 +285,7 @@ end
 -- for the current group.
 function CC:GetGroupBuffStatus()
     local total        = 0
+    local seen         = {}
     local hasFlask     = 0
     local hasFood      = 0
     local missingFlask = {}
@@ -267,6 +296,9 @@ function CC:GetGroupBuffStatus()
     local function check(unit)
         local name = CC:FullName(unit)
         if not name or not UnitIsConnected(unit) then return end
+        -- in a raid the raidN tokens include you, so count each name once
+        if seen[name] then return end
+        seen[name] = true
         total = total + 1
         local entry = self.buffRoster[name]
         if entry and entry.flask then

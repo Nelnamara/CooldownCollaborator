@@ -137,7 +137,31 @@ function CC:RefreshDefaultSpellList()
     content:SetHeight(math.max(y, 20))
 end
 
+-- ── Locking ──────────────────────────────────────────────────────────────────
+-- One lock for all three windows: the main panel, the Essentials bar and the Lane view.
+-- /cdc lock, /cdc unlock and the Settings box all come through here.
+
+function CC:AreWindowsLocked()
+    local db = self.db
+    return db.locked and db.essentialsLocked and db.laneLocked and true or false
+end
+
+function CC:SetWindowsLocked(locked)
+    locked = locked and true or false
+    self.db.locked, self.db.essentialsLocked, self.db.laneLocked = locked, locked, locked
+    self:UpdateLock()
+    self:UpdateEssentialsLock()
+    self:UpdateLaneLock()
+    if self.lockCheck then self.lockCheck:SetChecked(locked) end
+end
+
 -- ── Custom Spells tab ────────────────────────────────────────────────────────
+
+-- Turn a shift-clicked spell link into the box's text while it has focus
+local function SpellIDFromLink(link)
+    local id = type(link) == "string" and link:match("|Hspell:(%d+)")
+    return id and tonumber(id) or nil
+end
 
 function CC:RefreshSpellList()
     local content = self.spellListContent
@@ -145,13 +169,20 @@ function CC:RefreshSpellList()
 
     for _, c in pairs({ content:GetChildren() }) do c:Hide(); c:SetParent(nil) end
 
+    -- the empty-list note and the consumables heading are single strings made once, shown or
+    -- hidden and placed again on every refresh, so none is left behind under a row
+    if not self.noCustomFS then
+        self.noCustomFS = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        self.noCustomFS:SetText("No custom spells added yet.")
+        self.consumableHdrFS = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        self.consumableHdrFS:SetText("Consumables you added with /cdc consumable:")
+    end
+
     local ROW = 22
     local y   = 0
     local any = false
 
-    for idStr, data in pairs(self.db.customSpells) do
-        any = true
-        local sid = tonumber(idStr)
+    local function MakeRow(data, fallbackName, onRemove)
         local row = CreateFrame("Frame", nil, content)
         row:SetSize(content:GetWidth(), ROW)
         row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
@@ -165,22 +196,43 @@ function CC:RefreshSpellList()
         local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         lbl:SetPoint("LEFT", ico, "RIGHT", 4, 0)
         lbl:SetText(string.format("|cFFCCCCCC%s|r  |cFF888888%ds|r",
-            data.name or idStr, data.duration or 0))
+            data.name or fallbackName, data.duration or 0))
 
         local rmv = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         rmv:SetSize(56, 18)
         rmv:SetPoint("LEFT", lbl, "RIGHT", 8, 0)
         rmv:SetText("Remove")
-        local s = sid
-        rmv:SetScript("OnClick", function() CC:RemoveCustomSpell(s) end)
-
+        rmv:SetScript("OnClick", onRemove)
         y = y + ROW
     end
 
-    if not any then
-        local fs = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        fs:SetPoint("TOPLEFT", 0, 0)
-        fs:SetText("No custom spells added yet.")
+    for idStr, data in pairs(self.db.customSpells) do
+        any = true
+        local sid = tonumber(idStr)
+        MakeRow(data, idStr, function() CC:RemoveCustomSpell(sid) end)
+    end
+
+    self.noCustomFS:ClearAllPoints()
+    self.noCustomFS:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+    self.noCustomFS:SetShown(not any)
+    if not any then y = ROW end
+
+    -- consumables registered with /cdc consumable, each with a Remove button
+    local list = {}
+    for idStr, data in pairs(self.db.consumableBuffs or {}) do
+        list[#list + 1] = { sid = tonumber(idStr), data = data, idStr = idStr }
+    end
+    table.sort(list, function(l, r) return (l.sid or 0) < (r.sid or 0) end)
+    self.consumableHdrFS:ClearAllPoints()
+    self.consumableHdrFS:SetShown(#list > 0)
+    if #list > 0 then
+        y = y + 8
+        self.consumableHdrFS:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
+        y = y + 18
+        for _, e in ipairs(list) do
+            local sid = e.sid
+            MakeRow(e.data, e.idStr, function() CC:RemoveConsumableBuff(sid, true) end)
+        end
     end
     content:SetHeight(math.max(y, 20))
 end
@@ -255,13 +307,16 @@ function CC:OpenOptions()
     local cbLock = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
     cbLock:SetSize(22, 22)
     cbLock:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    cbLock:SetChecked(CC.db.locked)
+    cbLock:SetChecked(CC:AreWindowsLocked())
     cbLock:SetScript("OnClick", function(widget)
-        CC.db.locked = widget:GetChecked(); CC:UpdateLock()
+        CC:SetWindowsLocked(widget:GetChecked())
     end)
     local lLock = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lLock:SetPoint("LEFT", cbLock, "RIGHT", 2, 0)
-    lLock:SetText("Lock panel position")
+    lLock:SetText("Lock windows")
+    CC.lockCheck = cbLock
+    -- /cdc lock and /cdc unlock may have changed it while this window was closed
+    f:SetScript("OnShow", function() cbLock:SetChecked(CC:AreWindowsLocked()) end)
     yOff = yOff - 26
 
     local cbMM = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
@@ -441,7 +496,7 @@ function CC:OpenOptions()
     -- Instruction
     local hint = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOPLEFT", custPanel, "TOPLEFT", 4, -4)
-    hint:SetText("Type a spell name or ID, then set its cooldown duration and click Add.\nShift-click a spell link to auto-fill (spellbook must be open).")
+    hint:SetText("Type a spell name or ID, then set its cooldown duration and click Add.\nClick the box, then shift-click a spell in your spellbook to fill it in.")
     hint:SetJustifyH("LEFT")
     hint:SetWidth(CAW - 16)
 
@@ -477,15 +532,36 @@ function CC:OpenOptions()
 
     local pendingID = nil
 
+    local function TakeSpellID(id)
+        pendingID = id
+        spellInput:SetText(tostring(id))
+        local name = LookupSpellName(id)
+        preview:SetText(name or "|cFFFF4444Unknown|r")
+    end
+
+    -- A shift-clicked spell link goes to the game's link-insert call, which only knows chat boxes.
+    -- Follow it (after it runs, so chat is untouched) and take the link while this box has focus.
+    -- The call is ChatFrameUtil.InsertLink on the newer interface and ChatEdit_InsertLink on the
+    -- older; each is hooked where it exists, and taking the same link twice is harmless.
+    local function OnLinkInserted(link)
+        if not spellInput:HasFocus() then return end
+        local id = SpellIDFromLink(link)
+        if id then TakeSpellID(id) end
+    end
+    if ChatFrameUtil and ChatFrameUtil.InsertLink then
+        pcall(hooksecurefunc, ChatFrameUtil, "InsertLink", OnLinkInserted)
+    end
+    ---@diagnostic disable-next-line: undefined-global
+    if ChatEdit_InsertLink then
+        pcall(hooksecurefunc, "ChatEdit_InsertLink", OnLinkInserted)
+    end
+
     spellInput:SetScript("OnTextChanged", function(widget, userInput)
         if not userInput then return end
         local text = widget:GetText()
         local linkID = text:match("|Hspell:(%d+)")
         if linkID then
-            pendingID = tonumber(linkID)
-            widget:SetText(linkID)
-            local name = LookupSpellName(pendingID)
-            preview:SetText(name or "|cFFFF4444Unknown|r")
+            TakeSpellID(tonumber(linkID))
             return
         end
         pendingID = ResolveSpell(text)
