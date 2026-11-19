@@ -7,6 +7,7 @@
 ## OptionalDeps: CooldownTimeline3
 ## SavedVariables: CooldownCollaboratorDB
 ## X-Curse-Project-ID: 1577127
+## X-Wago-ID: b6XyoxKp
 ## X-Website: https://github.com/Nelnamara/CooldownCollaborator
 ## X-License: All Rights Reserved
 
