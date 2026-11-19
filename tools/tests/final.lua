@@ -271,6 +271,69 @@ do
 	end
 end
 
+---------------------------------------------------------------- F7 and F8: officer setups and stored payloads
+do
+	local c = Fresh(function(env)
+		env.STUB_IN_GUILD = true
+		env.GetNumGuildMembers = function() return 2 end
+		env.GetGuildRosterInfo = function(i)
+			if i == 1 then return "Rando-Realm", "Initiate", 4 end
+			return "Boss-Realm", "Officer", 1
+		end
+		env.GROUP = { { unit = "party1", name = "Lead", realm = "Realm", class = "DRUID", guid = "Player-1-41" } }
+	end)
+	c.Login()
+	c.FireEvent("GROUP_ROSTER_UPDATE")
+	c.Advance(5)
+	local setup = c.CC:EncodeSetup({ disabled = { 20484 }, custom = {}, alerts = {}, places = {} }, "x")
+	local function O(id, who) From(c, "O:2:" .. id .. ":1/1:" .. setup, "GUILD", who) end
+	local function shown() return c.CC.setupDialog and c.CC.setupDialog:IsShown() end
+	O("a1", "Boss")
+	check("F7: with guild sharing off an officer setup is not acted on", not shown() and c.CC.pendingSetup == nil)
+	c.CC.db.guildSync = true
+	O("a2", "Rando")
+	check("  a plain member's setup is ignored by default", not shown() and c.CC.pendingSetup == nil)
+	O("a3", "Boss")
+	check("  an officer's (rank index 0 or 1) opens the dialog", shown() and c.CC.pendingSetup and c.CC.pendingSetup.owner == "Boss-Realm")
+	O("a4", "Boss")
+	c.CC:AnswerSetup("later")
+	O("a5", "Boss")
+	check("  one dialog per sender per 10 minutes, and none replaces one still open", not shown())
+	c.Advance(601)
+	O("a6", "Boss")
+	check("  and again after the 10 minutes", shown())
+	c.CC:AnswerSetup("never")
+	c.Advance(601)
+	O("a7", "Boss")
+	check("  Never stays", not shown())
+	c.CC.db.setupFrom = "any"
+	O("a8", "Rando")
+	check("  'Any rank' lets a plain member's through", shown())
+	c.CC:AnswerSetup("later")
+	c.CC.db.setupFrom = "nobody"
+	c.Advance(601)
+	O("a9", "Boss")
+	check("  'Nobody' shuts it all", not shown())
+	-- F8
+	c.CC.db.setupFrom = "any"
+	for i = 1, 40 do
+		From(c, "P:2:x" .. i .. ":1/1:zz", "PARTY", "Lead")
+		c.Advance(1)
+	end
+	local nP = 0
+	for _ in pairs(c.CC.payloads.P["Lead-Realm"] or {}) do nP = nP + 1 end
+	check("F8: at most the newest 10 finished P payloads of a sender are kept, and the newest is among them",
+		nP == 10 and c.CC.payloads.P["Lead-Realm"].x40 ~= nil, nP)
+	for i = 1, 40 do
+		c.CC.db.setupNever = {}
+		From(c, "O:2:y" .. i .. ":1/1:" .. setup, "GUILD", "Rando")
+		c.Advance(1)
+	end
+	local nO = 0
+	for _ in pairs(c.CC.payloads.O["Rando-Realm"] or {}) do nO = nO + 1 end
+	check("  and likewise 10 O payloads", nO == 10, nO)
+end
+
 ---------------------------------------------------------------- the whole run
 check("no Lua errors in any copy", Errors() == 0, FirstError())
 OUTPUT(string.format("RESULT final %s %s: checks %d, fails %d, lua errors %d",

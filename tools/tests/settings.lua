@@ -309,8 +309,10 @@ do
 	-- receiving
 	local sender = "Boss-Realm"
 	CC.payloads.O[sender] = { s1 = { data = text, at = GetTime() } }
+	db.guildSync, db.setupFrom = true, "any"   -- (the rank and sharing rules are in final.lua)
+	local function OfferSetup() CC.setupShownAt = {}; CC:OnOfficerSetup(sender, "s1") end
 	local e1 = #ERRORS
-	CC:OnOfficerSetup(sender, "s1")
+	OfferSetup()
 	check("  a member gets a dialog naming the sender", CC.pendingSetup and CC.pendingSetup.owner == sender
 		and CC.setupDialog and CC.setupDialog:IsShown() and CC.setupDialog.text.__text:find("Boss", 1, true) ~= nil)
 	check("  and their guild rank is not shown while the roster lacks it", CC.pendingSetup.rank == nil)
@@ -320,22 +322,23 @@ do
 		if i == 1 then return "Other-Realm", "Member", 3 end
 		return "Boss-Realm", "Officer", 1
 	end
-	CC:OnOfficerSetup(sender, "s1")
+	OfferSetup()
 	check("  with the rank name once the roster has it", CC.pendingSetup.rank == "Officer"
 		and CC.setupDialog.text.__text:find("Boss (Officer) sent", 1, true) ~= nil, CC.setupDialog.text.__text)
 	GetNumGuildMembers, GetGuildRosterInfo = nil, nil
 	CC:AnswerSetup("later")
 	check("  Not now closes it and changes nothing", not CC.setupDialog:IsShown() and not db.disabledSpells[rb])
-	CC:OnOfficerSetup(sender, "s1")
+	OfferSetup()
 	CC:AnswerSetup("accept")
 	check("  Accept applies it", db.disabledSpells[rb] == true)
 	check("  and Undo takes it back", CC:UndoSetup() and not db.disabledSpells[rb])
-	CC:OnOfficerSetup(sender, "s1")
+	OfferSetup()
 	CC:AnswerSetup("never")
-	CC:OnOfficerSetup(sender, "s1")
+	OfferSetup()
 	check("  Never silences that person", CC.pendingSetup == nil and db.setupNever[sender] == true)
 	db.setupNever = {}
 	STUB_IN_GUILD = false
+	db.guildSync, db.setupFrom = false, "officers"
 	check("officer setup code raises no Lua error", #ERRORS == e1, ERRORS[e1 + 1])
 end
 

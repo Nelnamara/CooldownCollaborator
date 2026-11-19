@@ -192,6 +192,7 @@ local DEFAULTS = {
     teams       = {},      -- [team name] = { "Name-Realm", ... } (P43)
     rotations   = {},      -- [spellID] = { "Name-Realm", ... }: our own rotation orders (P39)
     alerts      = {},      -- [spellID] = { sound = <SoundKit ID, file or true>, flash = true, midscreen = false, warn = 0 } (P1)
+    setupFrom   = "officers", -- officer setups taken from: "officers" (guild master and officers), "any", "nobody"
     guildSync   = false,   -- also share over the guild channel; the panel gets a Guild tab (P41)
 
     -- settings lane (19 Nov): the new windows' own locks, presets, when the windows show, lighter mode

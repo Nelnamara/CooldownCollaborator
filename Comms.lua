@@ -590,6 +590,7 @@ end
 
 -- P and O: parts of one id are kept 30 s; the whole text is stored once every part is in
 -- (CC.payloads[kind][sender][id]). Rotation orders (rot-<spellID>) are read by UI.lua.
+local MAX_PAYLOADS = 10  -- finished P or O payloads kept per sender
 local chunks = {}  -- kind \t sender \t id -> { total, got, list, at }
 local function OnChunk(self, kind, owner, body)
     local id, partStr, data = strsplit(":", body, 3)
@@ -613,6 +614,18 @@ local function OnChunk(self, kind, owner, body)
     local byOwner = self.payloads[kind][owner] or {}
     self.payloads[kind][owner] = byOwner
     byOwner[id] = { data = table.concat(c.list), at = now }
+    -- only the newest few finished payloads of a sender are kept
+    local count = 0
+    for _ in pairs(byOwner) do count = count + 1 end
+    while count > MAX_PAYLOADS do
+        local oldestID
+        for pid, p in pairs(byOwner) do
+            if pid ~= id and (not oldestID or p.at < byOwner[oldestID].at) then oldestID = pid end
+        end
+        if not oldestID then break end
+        byOwner[oldestID] = nil
+        count = count - 1
+    end
     if kind == "O" and self.OnOfficerSetup then self:OnOfficerSetup(owner, id) end
     -- a rotation order (P:2:rot-<spellID>, UI.lua) shows at once
     if kind == "P" and id:match("^rot%-%d+$") and self.ReadSharedRotations then
@@ -645,7 +658,8 @@ function CC:OnAddonMessage(prefix, message, channel, sender)
         if prefix == self.PREFIX then
             local kind, rest = message:match("^(%u):2:(.*)$")
             if kind == "O" then
-                OnChunk(self, "O", owner, rest)
+                -- officer setups are read only with guild sharing on, from the ranks the player allows
+                if self:GuildSyncOn() and self:AcceptsSetupsFrom(owner) then OnChunk(self, "O", owner, rest) end
             elseif self:GuildSyncOn() then
                 self:OnGuildMessage(owner, message)
             end

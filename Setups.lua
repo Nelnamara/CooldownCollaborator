@@ -456,8 +456,15 @@ function CC:OnOfficerSetup(owner, id)
     local payload = self.payloads and self.payloads.O and self.payloads.O[owner] and self.payloads.O[owner][id]
     if not payload then return end
     if self.db.setupNever and self.db.setupNever[owner] then return end
+    if not (self:GuildSyncOn() and self:AcceptsSetupsFrom(owner)) then return end
+    -- one dialog at a time, and one per sender per 10 minutes: what was read is what Accept applies
+    if self.pendingSetup then return end
+    self.setupShownAt = self.setupShownAt or {}
+    local last = self.setupShownAt[owner]
+    if last and GetTime() - last < 600 then return end
     local setup = self:DecodeSetup(payload.data)
     if not setup then return end
+    self.setupShownAt[owner] = GetTime()
     self.pendingSetup = { owner = owner, setup = setup, id = id }
     self:ShowSetupDialog()
 end
@@ -474,6 +481,29 @@ function CC:GuildRankOf(fullName)
         end
     end)
     return ok and rank or nil
+end
+
+-- The guild rank index (0 = guild master) of a guildmate, from the guild roster, or nil.
+function CC:GuildRankIndexOf(fullName)
+    if not (GetNumGuildMembers and GetGuildRosterInfo) then return nil end
+    local short = self:ShortName(fullName)
+    local ok, index = pcall(function()
+        for i = 1, GetNumGuildMembers() do
+            local name, _, rankIndex = GetGuildRosterInfo(i)
+            if name and (name == fullName or self:ShortName(name) == short) then return rankIndex end
+        end
+    end)
+    return ok and index or nil
+end
+
+-- May a setup from this guildmate reach the dialog? Per the "Accept setups from" setting: the guild
+-- master and the next rank (rank index 0 or 1) by default, any rank, or nobody.
+function CC:AcceptsSetupsFrom(owner)
+    local mode = self.db.setupFrom or "officers"
+    if mode == "nobody" then return false end
+    if mode == "any" then return true end
+    local index = self:GuildRankIndexOf(owner)
+    return index == 0 or index == 1
 end
 
 function CC:ShowSetupDialog()

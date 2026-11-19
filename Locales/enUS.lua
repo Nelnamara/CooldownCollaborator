@@ -278,6 +278,10 @@ L["Your cooldowns and your group's show as icons with a countdown on CooldownTim
 L["Show group cooldowns on CooldownTimeline3's lanes"] = true
 L["Share with my guild (adds a Guild tab to the panel)"] = true
 L["Your cooldowns and who runs the addon go out on the guild channel, and the panel gets a Guild tab. Off by default."] = true
+L["Accept setups from:"] = true
+L["Guild master and officers"] = true
+L["Any rank"] = true
+L["Nobody"] = true
 L["Panel style:"] = true
 L["Text rows"] = true
 L["Icon row"] = true

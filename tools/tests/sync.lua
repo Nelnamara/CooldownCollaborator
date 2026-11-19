@@ -588,7 +588,11 @@ local whole = A.CC.payloads.P[full("Bram")]
 check("P: parts are kept until all are in, then the whole text is stored",
 	partial == nil and whole ~= nil and whole.plan1 ~= nil and whole.plan1.data == "abcdef")
 Inject("O:2:set1:1/1:xyz", "PARTY", "Bram", A)
+A.STUB_IN_GUILD = true
+A.CC.db.guildSync, A.CC.db.setupFrom = true, "any"   -- O is read only with guild sharing on
 Inject("O:2:set1:1/1:xyz", "GUILD", "Guildie", A)
+A.CC.db.guildSync, A.CC.db.setupFrom = false, "officers"
+A.STUB_IN_GUILD = false
 Inject("P:2:p2:1/1:zzz", "GUILD", "Guildie", A)
 check("O: only from the guild channel, and P never from it",
 	A.CC.payloads.O[full("Bram")] == nil and A.CC.payloads.O[full("Guildie")] ~= nil

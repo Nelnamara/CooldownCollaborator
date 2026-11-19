@@ -1086,6 +1086,14 @@ function CC:OpenOptions()
         L["Your cooldowns and who runs the addon go out on the guild channel, and the panel gets a Guild tab. Off by default."])
     y = y - 30
 
+    NewHeader(d, y, L["Accept setups from:"]); y = y - 24
+    NewChoice(d, 4, y, {
+        { label = L["Guild master and officers"], value = "officers" },
+        { label = L["Any rank"], value = "any" },
+        { label = L["Nobody"], value = "nobody" },
+    }, 150, function() return CC.db.setupFrom or "officers" end, function(v) CC.db.setupFrom = v end)
+    y = y - 30
+
     local lbl = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lbl:SetPoint("TOPLEFT", d, "TOPLEFT", 4, y - 4)
     lbl:SetText(L["Panel style:"])
