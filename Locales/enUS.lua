@@ -92,7 +92,7 @@ L["Kept from before your /reload; nobody has said since."] = true
 L["Doesn't run CooldownCollaborator and hasn't been seen casting."] = true
 L["Runs an old 1.x copy; the current version is %s."] = true
 L["Runs %s; the current version is %s."] = true
-L["Old copies can undo ready-now messages."] = true
+L["An older copy shares less, so what shows here can be out of date."] = true
 
 -- Alerts.lua
 L["%s in %ds"] = true

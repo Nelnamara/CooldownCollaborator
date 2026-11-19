@@ -489,11 +489,15 @@ end
 -- syncs and roster changes until /cdc or the minimap opens it again.
 function CC:ClosePanel()
     self.db.panelClosed = true
+    self.panelForced = nil
     if self.frame then self.frame:Hide() end
 end
 
 function CC:OpenPanel()
     self.db.panelClosed = false
+    -- the player's own action wins over "only in combat" and "only on boss fights" until the
+    -- next combat or boss change (CooldownCollaborator.lua clears it)
+    self.panelForced = true
     if not self.frame then return end
     self.frame:Show()
     self:RefreshRows()
@@ -1053,6 +1057,8 @@ local function ShowCooldownRow(line, row, look, width)
         line.timeText:SetTextColor(GREY[1], GREY[2], GREY[3])
     elseif row.remaining > 0 then
         local t = TimeColor(row.remaining)
+        -- a spell the plan will call for before it is back: red whatever the time left
+        if CC.PlannedSpellLate and CC:PlannedSpellLate(row.name, row.spellID) then t = RED end
         line.timeText:SetText(CC:FormatTime(row.remaining))
         line.timeText:SetTextColor(t[1], t[2], t[3])
         StartEffect(line, row)
@@ -1390,6 +1396,14 @@ end
 
 function CC:RefreshRows()
     if not self.frame then return end
+    -- a window that is hidden and stays hidden isn't rebuilt
+    if IsInGroup() then
+        if not (self:WindowsWanted() or self.panelForced) then
+            self.frame:Hide()
+            return
+        end
+        if self.db.panelClosed and not self.frame:IsShown() then return end
+    end
     self.runsText:SetText(self:RunsCountText())
     self.lustText:SetText(self:NextLustText())
 
@@ -1423,7 +1437,7 @@ function CC:RefreshRows()
     -- In a group it opens by itself, unless the player closed it (R19); with "only in combat" or
     -- "only on boss fights" it shows and hides with them (P30)
     if IsInGroup() then
-        if not self:WindowsWanted() then
+        if not (self:WindowsWanted() or self.panelForced) then
             self.frame:Hide()
         elseif not self.db.panelClosed then
             self.frame:Show()

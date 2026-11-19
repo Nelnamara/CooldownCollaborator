@@ -334,6 +334,83 @@ do
 	check("  and likewise 10 O payloads", nO == 10, nO)
 end
 
+---------------------------------------------------------------- F9, F11, F12, F13, F15: rez call, hidden windows, panel, plan, team editor
+do
+	local function Group(names)
+		local g = {}
+		for i, n in ipairs(names) do
+			g[#g + 1] = { unit = "party" .. i, name = n[1], realm = "Realm", class = n[2], guid = "Player-1-" .. (80 + i) }
+		end
+		return g
+	end
+	local c = Fresh(function(env)
+		env.PLAYER.class = "PRIEST"
+		env.UnitAffectingCombat = function() return false end
+		env.GROUP = Group({ { "Dru", "DRUID" }, { "Zdk", "DEATHKNIGHT" } })
+	end)
+	c.Login()
+	c.FireEvent("GROUP_ROSTER_UPDATE")
+	c.Advance(5)
+	local CCm = c.CC
+	-- F9: Zdk says hello (and so is confirmed), Dru runs no copy (a guess) and sorts first by name
+	if c.RETAILAPI and CCm.SpellData[61999] then
+		From(c, "H:2:1.2.0:retail", "PARTY", "Zdk")
+		local pick = CCm:BestRezzer("Someone-Realm")
+		check("F9: the rez call names a confirmed ready rezzer over a guessed one", pick and pick.name == "Zdk-Realm", pick and pick.name)
+	end
+	-- F13: a late planned spell turns the panel row's time red
+	From(c, "H:2:1.2.0:retail", "PARTY", "Dru")
+	CCm:RecordCooldownFromComm("Dru-Realm", 20484, c.GetTime() - (CCm.SpellData[20484].duration - 20), "DRUID")   -- 20 s left
+	CCm.PlannedSpellLate = function() return true end
+	CCm:RefreshRows()
+	local red = false
+	for _, row in ipairs(CCm.rows or {}) do
+		if row.__shown and row.timeText and row.timeText.__textColor and row.timeText.__textColor[1] == 1
+			and row.timeText.__textColor[2] == 0.30 then red = true end
+	end
+	check("F13: the panel row of a planned spell that won't be back in time is red", red)
+	CCm.PlannedSpellLate = nil
+	-- F12 and F11
+	CCm.db.showWindows = "combat"
+	CCm:RefreshAllViews()
+	check("F12: out of combat with 'only in combat', the panel is hidden", not CCm.frame:IsShown())
+	CCm:TogglePanel()
+	check("  /cdc or the minimap click shows it anyway", CCm.frame:IsShown())
+	c.FireEvent("PLAYER_REGEN_DISABLED")
+	c.FireEvent("PLAYER_REGEN_ENABLED")
+	check("  until the next combat change", not CCm.frame:IsShown())
+	local built = 0
+	local keepModel, keepData = CCm.EssentialsModel, CCm.BuildPanelData
+	CCm.EssentialsModel = function(...) built = built + 1 return keepModel(...) end
+	CCm.BuildPanelData = function(...) built = built + 1 return keepData(...) end
+	CCm:RefreshAllViews()
+	check("F11: windows that stay hidden aren't rebuilt", built == 0, built)
+	CCm.EssentialsModel, CCm.BuildPanelData = keepModel, keepData
+	CCm.db.showWindows = "always"
+	-- F15: the team editor's ticks follow the group on every open, and scroll past 20
+	local solo = Fresh(function(env) env.PLAYER.class = "PRIEST" end)
+	solo.Login()
+	solo.CC:OpenOptions()
+	local names = {}
+	for i = 1, 30 do names[i] = { "Mem" .. string.format("%02d", i), "WARRIOR" } end
+	solo.GROUP = Group(names)
+	solo.FireEvent("GROUP_ROSTER_UPDATE")
+	solo.CC.optionsFrame:Hide()
+	solo.CC.optionsFrame:Show()
+	local fn = solo.CC.optionsFrame:GetScript("OnShow")
+	if fn then fn(solo.CC.optionsFrame) end
+	local labels = {}
+	for _, cb in ipairs(solo.CC.teamTicks) do if cb:IsShown() then labels[#labels + 1] = cb.label.__text end end
+	check("F15: the ticks fill from the group when the window opens, not only when it was built", #labels == 20, #labels)
+	local wheel = solo.CC.teamTickHolder:GetScript("OnMouseWheel")
+	wheel(solo.CC.teamTickHolder, -1)
+	wheel(solo.CC.teamTickHolder, -1)
+	wheel(solo.CC.teamTickHolder, -1)
+	local last
+	for _, cb in ipairs(solo.CC.teamTicks) do if cb:IsShown() then last = cb.label.__text end end
+	check("  and the list scrolls to the last of 31 names", last ~= nil and #labels == 20, last)
+end
+
 ---------------------------------------------------------------- the whole run
 check("no Lua errors in any copy", Errors() == 0, FirstError())
 OUTPUT(string.format("RESULT final %s %s: checks %d, fails %d, lua errors %d",

@@ -685,19 +685,22 @@ end
 -- not the target, and not dead, a ghost or disconnected (R6). nil: nobody.
 function CC:BestRezzer(targetName)
     -- rezzers marked "never" are passed over; "last" ones only when nobody else is ready (P40)
+    -- a rezzer confirmed ready beats one only guessed ready (no hello, never seen casting)
     local skip = self.db and self.db.rezSkip or {}
-    local lastChoice
+    local lastChoice, guessedChoice, guessedLast
     for _, entry in ipairs(self:GetCapabilityStatus("BATTLEREZ")) do
         if entry.ready and entry.name ~= targetName and entry.online ~= false and entry.alive ~= false then
             local mode = skip[entry.name] or skip[self:ShortName(entry.name)]
+            local guessed = self.retailAPI and entry.guessed
             if mode == "last" then
-                lastChoice = lastChoice or entry
+                if guessed then guessedLast = guessedLast or entry else lastChoice = lastChoice or entry end
             elseif mode ~= "never" then
-                return entry
+                if not guessed then return entry end
+                guessedChoice = guessedChoice or entry
             end
         end
     end
-    return lastChoice
+    return guessedChoice or lastChoice or guessedLast
 end
 
 function CC:RequestRez()
@@ -1102,12 +1105,15 @@ ef:SetScript("OnEvent", function(self, event, ...)
         CC:OnUnitLevel(...)
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
         CC.inCombat = event == "PLAYER_REGEN_DISABLED"
+        CC.panelForced = nil   -- a combat change ends a panel opened by hand under "only in combat"
         if CC.db and CC.db.showWindows == "combat" then CC:RefreshAllViews() end
     elseif event == "ENCOUNTER_START" then
         CC.inEncounter = true
+        CC.panelForced = nil
         if CC.db and CC.db.showWindows == "boss" then CC:RefreshAllViews() end
     elseif event == "ENCOUNTER_END" then
         CC.inEncounter = false
+        CC.panelForced = nil
         if CC.db and CC.db.showWindows == "boss" then CC:RefreshAllViews() end
         -- a second, then a random 0 to 2 s more, so a raid doesn't all send at once
         C_Timer.After(1 + math.random() * 2, function() CC:BroadcastState() end)

@@ -887,6 +887,7 @@ function CC:OpenOptions()
             tabs[i]:SetEnabled(i ~= index)
         end
         f.page = index
+        if index == 5 and CC.RefreshTeamTicks then CC:RefreshTeamTicks() end
         if index == 1 and CC.startPage then CC.startPage.refresh() end
     end
     for i, name in ipairs(tabNames) do
@@ -1058,6 +1059,7 @@ function CC:OpenOptions()
     -- /cdc lock and /cdc unlock may have changed it while this window was closed
     f:SetScript("OnShow", function()
         cbLock:SetChecked(CC:AreWindowsLocked())
+        if CC.RefreshTeamTicks then CC:RefreshTeamTicks() end   -- who is in the group now
         if f.page == 1 then startPage.refresh() end
     end)
     y = y - 26
@@ -1633,6 +1635,12 @@ function CC:OpenOptions()
     teamTyped:SetMaxLetters(400)
     y = y - 24
     local teamTicks = {}
+    local teamTicked = {}   -- name -> true, kept while the list scrolls
+    local tickRow = 0       -- rows scrolled past (two names a row)
+    local tickHolder = CreateFrame("Frame", nil, pl)
+    tickHolder:SetPoint("TOPLEFT", pl, "TOPLEFT", 0, y)
+    tickHolder:SetSize(480, 200)
+    CC.teamTicks, CC.teamTickHolder = teamTicks, tickHolder   -- (the tests look at them)
     for i = 1, 20 do
         local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
         local cb = CreateFrame("CheckButton", nil, pl, "UICheckButtonTemplate")
@@ -1640,21 +1648,35 @@ function CC:OpenOptions()
         cb:SetPoint("TOPLEFT", pl, "TOPLEFT", 4 + col * 240, y - rowN * 20)
         cb.label = pl:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         cb.label:SetPoint("LEFT", cb, "RIGHT", 0, 0)
+        cb:SetScript("OnClick", function(widget) if widget.who then teamTicked[widget.who] = widget:GetChecked() and true or nil end end)
         teamTicks[i] = cb
     end
+    -- the group's names (every one, scrolled with the mouse wheel past the first 20)
     function CC:RefreshTeamTicks()
         local names = {}
         for name in pairs(self:GetActiveGroupNames()) do names[#names + 1] = name end
         table.sort(names)
+        for name in pairs(teamTicked) do
+            local here = false
+            for _, n in ipairs(names) do if n == name then here = true end end
+            if not here then teamTicked[name] = nil end
+        end
+        local maxRow = math.max(0, math.ceil(#names / 2) - 10)
+        tickHolder:EnableMouseWheel(maxRow > 0)
+        if tickRow > maxRow then tickRow = maxRow end
         for i, cb in ipairs(teamTicks) do
-            local name = names[i]
+            local name = names[tickRow * 2 + i]
             cb.who = name
             cb:SetShown(name ~= nil)
             cb.label:SetShown(name ~= nil)
             cb.label:SetText(name and self:ShortName(name) or "")
-            cb:SetChecked(false)
+            cb:SetChecked(name ~= nil and teamTicked[name] == true)
         end
     end
+    tickHolder:SetScript("OnMouseWheel", function(_, delta)
+        tickRow = math.max(0, tickRow - delta)
+        CC:RefreshTeamTicks()
+    end)
     CC:RefreshTeamTicks()
     y = y - 200
     local teamList = pl:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -1667,9 +1689,8 @@ function CC:OpenOptions()
     end
     NewButton(pl, 4, y, 80, L["Save team"], function()
         local members = NameList(teamTyped:GetText())
-        for _, cb in ipairs(teamTicks) do
-            if cb:IsShown() and cb:GetChecked() and cb.who then members[#members + 1] = CC:ShortName(cb.who) end
-        end
+        for name in pairs(teamTicked) do members[#members + 1] = CC:ShortName(name) end
+        table.sort(members)
         CC:SaveTeam(teamName:GetText(), members); SayTeams()
     end)
     NewButton(pl, 88, y, 80, L["Load team"], function()
