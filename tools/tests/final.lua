@@ -181,6 +181,64 @@ do
 	check("F4: and lapses after 10 minutes without a refresh", c.CC:NoRezChargesText() == nil and c.CC.rezCharges == nil)
 end
 
+---------------------------------------------------------------- F5: orders reach later joiners; F6: typed names keep what was typed
+do
+	local c = Fresh(function(env)
+		env.PLAYER.class = "PRIEST"
+		env.UnitAffectingCombat = function() return false end
+		env.UnitIsGroupLeader = function(u) return u == "player" end
+	end)
+	c.Login()
+	c.Advance(2)
+	c.CC:SaveRotationFromText("Rebirth", "Dru, Tester")
+	c.CC.db.plans.Raid = { rows = { { timer = nil, at = 90, player = "Dru", spellID = 20484 } }, at = 1 }
+	c.CC.db.activePlan = "Raid"
+	local before = #c.SENT
+	c.GROUP = { { unit = "party1", name = "Dru", realm = "Realm", class = "DRUID", guid = "Player-1-71" } }
+	c.FireEvent("GROUP_ROSTER_UPDATE")
+	c.Advance(8)
+	local function sentP(from)
+		local rot, plan = false, false
+		for i = from + 1, #c.SENT do
+			local m = c.SENT[i]
+			if not m.refused then
+				if m.msg:match("^P:2:rot%-") then rot = true end
+				if m.msg:match("^P:2:") and not m.msg:match("^P:2:rot%-") then plan = true end
+			end
+		end
+		return rot, plan
+	end
+	local rot, plan = sentP(before)
+	check("F5: orders and the active plan set while solo go out when the leader joins a group", rot and plan)
+	local mark = #c.SENT
+	c.Advance(30)
+	From(c, "Q:2", "PARTY", "Dru")
+	c.Advance(15)
+	rot, plan = sentP(mark)
+	check("  and again in answer to a state request", rot and plan)
+
+	-- F6
+	local d = Fresh(function(env)
+		env.PLAYER.class = "PRIEST"
+		env.GROUP = {
+			{ unit = "party1", name = "Bob", realm = "Other", class = "DRUID", guid = "Player-2-31" },
+			{ unit = "party2", name = "Dru", realm = "Realm", class = "DRUID", guid = "Player-1-32" },
+		}
+	end)
+	d.Login()
+	d.FireEvent("GROUP_ROSTER_UPDATE")
+	d.Advance(5)
+	d.CC:SaveRotationFromText("Rebirth", "Bob, Dru, Tester-Elsewhere")
+	local saved = d.CC.db.rotations[20484] or {}
+	check("F6: names typed in the rotation editor are kept as typed, no realm added",
+		saved[1] == "Bob" and saved[2] == "Dru" and saved[3] == "Tester-Elsewhere", table.concat(saved, ","))
+	local rows = {}
+	for _, r in ipairs(d.CC:BuildPanelData().rotation) do rows[#rows + 1] = d.CC:ShortName(r.name) end
+	check("  a groupmate from another realm still gets their place", table.concat(rows, ",") == "Bob,Dru", table.concat(rows, ","))
+	local planRows = d.CC:PlanRowsFromInput({ { trigger = "1:30", player = "Bob", spell = "Rebirth" } })
+	check("  plan rows keep the typed name too", planRows[1] and planRows[1].player == "Bob")
+end
+
 ---------------------------------------------------------------- the whole run
 check("no Lua errors in any copy", Errors() == 0, FirstError())
 OUTPUT(string.format("RESULT final %s %s: checks %d, fails %d, lua errors %d",

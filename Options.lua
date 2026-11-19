@@ -683,7 +683,7 @@ function CC:PlanRowsFromInput(inputs)
         local sid = self:ResolveTracked(r.spell)
         local player = Trim(r.player)
         if (timer or at) and sid and player ~= "" then
-            rows[#rows + 1] = { timer = timer, at = at, player = self:NormalizeSender(player), spellID = sid }
+            rows[#rows + 1] = { timer = timer, at = at, player = player, spellID = sid }
         elseif Trim(r.trigger) ~= "" or player ~= "" or Trim(r.spell) ~= "" then
             skipped = skipped + 1
         end
@@ -726,7 +726,7 @@ function CC:SaveRotationFromText(spellText, namesText)
     local sid = self:ResolveTracked(spellText)
     if not sid then return false end
     local names = {}
-    for _, n in ipairs(NameList(namesText)) do names[#names + 1] = self:NormalizeSender(n) end
+    for _, n in ipairs(NameList(namesText)) do names[#names + 1] = n end   -- bare names match a member at use time
     self:SetRotation(sid, names)
     return true, sid
 end
