@@ -125,9 +125,7 @@ local function UnitMark(unit)
     return nil
 end
 
-function CC:OwnerState(name)
-    return UnitMark(self:UnitTokenFor(name))
-end
+CC.UnitMark = UnitMark   -- Roster.lua's OwnerState reads a name's state through it
 
 -------------------------------------------------------------------------------
 -- Teams (P43) and tabs

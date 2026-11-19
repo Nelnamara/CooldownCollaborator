@@ -353,6 +353,18 @@ end
 --             copy (no hello), and no cast of theirs was seen (message or combat log)
 --   noCharges = Battle Rez only: the raid's charge pool is known and empty, so
 --             nobody can be brought back (a placed Soulstone included) until it refills
+-- An owner's state for the marks and the tooltip: "offline", "dead", or nil (as far as we know,
+-- there). Takes a status entry (its online / alive) or an owner's name (read from the unit).
+function CC:OwnerState(who)
+    if type(who) == "table" then
+        if who.online == false then return "offline" end
+        if who.alive == false then return "dead" end
+        return nil
+    end
+    local mark = CC.UnitMark(self:UnitTokenFor(who))
+    return mark and mark:lower() or nil
+end
+
 function CC:GetCapabilityStatus(capKey)
     local results = {}
     if not self.roster then return results end

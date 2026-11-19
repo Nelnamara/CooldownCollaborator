@@ -66,9 +66,9 @@ function CC:CooldownTooltipLines(ownerName, spellID)
     local remaining = self:GetRemaining(ownerName, spellID) or 0
     local state = self:OwnerState(ownerName)
     local guessed = remaining <= 0 and self:IsGuessedReady(ownerName, spellID)
-    if state == "DEAD" then
+    if state == "dead" then
         add(short .. " \194\183 dead", GREY)
-    elseif state == "OFFLINE" then
+    elseif state == "offline" then
         add(short .. " \194\183 offline", GREY)
     elseif remaining > 0 then
         add(short .. " \194\183 back in " .. self:FormatTime(remaining), GREY)

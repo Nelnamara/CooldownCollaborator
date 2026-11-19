@@ -214,13 +214,6 @@ function CC:SetRingIcon(w, look)
     w:Show()
 end
 
--- An owner's state for the marks: "offline", "dead", or nil (as far as we know, there).
-function CC:OwnerState(entry)
-    if entry.online == false then return "offline" end
-    if entry.alive == false then return "dead" end
-    return nil
-end
-
 -------------------------------------------------------------------------------
 -- The next big hit (P25): a typed time (/cdc nexthit) or a pull countdown (the
 -- game's, BigWigs' or DBM's: Plan.lua hears them). CC.nextHit = { at, from }.
