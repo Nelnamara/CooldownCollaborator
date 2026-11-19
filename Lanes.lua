@@ -469,6 +469,11 @@ function CC:RefreshLanes()
         return
     end
 
+    if IsInGroup() and not self:WindowsWanted() then
+        self.laneFrame:Hide()
+        return
+    end
+
     local hitIn = self:NextHitIn()
     self.laneFrame.title:SetText("|cFF54a3ff" .. L["Lanes"] .. "|r"
         .. (hitIn and ("  |cFFFFD100" .. string.format(L["next hit %s"], self:LookClock(math.ceil(hitIn))) .. "|r") or ""))

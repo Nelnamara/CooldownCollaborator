@@ -78,8 +78,9 @@ end
 
 -- Who is dead now, kept with when we first saw it. A death seen while the group
 -- is fighting opens the window (CC.deathInCombat, read by its refresh).
-function CC:ScanDeaths()
-    local now, here, members = GetTime(), {}, Members()
+function CC:ScanDeaths(members)
+    local now, here = GetTime(), {}
+    members = members or Members()
     local fighting
     for _, m in ipairs(members) do
         here[m.name] = true
@@ -101,9 +102,10 @@ end
 -- The dead in the leader's order: healers, tanks, damage, then anyone without a
 -- role; the longest dead first. { name, unit, class, role, diedAt }
 function CC:DeadList()
-    self:ScanDeaths()
+    local members = Members()   -- one pass over the group serves the scan and the list
+    self:ScanDeaths(members)
     local list = {}
-    for _, m in ipairs(Members()) do
+    for _, m in ipairs(members) do
         local diedAt = self.deaths[m.name]
         if diedAt then
             local _, class = UnitClass(m.unit)
@@ -195,7 +197,17 @@ function CC:BuildDeadList()
     f.foot = foot
 
     self.deadFrame = f
-    C_Timer.NewTicker(0.5, function() CC:RefreshView("RefreshDeadList") end)
+    -- Every half second while the window shows or someone is dead; hidden with nobody dead, a look
+    -- every 2 seconds is enough to notice the next death.
+    local idle = 0
+    C_Timer.NewTicker(0.5, function()
+        if not (f:IsShown() or next(CC.deaths) or CC.deadOpen or CC.deathInCombat) then
+            idle = idle + 1
+            if idle < 4 then return end
+        end
+        idle = 0
+        CC:RefreshView("RefreshDeadList")
+    end)
 end
 
 -- Who would answer a call for the top of the list, as the foot line says it.

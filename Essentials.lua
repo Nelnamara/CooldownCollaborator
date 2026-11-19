@@ -1308,6 +1308,12 @@ function CC:RefreshEssentials()
         return
     end
 
+    -- hidden and staying hidden (a group, windows not wanted now): no rebuild
+    if IsInGroup() and not self:WindowsWanted() then
+        self.essentialsFrame:Hide()
+        return
+    end
+
     local model = self:EssentialsModel()
     local used, shown = {}, {}
     self.essentialsRezBtn:Hide()
