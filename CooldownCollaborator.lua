@@ -1011,9 +1011,16 @@ end
 -- The pool as last read or heard, counted on to now: a recharge that has come
 -- due adds its charge (the one after it is then unknown). Returns charges, max,
 -- nextAt (nil: unknown), or nothing when no pool is known.
+CC.REZ_POOL_KEEP = 600
+
 function CC:RezPool()
     local pool = self.rezCharges
     if not pool then return nil end
+    -- a pool heard from someone else lapses after 10 minutes without a refresh
+    if pool.from ~= self:FullName("player") and GetTime() - (pool.heardAt or 0) > CC.REZ_POOL_KEEP then
+        self.rezCharges = nil
+        return nil
+    end
     local charges, nextAt = pool.charges, pool.nextAt
     if nextAt and GetTime() >= nextAt and charges < pool.max then
         charges, nextAt = charges + 1, nil

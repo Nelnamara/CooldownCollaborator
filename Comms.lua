@@ -552,19 +552,22 @@ local function OnState(self, owner, body)
     if changed then self:RefreshAllViews() end
 end
 
--- C: the raid's battle rez charge pool, from whoever can read it.
+-- C: the raid's battle rez charge pool, from a group member who is a Battle Rez provider
+-- (only their class can read it). The newest word wins; values are clamped to what a pool
+-- can hold; RezPool lets it lapse (at its own time to the next charge, or 10 minutes unrefreshed).
 local function OnCharges(self, owner, body)
+    local info = self.roster and self.roster[owner]
+    if not (info and info.capabilities and info.capabilities.BATTLEREZ) then return end
     local chargesField, maxField, nextField = strsplit(":", body, 3)
     local charges, max, toNext = tonumber(chargesField), tonumber(maxField), tonumber(nextField)
-    if not charges or not max or not toNext then return end
+    if not charges or not max or not toNext or charges ~= charges or max ~= max or toNext ~= toNext then return end
     if max == 0 then
         self.rezCharges = nil
         return
     end
-    if max < 1 or max > 20 or charges < 0 or charges > max or toNext < 0 or toNext > 3600
-        or charges ~= math.floor(charges) or max ~= math.floor(max) then
-        return
-    end
+    max = math.max(1, math.min(5, math.floor(max)))
+    charges = math.max(0, math.min(max, math.floor(charges)))
+    toNext = math.max(0, math.min(1800, toNext))
     local now = GetTime()
     self.rezCharges = { charges = charges, max = max, nextAt = toNext > 0 and now + toNext or nil,
         from = owner, heardAt = now }
