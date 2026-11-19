@@ -156,8 +156,7 @@ end
 
 -- The game's named sound constants, with the plain number where a client lacks the name.
 local function Sound(name, number)
-    local kit = _G.SOUNDKIT
-    return type(kit) == "table" and kit[name] or number
+    return SOUNDKIT and SOUNDKIT[name] or number
 end
 CC.ALERT_SOUNDS = {
     { id = Sound("RAID_WARNING", 8959),             label = "Raid warning" },
