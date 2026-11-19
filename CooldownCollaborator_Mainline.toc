@@ -21,6 +21,7 @@ UI.lua
 Roster.lua
 Essentials.lua
 Lanes.lua
+DeadList.lua
 Consumables.lua
 Minimap.lua
 Options.lua

@@ -155,6 +155,27 @@ local DEFAULTS = {
     laneLocked  = false,
 
     showOnCDTL3 = true,   -- feed group cooldowns to CDTL3's lanes (if CDTL3 is loaded)
+
+    -- look-lanes (19 Nov): the dead list (DeadList.lua), the externals and mana strips
+    -- (Strips.lua), the burst line (Burst.lua) and the raid plan's runtime (Plan.lua)
+    deadListEnabled  = true,   -- opens when someone dies in combat, closes when nobody is dead
+    deadListX        = -300,
+    deadListY        = 60,
+    externalsEnabled = false,
+    externalsX       = -300,
+    externalsY       = -60,
+    manaEnabled      = false,
+    manaX            = -300,
+    manaY            = -170,
+    burstEnabled     = false,
+    burstX           = 330,
+    burstY           = -60,
+    burstSpells      = {},     -- [spellID] = true: your counted spells (empty: kind personal or raid, 90 s or more)
+    plans            = {},     -- [planName] = { rows = { { timer = text or at = seconds, player, spellID } }, from, at }
+    activePlan       = false,  -- the plan whose rows prompt (a plan shared by the leader becomes it)
+    planLead         = 5,      -- seconds the prompt bar shows before a planned use
+    planBarX         = 0,
+    planBarY         = 160,
 }
 
 function CC:Init()
@@ -590,17 +611,15 @@ local function SendChat(msg, chatType)
     if send then send(msg, chatType) end
 end
 
--- Raid lead / assist only: target a dead player and announce who should
--- rez them, naming the specific provider whose Battle Rez is ready right
--- now rather than a generic "someone rez" callout.
+-- Announce who should rez a dead player, naming the specific provider whose
+-- Battle Rez is ready right now rather than a generic "someone rez" callout.
+-- In a raid the leader or an assist may ask; in a 5-player group anyone may (P3).
 -- (IsRaidLeader / IsRaidOfficer are gone on every client; these two are on all five.)
 function CC:CanRequestRez()
     if IsInRaid() then
         return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
-    elseif IsInGroup() then
-        return UnitIsGroupLeader("player")
     end
-    return false
+    return IsInGroup()
 end
 
 -- The target's full name, or nil when it can't be read: on Retail and Forever a hidden name must
@@ -611,9 +630,37 @@ local function TargetName()
     return nil
 end
 
+-- In raids and Mythic+ every combat rez (Soulstone too on Retail and MoP) uses one
+-- charge pool: with none left nobody can be brought back. The line saying so, or
+-- nil while a charge is there (or no pool is known).
+function CC:NoRezChargesText()
+    local charges, _, nextAt = self:RezPool()
+    if charges ~= 0 then return nil end
+    local wait = nextAt and math.max(0, nextAt - GetTime())
+    return "No Battle Rez charges" .. (wait and string.format("; next in %d:%02d",
+        math.floor(wait / 60), math.floor(wait % 60)) or ".")
+end
+
+-- The rezzer who would answer a call for targetName: the first ready one who is
+-- not the target, and not dead, a ghost or disconnected (R6). nil: nobody.
+function CC:BestRezzer(targetName)
+    for _, entry in ipairs(self:GetCapabilityStatus("BATTLEREZ")) do
+        if entry.ready and entry.name ~= targetName and entry.online ~= false and entry.alive ~= false then
+            return entry
+        end
+    end
+    return nil
+end
+
 function CC:RequestRez()
     if not self:CanRequestRez() then
-        print("|cFF54a3ffCDC|r Only the raid leader/assist (or party leader) can request a rez.")
+        print("|cFF54a3ffCDC|r Only the raid leader or an assist can request a rez in a raid.")
+        return
+    end
+    -- Nobody targeted: the top of the dead list (DeadList.lua), if anyone is dead.
+    local top = not UnitExists("target") and self.DeadList and self:DeadList()[1]
+    if top then
+        self:CallRez(top.name)
         return
     end
     -- Only a dead, friendly player may be named; a friendly player outside the group is fine
@@ -629,26 +676,22 @@ function CC:RequestRez()
         print("|cFF54a3ffCDC|r Can't read that target's name. Target a dead friendly player first.")
         return
     end
-    -- In raids and Mythic+ every combat rez (Soulstone too on Retail and MoP) uses one
-    -- charge pool: with none left nobody can be brought back.
-    local charges, _, nextAt = self:RezPool()
-    if charges == 0 then
-        local wait = nextAt and math.max(0, nextAt - GetTime())
-        print("|cFF54a3ffCDC|r No Battle Rez charges" .. (wait and string.format("; next in %d:%02d",
-            math.floor(wait / 60), math.floor(wait % 60)) or "."))
+    self:CallRez(targetName)
+end
+
+-- Name the rezzer for a dead player (the target, or a dead list row) on the
+-- channel that reaches the whole group.
+function CC:CallRez(targetName)
+    if not self:CanRequestRez() then
+        print("|cFF54a3ffCDC|r Only the raid leader or an assist can request a rez in a raid.")
         return
     end
-    local status = CC:GetCapabilityStatus("BATTLEREZ")
-    local provider = nil
-    for _, entry in ipairs(status) do
-        -- A dead or offline player can't rez anyone: skip the target, and anyone
-        -- else who is dead, a ghost or disconnected (R6).
-        if entry.ready and entry.name ~= targetName and entry.online ~= false and entry.alive ~= false then
-            provider = entry
-            break
-        end
+    local noCharges = self:NoRezChargesText()
+    if noCharges then
+        print("|cFF54a3ffCDC|r " .. noCharges)
+        return
     end
-
+    local provider = self:BestRezzer(targetName)
     if not provider then
         print("|cFF54a3ffCDC|r No living Battle Rez provider available right now.")
         return
