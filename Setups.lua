@@ -789,7 +789,6 @@ end
 -- { { name, class, online, alive, spells = { { spellID, name, ready, remaining }, ... } }, ... }
 function API.GetGroup()
     local out = {}
-    local me = CC:FullName("player")
     for name in pairs(CC:GetActiveGroupNames()) do
         local info = CC.roster and CC.roster[name]
         if info then
