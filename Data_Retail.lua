@@ -51,10 +51,6 @@ CC.SpellData = {
     [80353]  = { name = "Time Warp",                 duration = 300, icon = 458224,  class = "MAGE",        level = 49 },
     [45438]  = { name = "Ice Block",                 duration = 240, icon = 135841,  class = "MAGE"        },
 
-    -- Warlock. Demonic Gateway: the 12.1.5 data says 10 s (RecoveryTime 10000,
-    -- no category or charge cooldown); kept at 90 s until that is settled.
-    [111771] = { name = "Demonic Gateway",           duration = 90,  icon = 607512,  class = "WARLOCK"     },
-
     -- Monk
     [115310] = { name = "Revival",                   duration = 180, icon = 1020466, class = "MONK"        },
     [116849] = { name = "Life Cocoon",               duration = 120, icon = 627485,  class = "MONK"        },

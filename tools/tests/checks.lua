@@ -34,7 +34,7 @@ local function countSent(prefix, pattern)
 end
 
 local EXPECT = {
-	retail  = { data = "Data_Retail.lua",  spells = 43, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN", log = false },
+	retail  = { data = "Data_Retail.lua",  spells = 42, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN", log = false },
 	mop     = { data = "Data_Mists.lua",   spells = 41, lust = "MAGE,SHAMAN",               rez = "DEATHKNIGHT,DRUID",         log = true  },
 	tbc     = { data = "Data_TBC.lua",     spells = 22, lust = "SHAMAN",                    rez = "DRUID",                     log = true  },
 	era     = { data = "Data_Era.lua",     spells = 15, lust = nil,                         rez = "DRUID",                     log = true  },
@@ -145,7 +145,6 @@ if FLAVOR == "retail" then
 		[196718] = { 300, 1305154 },   -- Darkness (was 180 s)
 		[357170] = { 60, 4622478 },    -- Time Dilation, one charge (was 90 s)
 		[32182]  = { 300, 132313 },    -- Heroism's icon
-		[111771] = { 90, 607512 },     -- Demonic Gateway: icon fixed; the data's 10 s is not taken yet
 	}
 	local fixedBad = {}
 	for id, want in pairs(RETAIL_FIXED) do
@@ -153,6 +152,7 @@ if FLAVOR == "retail" then
 		if not d or d.duration ~= want[1] or d.icon ~= want[2] then fixedBad[#fixedBad + 1] = id end
 	end
 	check("Retail: corrected rows have the 12.1.5 cooldown and icon", #fixedBad == 0, table.concat(fixedBad, ","))
+	check("Retail: no Demonic Gateway row (10 s in 12.1.5, not a group cooldown)", CC.SpellData[111771] == nil)
 end
 if CC.SpellData[20707] then
 	local ss = CC.SpellData[20707]
