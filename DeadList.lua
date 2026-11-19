@@ -197,11 +197,12 @@ function CC:BuildDeadList()
     f.foot = foot
 
     self.deadFrame = f
-    -- Every half second while the window shows or someone is dead; hidden with nobody dead, a look
-    -- every 2 seconds is enough to notice the next death.
+    -- Every half second while the window shows, someone is dead or the group is fighting; hidden
+    -- with nobody dead and no fight, a look every 2 seconds is enough to notice the next death.
     local idle = 0
     C_Timer.NewTicker(0.5, function()
-        if not (f:IsShown() or next(CC.deaths) or CC.deadOpen or CC.deathInCombat) then
+        if not (f:IsShown() or next(CC.deaths) or CC.deadOpen or CC.deathInCombat
+            or CC.inEncounter or CC.inCombat or InCombatLockdown()) then
             idle = idle + 1
             if idle < 4 then return end
         end

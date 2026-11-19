@@ -144,6 +144,7 @@ CC:RefreshAllViews()
 local a, b, c = shown()
 check("always: all three windows show in a group", a and b and c and CC:WindowsWanted())
 db.showWindows = "combat"
+CC.panelForced = nil   -- (opening the panel by hand earlier set it; the next combat change clears it)
 CC:RefreshAllViews()
 a, b, c = shown()
 check("only in combat: hidden out of combat", not a and not b and not c and not CC:WindowsWanted())
