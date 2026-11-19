@@ -6,8 +6,9 @@
 CooldownCollaborator = {}
 CC = CooldownCollaborator
 
-CC.version = "1.1.1"
-CC.PREFIX   = "CDCOLLAB"
+CC.version     = "1.1.1"
+CC.PREFIX      = "CDCOLLAB"   -- cooldowns (Comms.lua, docs/MESSAGE_FORMAT_2.md)
+CC.BUFF_PREFIX = "CDCBUFF"    -- flask and food status
 
 -------------------------------------------------------------------------------
 -- Client detection (the same rules as CooldownTimeline3). WoW: Forever runs
@@ -68,7 +69,9 @@ CC.Compat = {
     end,
 }
 
--- state["Name-Realm"] = { class = "WARRIOR", spells = { [spellID] = usedAtTimestamp } }
+-- state["Name-Realm"] = { class = "WARRIOR", spells = { [spellID] = usedAt (local GetTime()) },
+--     restored = { [spellID] = true } (from saved data, until a live message),
+--     log = { [spellID] = true } (from the combat log) }
 CC.state = {}
 
 CC.inEncounter = false
@@ -174,7 +177,7 @@ function CC:Init()
     self:LoadConsumableBuffs()
 
     C_ChatInfo.RegisterAddonMessagePrefix(self.PREFIX)
-    C_ChatInfo.RegisterAddonMessagePrefix("CDCBUFF")
+    C_ChatInfo.RegisterAddonMessagePrefix(self.BUFF_PREFIX)
     self:RegisterGroupEvents()
     self:BuildOptionsPanel()
     self:BuildMinimapButton()
@@ -256,7 +259,10 @@ function CC:RemoveCustomSpell(spellID)
     self:RefreshSpellList()
 end
 
-function CC:RecordCooldown(unitToken, spellID)
+-- Our own cast (or our own flask or food), at usedAt (default now). Always
+-- recorded and sent: unticking a spell or a higher minimum length only filters
+-- what this client shows (UI.lua, Bridge.lua), never what the group hears (R5).
+function CC:RecordCooldown(unitToken, spellID, usedAt)
     -- Every rank records under (and is sent as) its base ID.
     local castID = spellID
     spellID = self:BaseSpellID(spellID)
@@ -266,28 +272,30 @@ function CC:RecordCooldown(unitToken, spellID)
             tostring(unitToken), tostring(castID), tostring(data ~= nil)))
     end
     if not data then return end
-    if data.duration < (self.db.minDuration or 60) then return end
-    if self.db.disabledSpells and self.db.disabledSpells[spellID] then return end
 
     local name = self:FullName(unitToken)
     if not name then return end
 
-    if not self.state[name] then
+    local entry = self.state[name]
+    if not entry then
         local _, classTag = UnitClass(unitToken)
-        self.state[name] = { class = classTag or "UNKNOWN", spells = {} }
+        entry = { class = classTag or "UNKNOWN", spells = {} }
+        self.state[name] = entry
     end
-    local now = GetTime()
-    self.state[name].spells[spellID] = now
+    local now = usedAt or GetTime()
+    entry.spells[spellID] = now
+    if entry.restored then entry.restored[spellID] = nil end
 
     -- Watch our own spell so we can announce "ready now" (talents shorten
     -- the real cooldown below the base length everyone else assumes). Not
     -- for a spell whose cooldown sits on an item: its own cooldown reads 0.
     if unitToken == "player" and not data.consumable and not data.itemCooldown then
         self.localActive[spellID] = now
+        self.heldReady[spellID] = nil
     end
 
     self:SendCooldownSync(spellID, name, now)
-    self:BridgeStart(name, spellID, now, self.state[name].class)
+    self:BridgeStart(name, spellID, now, entry.class)
     self:RefreshAllViews()
 end
 
@@ -298,6 +306,8 @@ function CC:RecordReadyFromComm(playerName, spellID)
     local entry = self.state[playerName]
     if not data or not entry or not entry.spells[spellID] then return end
     entry.spells[spellID] = GetTime() - data.duration
+    if entry.restored then entry.restored[spellID] = nil end
+    if entry.log then entry.log[spellID] = nil end
     self:BridgeStop(playerName, spellID)
     self:RefreshAllViews()
 end
@@ -308,23 +318,267 @@ end
 -- and changes nothing.
 local DUPLICATE_WINDOW = 5
 
-function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag)
-    spellID = self:BaseSpellID(spellID)
+-- One timer of another player; true when it changed. how: nil = their cast
+-- message (a later cast wins), "log" = the combat log (the same rule), "state" =
+-- their S list (their own word: it replaces), "restored" = our saved data (only
+-- where nothing live is held). A restored time never beats a live report.
+function CC:SetRemoteCooldown(playerName, spellID, usedAt, classTag, how)
     local data = CC.SpellData[spellID]
-    if not data or not playerName then return end
+    if not data or not playerName then return false end
 
-    if not self.state[playerName] then
-        self.state[playerName] = { class = classTag or "UNKNOWN", spells = {} }
-    elseif classTag and classTag ~= "UNKNOWN" and self.state[playerName].class == "UNKNOWN" then
-        self.state[playerName].class = classTag
+    local entry = self.state[playerName]
+    if not entry then
+        entry = { class = classTag or "UNKNOWN", spells = {} }
+        self.state[playerName] = entry
+    elseif classTag and classTag ~= "UNKNOWN" and entry.class == "UNKNOWN" then
+        entry.class = classTag
     end
-    local cur = self.state[playerName].spells[spellID]
-    if cur and math.abs(usedAt - cur) < DUPLICATE_WINDOW then return end
-    if not cur or usedAt > cur then
-        self.state[playerName].spells[spellID] = usedAt
-        self:BridgeStart(playerName, spellID, usedAt, self.state[playerName].class)
+    local cur = entry.spells[spellID]
+    local wasRestored = entry.restored and entry.restored[spellID]
+    if how == "restored" then
+        if cur then return false end
+    elseif how == "state" or wasRestored then
+        -- the owner's word, or any live report over a saved time (a saved one can be a
+        -- second out): only a real difference restarts it
+        if cur and math.abs(usedAt - cur) < (wasRestored and 0.25 or 2) then
+            if wasRestored then entry.restored[spellID] = nil end
+            return false
+        end
+    else
+        if cur and math.abs(usedAt - cur) < DUPLICATE_WINDOW then return false end
+        if cur and usedAt <= cur then return false end
+    end
+    entry.spells[spellID] = usedAt
+    if how == "restored" then
+        entry.restored = entry.restored or {}
+        entry.restored[spellID] = true
+    elseif entry.restored then
+        entry.restored[spellID] = nil
+    end
+    if how == "log" then
+        entry.log = entry.log or {}
+        entry.log[spellID] = true
+    elseif entry.log then
+        entry.log[spellID] = nil
+    end
+    self:BridgeStart(playerName, spellID, usedAt, entry.class)
+    return true
+end
+
+function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag, how)
+    spellID = self:BaseSpellID(spellID)
+    if self:SetRemoteCooldown(playerName, spellID, usedAt, classTag, how) then
         self:RefreshAllViews()
     end
+end
+
+-------------------------------------------------------------------------------
+-- Soulstones placed on living group members: CC.stones[target] = { from,
+-- placedAt (local GetTime()), duration (the buff's length) }. Retail hides other
+-- players' buffs in combat and Forever has no combat log, so there the
+-- warlock's own client says who it stoned (T, Comms.lua); Era, TBC and MoP see
+-- it in the combat log (Events.lua). One stone per warlock: a new one replaces
+-- their last. A Soulstone cast on the dead is a rez, not a placement.
+-------------------------------------------------------------------------------
+
+CC.SOULSTONE_ID = 20707
+CC.stones = CC.stones or {}
+
+-- The buff's length in the game data: SpellMisc DurationIndex 347 (900 s) on
+-- 12.1.5 and 5.5.4, 30 (1800 s) on Era, TBC and Forever. A `buff` on the data row wins.
+function CC:StoneDuration()
+    local data = CC.SpellData[CC.SOULSTONE_ID]
+    if data and data.buff then return data.buff end
+    return (self.tocversion or 0) >= 50000 and 900 or 1800
+end
+
+-- Record a stone; true when it is new or moved.
+function CC:PlaceStone(from, target, placedAt)
+    if not from or not target then return false end
+    for name, stone in pairs(self.stones) do
+        if stone.from == from and name ~= target then self.stones[name] = nil end
+    end
+    local cur = self.stones[target]
+    if cur and cur.from == from and math.abs(cur.placedAt - placedAt) < 2 then return false end
+    self.stones[target] = { from = from, placedAt = placedAt, duration = self:StoneDuration() }
+    return true
+end
+
+-- The stone still on a player, or nil (a run-out one is forgotten).
+function CC:GetStone(target)
+    local stone = self.stones[target]
+    if stone and stone.placedAt + stone.duration <= GetTime() then
+        self.stones[target] = nil
+        return nil
+    end
+    return stone
+end
+
+local function IsStone(spellID)
+    local ok, yes = pcall(function() return CC:BaseSpellID(spellID) == CC.SOULSTONE_ID end)
+    return ok and yes == true and CC.SpellData[CC.SOULSTONE_ID] ~= nil
+end
+
+-- Who our Soulstone is going on, as the cast starts: the name the cast carries
+-- (UNIT_SPELLCAST_SENT), else our target when it is a friendly player, else
+-- ourselves (with no friendly target it goes on us). nil: someone outside the
+-- group, or nothing readable. Every read in a pcall: on Retail a name can be hidden.
+local function StoneTargetAtCast(sentTarget)
+    local ok, named = pcall(CC.MemberByName, CC, sentTarget)
+    if ok and named then return named end
+    local okEmpty, empty = pcall(function() return sentTarget == nil or sentTarget == "" end)
+    if ok and okEmpty and not empty then return nil end
+    local okT, who = pcall(function()
+        if UnitExists("target") and UnitIsPlayer("target") and UnitIsFriend("player", "target") then
+            return CC:MemberByName(CC:FullName("target")) or false
+        end
+        return CC:FullName("player")
+    end)
+    if okT and who then return who end
+    return nil
+end
+
+local stoneCasts = {}  -- castGUID -> the target our Soulstone cast started on (false: none to record)
+
+function CC:OnSpellcastSent(unit, target, castGUID, spellID)
+    if unit ~= "player" or not IsStone(spellID) then return end
+    local who = StoneTargetAtCast(target) or false
+    pcall(function() stoneCasts[castGUID] = who end)
+end
+
+-- Our Soulstone landed: on a living group member it is a placement, which the
+-- group hears from us on Retail and Forever.
+function CC:OnStoneCastDone(castGUID, spellID)
+    if not IsStone(spellID) then return end
+    local target
+    pcall(function()
+        target = stoneCasts[castGUID]
+        stoneCasts[castGUID] = nil
+    end)
+    if not target then return end
+    local unit = self:UnitTokenFor(target)
+    if not unit then return end
+    local okDead, dead = pcall(function() return UnitIsDeadOrGhost(unit) and true or false end)
+    if not okDead or dead then return end
+    if self:PlaceStone(self:FullName("player"), target, GetTime()) then self:SendStone(target) end
+end
+
+-------------------------------------------------------------------------------
+-- Timers kept across a /reload or relog (R4, P16): saved at logout as real
+-- clock times (time(): GetTime() restarts with the game), restored at login
+-- when still running. Ours at once; a groupmate's once they are in our group
+-- (the group may not be readable yet at login), for a minute after login. The
+-- game writes saved data only at logout or /reload, so after a crash what the
+-- group answers to our state request fills them in.
+-- db.timers = { wall = time(), clock = GetTime(), players = { [name] = { class, spells = { [id] = wall time used } } } }
+-- time() counts whole seconds; after a /reload GetTime() has gone on, so the
+-- saved clock pair restores to the exact time.
+-------------------------------------------------------------------------------
+
+local RESTORE_WINDOW = 60
+
+function CC:SaveTimers()
+    if not self.db then return end
+    local now, wall = GetTime(), time()
+    local saved = {}
+    for name, entry in pairs(self.state) do
+        local spells
+        for id, usedAt in pairs(entry.spells) do
+            local data = CC.SpellData[id]
+            if data and usedAt + data.duration > now then
+                spells = spells or {}
+                spells[id] = wall - (now - usedAt)
+            end
+        end
+        if spells then saved[name] = { class = entry.class, spells = spells } end
+    end
+    local stones = {}
+    for target, stone in pairs(self.stones) do
+        if stone.placedAt + stone.duration > now then
+            stones[target] = { from = stone.from, at = wall - (now - stone.placedAt), duration = stone.duration }
+        end
+    end
+    self.db.timers = { wall = wall, clock = now, players = saved, stones = stones }
+end
+
+function CC:RestoreTimers()
+    local saved = self.db and self.db.timers
+    if type(saved) ~= "table" or type(saved.players) ~= "table" then return end
+    local me = self:FullName("player")
+    local now, wall = GetTime(), time()
+    -- the same game clock as at the save (a /reload): GetTime() has moved on as far as time()
+    local wall0, clock0 = saved.wall, saved.clock
+    local sameClock = type(wall0) == "number" and type(clock0) == "number" and now >= clock0
+        and math.abs((now - clock0) - (wall - wall0)) < 2
+    local pending, ownChanged = {}, false
+    for name, e in pairs(saved.players) do
+        if type(name) == "string" and type(e) == "table" and type(e.spells) == "table" then
+            for key, at in pairs(e.spells) do
+                local id = tonumber(key)
+                local data = id and CC.SpellData[id]
+                local ago = type(at) == "number" and wall - at
+                if id and data and ago and ago >= 0 and ago < data.duration then
+                    local usedAt = now - ago
+                    if sameClock then usedAt = clock0 - (wall0 - at) end
+                    if me and name == me then
+                        local entry = self.state[me]
+                        if not entry then
+                            local _, classTag = UnitClass("player")
+                            entry = { class = classTag or e.class or "UNKNOWN", spells = {} }
+                            self.state[me] = entry
+                        end
+                        if not entry.spells[id] then
+                            entry.spells[id] = usedAt
+                            entry.restored = entry.restored or {}
+                            entry.restored[id] = true
+                            if not data.consumable and not data.itemCooldown then self.localActive[id] = usedAt end
+                            ownChanged = true
+                        end
+                    else
+                        pending[name] = pending[name] or { class = e.class, spells = {} }
+                        pending[name].spells[id] = usedAt
+                    end
+                end
+            end
+        end
+    end
+    for target, stone in pairs(type(saved.stones) == "table" and saved.stones or {}) do
+        local at, duration = stone.at, stone.duration
+        if type(target) == "string" and type(stone.from) == "string" and type(at) == "number"
+            and type(duration) == "number" and wall - at >= 0 and wall - at < duration then
+            local placedAt = sameClock and (clock0 - (wall0 - at)) or (now - (wall - at))
+            self.stones[target] = self.stones[target] or { from = stone.from, placedAt = placedAt, duration = duration }
+        end
+    end
+    self.restorePending = next(pending) and pending or nil
+    self.restoreUntil = now + RESTORE_WINDOW
+    self:MergeRestored()
+    if ownChanged then
+        self:BridgeResync()
+        self:RefreshAllViews()
+    end
+end
+
+-- Restored timers of players who are in our group now.
+function CC:MergeRestored()
+    local pending = self.restorePending
+    if not pending then return end
+    if GetTime() > (self.restoreUntil or 0) then
+        self.restorePending = nil
+        return
+    end
+    local active = self:GetActiveGroupNames()
+    local changed = false
+    for name, e in pairs(pending) do
+        if active[name] then
+            for id, usedAt in pairs(e.spells) do
+                if self:SetRemoteCooldown(name, id, usedAt, e.class, "restored") then changed = true end
+            end
+            pending[name] = nil
+        end
+    end
+    if not next(pending) then self.restorePending = nil end
+    if changed then self:RefreshAllViews() end
 end
 
 -- Every client has C_ChatInfo.SendChatMessage; the bare SendChatMessage now lives only in
@@ -334,24 +588,6 @@ local function SendChat(msg, chatType)
     ---@diagnostic disable-next-line: deprecated
     local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
     if send then send(msg, chatType) end
-end
-
--- Resolve a player's name back to a live unit token, so we can check things
--- (alive/dead) that GetCapabilityStatus's name-only entries cannot.
-local function FindUnitToken(name)
-    if CC:FullName("player") == name then return "player" end
-    if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do
-            local token = "raid" .. i
-            if CC:FullName(token) == name then return token end
-        end
-    elseif IsInGroup() then
-        for i = 1, GetNumGroupMembers() - 1 do
-            local token = "party" .. i
-            if CC:FullName(token) == name then return token end
-        end
-    end
-    return nil
 end
 
 -- Raid lead / assist only: target a dead player and announce who should
@@ -393,17 +629,23 @@ function CC:RequestRez()
         print("|cFF54a3ffCDC|r Can't read that target's name. Target a dead friendly player first.")
         return
     end
+    -- In raids and Mythic+ every combat rez (Soulstone too on Retail and MoP) uses one
+    -- charge pool: with none left nobody can be brought back.
+    local charges, _, nextAt = self:RezPool()
+    if charges == 0 then
+        local wait = nextAt and math.max(0, nextAt - GetTime())
+        print("|cFF54a3ffCDC|r No Battle Rez charges" .. (wait and string.format("; next in %d:%02d",
+            math.floor(wait / 60), math.floor(wait % 60)) or "."))
+        return
+    end
     local status = CC:GetCapabilityStatus("BATTLEREZ")
     local provider = nil
     for _, entry in ipairs(status) do
-        -- A dead player can't rez anyone, including themselves - skip the
-        -- target and skip anyone else who is also currently dead/ghost.
-        if entry.ready and entry.name ~= targetName then
-            local token = FindUnitToken(entry.name)
-            if not token or not UnitIsDeadOrGhost(token) then
-                provider = entry
-                break
-            end
+        -- A dead or offline player can't rez anyone: skip the target, and anyone
+        -- else who is dead, a ghost or disconnected (R6).
+        if entry.ready and entry.name ~= targetName and entry.online ~= false and entry.alive ~= false then
+            provider = entry
+            break
         end
     end
 
@@ -463,7 +705,9 @@ function CC:GetRemaining(playerName, spellID)
     local data = CC.SpellData[spellID]
     if not data then return nil end
     local rem = (usedAt + data.duration) - GetTime()
-    return rem > 0 and rem or 0
+    -- a spell marked ready (usedAt = now - duration) can come back a hair above
+    -- 0 in floating point; under a millisecond is ready
+    return rem > 0.001 and rem or 0
 end
 
 -- Live readiness for the LOCAL player's own spell, in seconds (0 = ready), or nil
@@ -610,7 +854,86 @@ function CC:PollLocalReady()
     end
 end
 
-C_Timer.NewTicker(1, function() CC:PollLocalReady() end)
+-- P11: whoever can read the raid's battle rez charge pool (the charges of their
+-- own Battle Rez spell) shares it as C; everyone keeps CC.rezCharges =
+-- { charges, max, nextAt, from }. Our own reading is CC.rezChargesRead.
+-- Returns the pool or nil, and whether our spell could be read at all.
+local function ReadRezPool()
+    local cap = CC.CAPABILITIES and CC.CAPABILITIES.BATTLEREZ
+    local _, classTag = UnitClass("player")
+    local ids = {}
+    for _, id in ipairs(cap and classTag and cap.classes[classTag] or {}) do ids[#ids + 1] = id end
+    -- Retail and MoP: a warlock's Soulstone draws on the same pool
+    if classTag == "WARLOCK" and (CC.tocversion or 0) >= 50000 and CC.SpellData[CC.SOULSTONE_ID] then
+        ids[#ids + 1] = CC.SOULSTONE_ID
+    end
+    for _, spellID in ipairs(ids) do
+        local id = CC:KnownRank(spellID)
+        if id then
+            local pool
+            local ok = pcall(function()
+                local current, maxCharges, start, duration = ReadCharges(id)
+                if current and maxCharges and maxCharges > 1 then
+                    local nextAt
+                    if current < maxCharges and start and duration and start > 0 and duration > 0 then
+                        nextAt = start + duration
+                    end
+                    pool = { charges = current, max = maxCharges, nextAt = nextAt }
+                end
+            end)
+            return pool, ok
+        end
+    end
+    return nil, false
+end
+
+-- The pool as last read or heard, counted on to now: a recharge that has come
+-- due adds its charge (the one after it is then unknown). Returns charges, max,
+-- nextAt (nil: unknown), or nothing when no pool is known.
+function CC:RezPool()
+    local pool = self.rezCharges
+    if not pool then return nil end
+    local charges, nextAt = pool.charges, pool.nextAt
+    if nextAt and GetTime() >= nextAt and charges < pool.max then
+        charges, nextAt = charges + 1, nil
+    end
+    return charges, pool.max, nextAt
+end
+
+function CC:PollRezCharges()
+    if not IsInGroup() then
+        self.rezChargesRead = nil
+        return
+    end
+    local pool, readable = ReadRezPool()
+    if not readable then return end
+    local last = self.rezChargesRead
+    local me = self:FullName("player")
+    if not pool then
+        if last then
+            -- the pool is gone (the fight or the key is over)
+            self.rezChargesRead = nil
+            if self.rezCharges and self.rezCharges.from == me then self.rezCharges = nil end
+            self:SendRezCharges(math.random() * 1.5)
+        end
+        return
+    end
+    if last and last.charges == pool.charges and last.max == pool.max
+        and math.abs((last.nextAt or 0) - (pool.nextAt or 0)) < 2 then
+        return
+    end
+    local now = GetTime()
+    pool.changedAt = now
+    self.rezChargesRead = pool
+    self.rezCharges = { charges = pool.charges, max = pool.max, nextAt = pool.nextAt, from = me, heardAt = now }
+    self:SendRezCharges(math.random() * 1.5)
+end
+
+C_Timer.NewTicker(1, function()
+    CC:PollLocalReady()
+    CC:PollRezCharges()
+    CC:BridgeCheckFilter()
+end)
 
 -- Event frame
 local ef = CreateFrame("Frame", "CCEventFrame")
@@ -629,6 +952,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
             self:RegisterEvent("CHAT_MSG_ADDON")
             if CC.isRetail then
                 self:RegisterEvent("INSPECT_READY")
+                self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
             end
             self:RegisterEvent("PLAYER_LOGOUT")
             self:RegisterEvent("PLAYER_LOGIN")
@@ -637,8 +961,11 @@ ef:SetScript("OnEvent", function(self, event, ...)
     elseif event == "GROUP_ROSTER_UPDATE" then
         CC:CloseWindowsIfLeftGroup()
         CC:PruneState()
+        CC:MergeRestored()
         CC:RefreshView("RefreshRows")
         CC:ScanRoster()
+        -- joined (or left) a group: hello, state request, our state (Comms.lua)
+        CC:CheckGroupChange()
     elseif event == "UNIT_LEVEL" then
         -- a provider spell may have just come in reach (Roster.lua)
         CC:OnUnitLevel(...)
@@ -646,7 +973,8 @@ ef:SetScript("OnEvent", function(self, event, ...)
         CC.inEncounter = true
     elseif event == "ENCOUNTER_END" then
         CC.inEncounter = false
-        C_Timer.After(1, function() CC:BroadcastState() end)
+        -- a second, then a random 0 to 2 s more, so a raid doesn't all send at once
+        C_Timer.After(1 + math.random() * 2, function() CC:BroadcastState() end)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         -- spellID is SECRET for party/raid tokens — confirmed by live crash
         -- ("attempted to index a table that cannot be indexed with secret
@@ -654,10 +982,14 @@ ef:SetScript("OnEvent", function(self, event, ...)
         -- gives a safe, indexable spellID. Other players' cooldowns must
         -- arrive exclusively via the addon-message sync (OnAddonMessage),
         -- never by reading this event for their unit token directly.
-        local unitToken, _, spellID = ...
+        local unitToken, castGUID, spellID = ...
         if unitToken == "player" then
             CC:RecordCooldown(unitToken, spellID)
+            CC:OnStoneCastDone(castGUID, spellID)
         end
+    elseif event == "UNIT_SPELLCAST_SENT" then
+        -- our own Soulstone's target, as the cast starts
+        CC:OnSpellcastSent(...)
     elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
         -- Era, TBC and MoP only (Events.lua): other players' casts
         local ok, err = pcall(CC.OnCombatLog, CC)
@@ -666,15 +998,22 @@ ef:SetScript("OnEvent", function(self, event, ...)
         end
     elseif event == "INSPECT_READY" then
         CC:OnInspectReady(...)
+    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
+        CC:OnSpecChanged(...)
     elseif event == "CHAT_MSG_ADDON" then
         CC:OnAddonMessage(...)
     elseif event == "PLAYER_LOGIN" then
+        -- our full name (and realm) is readable by now: timers saved at the last logout
+        CC:RestoreTimers()
         -- Every addon is loaded by now, so CDTL3 (if present) is ready.
         CC:BridgeRegister()
         -- the minimap has its real size by now (Minimap.lua)
         CC:PlaceMinimapButton()
+        -- a /reload or login inside a group says hello and asks for the group's state
+        CC:CheckGroupChange()
     elseif event == "PLAYER_LOGOUT" then
         CC:SavePosition()
+        CC:SaveTimers()
     end
 end)
 
@@ -738,8 +1077,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
             for key in pairs(info.capabilities) do caps[#caps + 1] = key end
             local specName = CC:GetSpecName(name)
             local classStr = specName and (specName .. " " .. info.class) or info.class
-            print(string.format("    %s [%s] capabilities: %s",
-                CC:ShortName(name), classStr, #caps > 0 and table.concat(caps, ", ") or "none"))
+            print(string.format("    %s [%s] capabilities: %s; %s",
+                CC:ShortName(name), classStr, #caps > 0 and table.concat(caps, ", ") or "none", CC:PeerNote(name)))
         end
     elseif cmd == "debug" then
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)

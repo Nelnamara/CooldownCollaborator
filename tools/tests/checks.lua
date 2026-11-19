@@ -25,6 +25,8 @@ local function lastSent(prefix)
 		if SENT[i].prefix == prefix then return SENT[i], i end
 	end
 end
+-- let the send queue (one message every 0.25 s per channel) catch up
+local function Settle(seconds) Advance(seconds or 0.3) end
 local function countSent(prefix, pattern)
 	local n = 0
 	for _, s in ipairs(SENT) do
@@ -336,7 +338,7 @@ if FLAVOR == "retail" then
 	CC.rosterSpecs["Vessa-Realm"] = nil
 	table.remove(GROUP, 4)
 	FireEvent("GROUP_ROSTER_UPDATE")
-	-- ourselves as a hunter: our own roster spec is GetSpecialization's index (2), never matched; the spellbook decides
+	-- ourselves as a hunter: our own roster spec is our own spec's ID (a druid's here), never matched; the spellbook decides
 	local keep = CC.roster[ME]
 	CC.roster[ME] = { class = "HUNTER", capabilities = CC:CapabilitiesFor("player", "HUNTER") }
 	check("we as a hunter: Harrier's Cry is left for our spellbook to decide", CC.roster[ME].capabilities.BLOODLUST ~= nil)
@@ -446,6 +448,7 @@ check("send results: nil, true, 0 and Success are sent; 3, 11 and false are not"
 	and CC:AddonMessageSent(Enum.SendAddonMessageResult.Success)
 	and not CC:AddonMessageSent(3) and not CC:AddonMessageSent(11) and not CC:AddonMessageSent(false))
 local keepResult = SendResult
+Settle()
 SendResult = function() return 3 end
 CC:SendCooldownSync(20484, ME, NOW - 5)
 check("a throttled send is queued once", #CC.pendingSyncs == 1, #CC.pendingSyncs)
@@ -461,6 +464,7 @@ check("instance group: INSTANCE_CHAT", CC:GroupChannel() == "INSTANCE_CHAT")
 FireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-3", 29166)
 local w1 = lastSent("CDCOLLAB")
 CC:BroadcastBuffStatus(ME, false, false)
+Settle()
 local w2 = lastSent("CDCBUFF")
 check("  cooldown sync and buff status go to INSTANCE_CHAT", w1.channel == "INSTANCE_CHAT" and w2.channel == "INSTANCE_CHAT")
 INSTANCE_GROUP = false
@@ -468,6 +472,7 @@ INSTANCE_GROUP = false
 -- round trip: what Brannoc's own client sends, received here
 local shamanSpell = CC.SpellData[2825] and 2825 or 16190
 CC.state["Brannoc-Realm"] = { class = "SHAMAN", spells = {} }
+Settle()
 CC:SendCooldownSync(shamanSpell, "Brannoc-Realm", NOW - 10)
 local out = lastSent("CDCOLLAB")
 CC.state["Brannoc-Realm"] = nil
@@ -532,6 +537,7 @@ else
 end
 
 ---------------------------------------------------------------- variants: other IDs of one spell
+Settle()
 if FLAVOR == "mop" then
 	-- R14: Stampeding Roar cast in Cat or Bear Form has its own ID; it records and goes out as 106898
 	for i, form in ipairs({ 77764, 77761 }) do
@@ -572,6 +578,7 @@ else
 		{ name = "Well Fed", spellId = 24799 } }
 end
 CC:PollConsumables()
+Settle(1)
 local br = CC.buffRoster[ME]
 check("own flask and Well Fed found (" .. (CC.ConsumableMatch == "name" and "by name" or "by ID") .. ")", br and br.flask and br.food)
 check("  status sent", lastSent("CDCBUFF").msg == "flask:1:food:1")
@@ -588,6 +595,7 @@ check("a /cdc consumable entry matches its spell ID; the built-ins are gone", CC
 PLAYER_AURA_IDS = {}
 AURAS.HELPFUL = {}
 CC:PollConsumables()
+Settle(1)
 check("  and nothing once the buffs drop", not CC.buffRoster[ME].flask and lastSent("CDCBUFF").msg == "flask:0:food:0")
 check("CDCBUFF from a party member", (function()
 	FireEvent("CHAT_MSG_ADDON", "CDCBUFF", "flask:1:food:0", "PARTY", "Tania")

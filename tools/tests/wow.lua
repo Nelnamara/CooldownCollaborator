@@ -8,7 +8,8 @@
 --   NOW, Advance(dt), RunTimers(), FireEvent(e, ...), ERRORS, PRINTS, PLAYER,
 --   GROUP / INSTANCE_GROUP, SENT (addon messages), SendResult(), SPELLCD,
 --   SPELLCHARGES, KNOWN, SPELLINFO, AURAS, PLAYER_AURA_IDS, CLEU_ARGS, SECRET,
---   INSPECTS, LoadTOC(tocName), Login().
+--   INSPECTS / INSPECTED, WALL_OFFSET (time() = GetTime() + it), LoadTOC(tocName), Login().
+-- A GROUP member may carry level, offline, dead and spec (its specialization ID).
 local TOC = HARNESS_TOC
 FLAVOR = (TOC >= 110000 and "retail") or (TOC >= 50000 and "mop") or (TOC >= 20000 and "tbc")
 	or ((TOC >= 16000 and TOC < 17000) and "forever") or "era"
@@ -81,29 +82,29 @@ end
 
 NOW = 1000
 function GetTime() return NOW end
+-- time(): the real clock (seconds since 1970), which keeps going across a relog while GetTime() restarts
+WALL_OFFSET = 1800000000 - NOW
+function time() return math.floor(NOW + WALL_OFFSET) end
 local timers = {}
+-- the clock moves on by dt, each timer running at its own time (the clock steps to it), in order
 function Advance(dt)
-	NOW = NOW + dt
-	RunTimers()
-end
-function RunTimers()
-	local again = true
-	while again do
-		again = false
-		table.sort(timers, function(a, b) return a.t < b.t end)
+	local target = NOW + dt
+	while true do
+		local best, bi
 		for i, tm in ipairs(timers) do
-			if tm.t <= NOW then
-				table.remove(timers, i)
-				xpcall(tm.f, errh)
-				again = true
-				break
-			end
+			if tm.t <= target and (not best or tm.t < best.t) then best, bi = tm, i end
 		end
+		if not best then break end
+		table.remove(timers, bi)
+		if best.t > NOW then NOW = best.t end
+		xpcall(best.f, errh)
 	end
+	NOW = target
 end
+function RunTimers() Advance(0) end
 C_Timer = {
 	After = function(d, f) timers[#timers + 1] = { t = NOW + d, f = f } end,
-	-- tickers run (once per Advance at most, then re-arm d seconds later)
+	-- tickers run every d seconds (an Advance past several runs it several times)
 	NewTicker = function(d, f)
 		local h = { cancelled = false }
 		local function arm()
@@ -278,8 +279,8 @@ function UnitClass(u) local m = member(u); if m then return m.class, m.class, 1 
 local LEVEL_CAP = ({ era = 60, forever = 60, tbc = 70, mop = 90, retail = 90 })[FLAVOR] or 60
 function UnitLevel(u) local m = member(u); if m then return m.level or LEVEL_CAP end return 0 end
 function UnitExists(u) return member(u) ~= nil end
-function UnitIsConnected(u) return member(u) ~= nil end
-function UnitIsDeadOrGhost() return false end
+function UnitIsConnected(u) local m = member(u); return m ~= nil and not m.offline end
+function UnitIsDeadOrGhost(u) local m = member(u); return m ~= nil and m.dead == true end
 function UnitIsPlayer(u) return member(u) ~= nil end
 function UnitIsFriend(a, b) return member(a) ~= nil and member(b) ~= nil end
 -- STUB_IN_RAID: the group is a raid; STUB_IS_LEADER / STUB_IS_ASSIST: the player leads it / is a raid assistant.
@@ -300,30 +301,49 @@ function GetPlayerInfoByGUID(guid)
 end
 function CheckInteractDistance() return true end
 -- the inspect API exists on every client; CooldownCollaborator should only use it on Retail
-INSPECTS = 0
-function NotifyInspect() INSPECTS = INSPECTS + 1 end
+INSPECTS, INSPECTED = 0, {}
+function NotifyInspect(u) INSPECTS = INSPECTS + 1; INSPECTED[#INSPECTED + 1] = u end
 function ClearInspectPlayer() end
-function GetInspectSpecialization() return 1 end
+function CanInspect(u) return member(u) ~= nil end
+-- the inspected member's specialization ID (254 = Marksmanship), 0 when unknown
+function GetInspectSpecialization(u) local m = member(u); return m and m.spec or 0 end
+-- specialization IDs by class, in the order GetSpecialization counts them
+local SPEC_IDS = { DRUID = { 102, 103, 104, 105 }, HUNTER = { 253, 254, 255 }, PRIEST = { 256, 257, 258 },
+	SHAMAN = { 262, 263, 264 }, MAGE = { 62, 63, 64 } }
+local SPEC_NAMES = { [102] = "Balance", [103] = "Feral", [104] = "Guardian", [105] = "Restoration",
+	[253] = "Beast Mastery", [254] = "Marksmanship", [255] = "Survival", [256] = "Discipline", [257] = "Holy",
+	[258] = "Shadow", [262] = "Elemental", [263] = "Enhancement", [264] = "Restoration", [62] = "Arcane",
+	[63] = "Fire", [64] = "Frost" }
 if FLAVOR == "retail" or FLAVOR == "mop" then
 	function GetSpecialization() return 2 end
+	function GetSpecializationInfoByID(id) if SPEC_NAMES[id] then return id, SPEC_NAMES[id] end end
 end
 if FLAVOR == "retail" then
-	C_SpecializationInfo = { GetSpecialization = function() return 2 end }
+	C_SpecializationInfo = {
+		GetSpecialization = function() return 2 end,
+		GetSpecializationInfo = function(i)
+			local ids = SPEC_IDS[PLAYER.class]
+			local id = ids and ids[i]
+			if id then return id, SPEC_NAMES[id] end
+		end,
+	}
 end
 CHATSENT = {}
 -- the bare global is one of Blizzard's deprecation fallbacks (on by default); C_ChatInfo's is on every client
 function SendChatMessage(msg, chan) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, via = "global" } end
 
 ---------------------------------------------------------------- addon messages
-SENT = {}      -- { prefix, msg, channel }
+SENT = {}      -- { prefix, msg, channel, refused = true when SendResult() said no }
 PREFIXES = {}
 -- what SendAddonMessage returns: an Enum.SendAddonMessageResult on retailAPI clients, true on the others
 SendResult = RETAILAPI and function() return 0 end or function() return true end
 C_ChatInfo = {
 	RegisterAddonMessagePrefix = function(p) PREFIXES[p] = true; return true end,
 	SendAddonMessage = function(prefix, msg, channel)
-		SENT[#SENT + 1] = { prefix = prefix, msg = msg, channel = channel }
-		return SendResult()
+		local result = SendResult()
+		SENT[#SENT + 1] = { prefix = prefix, msg = msg, channel = channel, at = NOW,
+			refused = not (result == nil or result == true or result == 0) or nil }
+		return result
 	end,
 	SendChatMessage = function(msg, chan) CHATSENT[#CHATSENT + 1] = { msg = msg, chan = chan, via = "C_ChatInfo" } end,
 }
@@ -412,7 +432,7 @@ else
 	function UnitAura(u, i, f)
 		local l = AURAS[f or "HELPFUL"]
 		local a = l and l[i]
-		if a then return a.name, a.icon, 0, "", a.duration or 0, 0, nil, nil, nil, a.spellId end
+		if a then return a.name, a.icon, 0, "", a.duration or 0, a.expirationTime or 0, nil, nil, nil, a.spellId end
 	end
 	CLEU_ARGS = nil
 	function CombatLogGetCurrentEventInfo() return table.unpack(CLEU_ARGS or {}) end
@@ -420,14 +440,17 @@ else
 end
 
 ---------------------------------------------------------------- auras
-AURAS = { HELPFUL = {} }      -- readable buff list (Classic): { name =, spellId = }
-PLAYER_AURA_IDS = {}          -- id -> true (GetPlayerAuraBySpellID on Retail / Forever)
+AURAS = { HELPFUL = {} }      -- readable buff list (Classic): { name =, spellId =, expirationTime = }
+-- id -> true (GetPlayerAuraBySpellID on Retail / Forever: hidden fields), or { expirationTime = } (readable)
+PLAYER_AURA_IDS = {}
 C_UnitAuras = {}
 if RETAILAPI then
 	-- aura data is secret here: reading it by index is a bug, so it throws
 	C_UnitAuras.GetAuraDataByIndex = function() error("aura data by index read on a client where it is secret") end
 	C_UnitAuras.GetPlayerAuraBySpellID = function(id)
-		if PLAYER_AURA_IDS[id] then return { spellId = SECRET, name = SECRET } end
+		local a = PLAYER_AURA_IDS[id]
+		if type(a) == "table" then return { spellId = SECRET, name = SECRET, expirationTime = a.expirationTime } end
+		if a then return { spellId = SECRET, name = SECRET, expirationTime = SECRET } end
 	end
 else
 	-- CDTL3 confirms GetAuraDataByIndex on the Classic clients; GetPlayerAuraBySpellID is unverified there, so absent
