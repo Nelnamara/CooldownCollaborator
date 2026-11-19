@@ -234,7 +234,7 @@ function CC:Init()
     end
     self:LoadCustomSpells()
     self:LoadConsumableBuffs()
-    self:ApplyCharacterProfile()
+    -- the character's profile waits for PLAYER_LOGIN: the realm isn't readable before it
 
     C_ChatInfo.RegisterAddonMessagePrefix(self.PREFIX)
     C_ChatInfo.RegisterAddonMessagePrefix(self.BUFF_PREFIX)
@@ -1131,7 +1131,8 @@ ef:SetScript("OnEvent", function(self, event, ...)
     elseif event == "CHAT_MSG_ADDON" then
         CC:OnAddonMessage(...)
     elseif event == "PLAYER_LOGIN" then
-        -- our full name (and realm) is readable by now: timers saved at the last logout
+        -- our full name (and realm) is readable by now: this character's profile, then timers saved at the last logout
+        CC:ApplyCharacterProfile()
         CC:RestoreTimers()
         -- Every addon is loaded by now, so CDTL3 (if present) is ready.
         CC:BridgeRegister()

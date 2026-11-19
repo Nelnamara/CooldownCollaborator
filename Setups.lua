@@ -319,10 +319,13 @@ end
 function CC:ApplyCharacterProfile()
     local name = self:CurrentProfile()
     if name then self:ApplySetup(self.db.profiles[name], { noUndo = true }) end
+    self.profileApplied = true
 end
 
 -- At logout the profile in use keeps what was changed since.
 function CC:SaveCurrentProfile()
+    -- never before this character's own profile went in: the live settings may be another character's
+    if not self.profileApplied then return end
     local name = self:CurrentProfile()
     if name then
         local keep = self:KeepsOwnPlaces()
