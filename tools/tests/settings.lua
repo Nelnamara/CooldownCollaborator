@@ -313,6 +313,17 @@ do
 	CC:OnOfficerSetup(sender, "s1")
 	check("  a member gets a dialog naming the sender", CC.pendingSetup and CC.pendingSetup.owner == sender
 		and CC.setupDialog and CC.setupDialog:IsShown() and CC.setupDialog.text.__text:find("Boss", 1, true) ~= nil)
+	check("  and their guild rank is not shown while the roster lacks it", CC.pendingSetup.rank == nil)
+	CC:AnswerSetup("later")
+	GetNumGuildMembers = function() return 2 end
+	GetGuildRosterInfo = function(i)
+		if i == 1 then return "Other-Realm", "Member", 3 end
+		return "Boss-Realm", "Officer", 1
+	end
+	CC:OnOfficerSetup(sender, "s1")
+	check("  with the rank name once the roster has it", CC.pendingSetup.rank == "Officer"
+		and CC.setupDialog.text.__text:find("Boss (Officer) sent", 1, true) ~= nil, CC.setupDialog.text.__text)
+	GetNumGuildMembers, GetGuildRosterInfo = nil, nil
 	CC:AnswerSetup("later")
 	check("  Not now closes it and changes nothing", not CC.setupDialog:IsShown() and not db.disabledSpells[rb])
 	CC:OnOfficerSetup(sender, "s1")

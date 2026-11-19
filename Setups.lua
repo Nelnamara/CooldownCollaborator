@@ -457,6 +457,20 @@ function CC:OnOfficerSetup(owner, id)
     self:ShowSetupDialog()
 end
 
+-- The guild rank name of a guildmate (Name-Realm), from the guild roster, or nil when the roster
+-- doesn't have them (yet).
+function CC:GuildRankOf(fullName)
+    if not (GetNumGuildMembers and GetGuildRosterInfo) then return nil end
+    local short = self:ShortName(fullName)
+    local ok, rank = pcall(function()
+        for i = 1, GetNumGuildMembers() do
+            local name, rankName = GetGuildRosterInfo(i)
+            if name and (name == fullName or self:ShortName(name) == short) then return rankName end
+        end
+    end)
+    return ok and rank or nil
+end
+
 function CC:ShowSetupDialog()
     local pending = self.pendingSetup
     if not pending then return end
@@ -487,8 +501,11 @@ function CC:ShowSetupDialog()
         Button(264, "Never", function() CC:AnswerSetup("never") end)
         self.setupDialog = f
     end
-    f.text:SetText(string.format("%s sent a setup to the guild.\nIt will change:\n- %s\n\nAccept it, not now, or never from this person?",
-        self:ShortName(pending.owner), table.concat(self:DescribeSetup(pending.setup), "\n- ")))
+    local rank = self:GuildRankOf(pending.owner)
+    pending.rank = rank
+    f.text:SetText(string.format("%s%s sent a setup to the guild.\nIt will change:\n- %s\n\nAccept it, not now, or never from this person?",
+        self:ShortName(pending.owner), rank and (" (" .. rank .. ")") or "",
+        table.concat(self:DescribeSetup(pending.setup), "\n- ")))
     f:Show()
 end
 
