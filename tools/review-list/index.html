@@ -1,0 +1,520 @@
+<title>Collaborator Review List</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one narrow column, the walk sheet's look. A summary lane on top, then open reviews
+   (newest first), each a stack of cards with Go / Later / No and a note; finished reviews fold below. */
+:root {
+	--bg: #f3f5f4;
+	--surface: #ffffff;
+	--fg: #18211f;
+	--muted: #5c6b67;
+	--line: #d6dedb;
+	--chip: #e8eeec;
+	--accent: #0f6b62;
+	--go: #1f8a4c;
+	--later: #b7791f;
+	--no: #6b7a76;
+	--on-mark: #ffffff;
+	--font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #121816; --surface: #1a2220; --fg: #e6eeeb; --muted: #94a5a0; --line: #2c3936; --chip: #24302d;
+		--accent: #4fc4b6; --go: #3fb872; --later: #e0a94a; --no: #8a9a96; --on-mark: #0d1211;
+		color-scheme: dark;
+	}
+}
+:root[data-theme="dark"] {
+	--bg: #121816; --surface: #1a2220; --fg: #e6eeeb; --muted: #94a5a0; --line: #2c3936; --chip: #24302d;
+	--accent: #4fc4b6; --go: #3fb872; --later: #e0a94a; --no: #8a9a96; --on-mark: #0d1211;
+	color-scheme: dark;
+}
+body {
+	background: var(--bg);
+	color: var(--fg);
+	font-family: var(--font-body);
+	font-size: 15px;
+	line-height: 1.5;
+}
+.page {
+	max-width: 760px;
+	margin: 0 auto;
+	padding-block: 28px 56px;
+	padding-left: max(16px, env(safe-area-inset-left, 0px));
+	padding-right: max(16px, env(safe-area-inset-right, 0px));
+	display: flex;
+	flex-direction: column;
+	gap: 32px;
+}
+h1, h2, h3 { font-family: var(--font-head); text-wrap: balance; margin: 0; }
+h1 { font-size: 26px; font-weight: 600; }
+h2 { font-size: 19px; font-weight: 600; }
+h3 { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.head { display: flex; flex-direction: column; gap: 12px; }
+.sub { color: var(--muted); margin: 0; max-width: 62ch; }
+.lane { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); }
+.lane span { display: block; height: 100%; }
+.lane .g { background: var(--go); }
+.lane .l { background: var(--later); }
+.lane .n { background: var(--no); }
+.counts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.counts b { color: var(--fg); font-weight: 600; }
+.status { color: var(--muted); margin: 0; }
+.status.warn { color: var(--later); }
+#reviews, #done { display: flex; flex-direction: column; gap: 36px; }
+#done { gap: 10px; }
+.review { display: flex; flex-direction: column; gap: 16px; }
+.review-head { display: flex; flex-direction: column; gap: 4px; }
+.review-head .line1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.review-head small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.review-head p { margin: 0; color: var(--muted); max-width: 62ch; }
+.group { display: flex; flex-direction: column; gap: 8px; }
+.item {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-left: 4px solid var(--line);
+	border-radius: 6px;
+	padding: 12px 14px;
+	display: flex; flex-direction: column; gap: 8px;
+	min-width: 0;
+}
+.item[data-status="go"] { border-left-color: var(--go); }
+.item[data-status="later"] { border-left-color: var(--later); }
+.item[data-status="no"] { border-left-color: var(--no); }
+.item p { margin: 0; overflow-wrap: anywhere; }
+.item .title { font-weight: 600; }
+.item .text { white-space: pre-line; }
+.item code { font-size: 0.93em; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tags span {
+	font-size: 12px; line-height: 1.4; padding: 2px 8px; border-radius: 4px;
+	background: var(--chip); color: var(--muted); overflow-wrap: anywhere;
+}
+.tags span.lead { color: var(--fg); font-weight: 500; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.marks { display: flex; gap: 6px; }
+.marks button {
+	font: inherit; font-weight: 500; font-size: 13px;
+	padding: 6px 12px; border-radius: 5px; cursor: pointer;
+	border: 1px solid var(--line); background: transparent; color: var(--fg);
+}
+.marks button:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.marks button[aria-pressed="true"] { color: var(--on-mark); border-color: transparent; }
+.marks button[data-mark="go"][aria-pressed="true"] { background: var(--go); }
+.marks button[data-mark="later"][aria-pressed="true"] { background: var(--later); }
+.marks button[data-mark="no"][aria-pressed="true"] { background: var(--no); }
+.marks button:disabled { opacity: 0.5; cursor: default; }
+textarea {
+	flex: 1 1 220px; min-width: 0; min-height: 34px; resize: vertical;
+	font: inherit; font-size: 13.5px; color: var(--fg);
+	background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px;
+}
+.saved { font-size: 12px; color: var(--muted); min-height: 1em; }
+.empty { border: 1px dashed var(--line); border-radius: 6px; padding: 20px; color: var(--muted); }
+#done-wrap { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 20px; }
+details.folded { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details.folded > summary {
+	cursor: pointer; padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+	font-family: var(--font-head); font-weight: 600; font-size: 16px;
+}
+details.folded > summary small { font-family: var(--font-body); font-weight: 400; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+details.folded[open] > summary { border-bottom: 1px solid var(--line); }
+details.folded > .review { padding: 16px 14px; }
+</style>
+
+<div class="page">
+	<header class="head">
+		<h1>Collaborator Review List</h1>
+		<p class="sub">Findings and ideas from CooldownCollaborator reviews. Mark each one Go (worth doing), Later or No, and add a note if you like. A Go doesn't start any work: we agree the scope first. Marks save as you go.</p>
+		<div class="lane" id="lane" role="img" aria-label="Marked so far"></div>
+		<div class="counts" id="counts"></div>
+		<p class="status" id="status">Loading saved marks…</p>
+	</header>
+	<main id="reviews">
+		<div class="empty" id="empty">No review items yet. Findings appear here when a review is done.</div>
+	</main>
+	<section id="done-wrap" hidden>
+		<h3>Finished reviews</h3>
+		<div id="done"></div>
+	</section>
+</div>
+
+<script>
+(function () {
+	var MARKS = ["go", "later", "no"];
+	var LABEL = { go: "Go", later: "Later", no: "No" };
+	var els = {};          // doc id -> card elements
+	var items = {};        // doc id -> data
+	var queues = {};       // doc id -> one write at a time
+	var noteTimers = {};
+	var dirty = {};        // doc id -> note typed but not saved yet
+	var touched = {};      // reviews marked in this visit stay in place until the next visit
+	var foldOpen = {};     // finished review id -> unfolded
+	var shape = "";        // the layout last drawn; redrawn only when items are added, removed, moved or folded
+	var heads = {};        // review id -> its count labels
+	var db = null;
+	var readOnly = false;
+	var statusEl = document.getElementById("status");
+	var reviewsEl = document.getElementById("reviews");
+	var doneEl = document.getElementById("done");
+	var doneWrap = document.getElementById("done-wrap");
+	var emptyEl = document.getElementById("empty");
+
+	function setStatus(text, warn) {
+		statusEl.textContent = text;
+		statusEl.className = warn ? "status warn" : "status";
+		statusEl.hidden = !text;
+	}
+
+	// plain text with `code` spans; always set as text, never as HTML
+	function fillText(p, text) {
+		p.textContent = "";
+		String(text || "").split("`").forEach(function (part, i) {
+			if (i % 2 === 1) {
+				var c = document.createElement("code");
+				c.textContent = part;
+				p.appendChild(c);
+			} else if (part) {
+				p.appendChild(document.createTextNode(part));
+			}
+		});
+	}
+
+	// moving a note box out of the page and back drops the cursor; put it back where it was
+	function keepFocus(redraw) {
+		var box = document.activeElement, start = 0, end = 0;
+		if (!box || box.tagName !== "TEXTAREA") { box = null; }
+		if (box) { start = box.selectionStart; end = box.selectionEnd; }
+		redraw();
+		if (box && box.isConnected && document.activeElement !== box) {
+			box.focus({ preventScroll: true });
+			try { box.setSelectionRange(start, end); } catch (e) {}
+		}
+	}
+
+	function write(id, patch) {
+		if (!db || readOnly) { return; }
+		var ui = els[id];
+		var run = function () {
+			return db.collection("items").doc(id).update(patch).then(function () {
+				if (ui) { ui.saved.textContent = "Saved"; }
+			}, function (e) {
+				if (e && e.code === "invalid_argument") {
+					readOnly = true;
+					setStatus("You can read this list but not change it.", true);
+					render();
+				} else if (ui) {
+					ui.saved.textContent = "Not saved. Try again.";
+				}
+			});
+		};
+		queues[id] = (queues[id] || Promise.resolve()).then(run, run);
+	}
+
+	function build(id) {
+		var root = document.createElement("div");
+		root.className = "item";
+		var title = document.createElement("p");
+		title.className = "title";
+		var tags = document.createElement("div");
+		tags.className = "tags";
+		var text = document.createElement("p");
+		text.className = "text";
+		var row = document.createElement("div");
+		row.className = "row";
+		var marks = document.createElement("div");
+		marks.className = "marks";
+		var buttons = {};
+		MARKS.forEach(function (m) {
+			var b = document.createElement("button");
+			b.type = "button";
+			b.dataset.mark = m;
+			b.textContent = LABEL[m];
+			b.addEventListener("click", function () { setMark(id, m); });
+			marks.appendChild(b);
+			buttons[m] = b;
+		});
+		var note = document.createElement("textarea");
+		note.id = "note-" + id;
+		note.rows = 1;
+		note.placeholder = "Note";
+		note.setAttribute("aria-label", "Note");
+		var saved = document.createElement("div");
+		saved.className = "saved";
+		note.addEventListener("input", function () {
+			clearTimeout(noteTimers[id]);
+			dirty[id] = true;
+			saved.textContent = "";
+			noteTimers[id] = setTimeout(function () { saveNote(id); }, 900);
+		});
+		note.addEventListener("blur", function () {
+			clearTimeout(noteTimers[id]);
+			saveNote(id);
+		});
+		row.appendChild(marks);
+		row.appendChild(note);
+		root.appendChild(title);
+		root.appendChild(tags);
+		root.appendChild(text);
+		root.appendChild(row);
+		root.appendChild(saved);
+		els[id] = { root: root, title: title, tags: tags, text: text, buttons: buttons, note: note, saved: saved };
+		return els[id];
+	}
+
+	function saveNote(id) {
+		var ui = els[id], d = items[id];
+		if (!ui || !d) { return; }
+		var v = ui.note.value;
+		dirty[id] = false;
+		if (v === (d.note || "")) { return; }
+		d.note = v;
+		write(id, { note: v, updatedAt: new Date().toISOString() });
+	}
+
+	function setMark(id, mark) {
+		var d = items[id];
+		if (!d || readOnly) { return; }
+		touched[d.review] = true;
+		d.status = d.status === mark ? "" : mark;
+		paint(id);
+		render();
+		write(id, { status: d.status, updatedAt: new Date().toISOString() });
+	}
+
+	function paint(id) {
+		var ui = els[id] || build(id), d = items[id];
+		if (ui.shownTitle !== d.title) { ui.shownTitle = d.title; fillText(ui.title, d.title); }
+		if (ui.shownText !== d.text) { ui.shownText = d.text; fillText(ui.text, d.text); ui.text.hidden = !d.text; }
+		var tagKey = (d.tags || []).join("\u0001");
+		if (ui.shownTags !== tagKey) {
+			ui.shownTags = tagKey;
+			ui.tags.textContent = "";
+			(d.tags || []).forEach(function (t, i) {
+				var s = document.createElement("span");
+				if (i === 0) { s.className = "lead"; }
+				s.textContent = t;
+				ui.tags.appendChild(s);
+			});
+			ui.tags.hidden = !(d.tags && d.tags.length);
+		}
+		ui.root.dataset.status = d.status || "";
+		MARKS.forEach(function (m) {
+			ui.buttons[m].setAttribute("aria-pressed", d.status === m ? "true" : "false");
+			ui.buttons[m].disabled = readOnly;
+		});
+		ui.note.readOnly = readOnly;
+		// never refill a box being typed in or holding unsaved typing (a redraw takes the focus away for a moment)
+		if (document.activeElement !== ui.note && !dirty[id] && ui.note.value !== (d.note || "")) {
+			ui.note.value = d.note || "";
+		}
+	}
+
+	function tally(ids) {
+		var n = { go: 0, later: 0, no: 0, open: 0 };
+		ids.forEach(function (id) {
+			var s = items[id].status;
+			if (n[s] !== undefined && s !== "open") { n[s]++; } else { n.open++; }
+		});
+		return n;
+	}
+
+	function summary() {
+		var ids = Object.keys(items), n = tally(ids), total = ids.length;
+		var lane = document.getElementById("lane");
+		lane.textContent = "";
+		[["g", n.go], ["l", n.later], ["n", n.no]].forEach(function (seg) {
+			if (total && seg[1]) {
+				var s = document.createElement("span");
+				s.className = seg[0];
+				s.style.width = (seg[1] / total * 100) + "%";
+				lane.appendChild(s);
+			}
+		});
+		var counts = document.getElementById("counts");
+		counts.textContent = "";
+		[["Go", n.go], ["Later", n.later], ["No", n.no], ["Open", n.open], ["Items", total]].forEach(function (c) {
+			var span = document.createElement("span");
+			var b = document.createElement("b");
+			b.textContent = c[1];
+			span.appendChild(b);
+			span.appendChild(document.createTextNode(" " + c[0]));
+			counts.appendChild(span);
+		});
+	}
+
+	function countLine(n) {
+		var parts = [];
+		if (n.go) { parts.push(n.go + " Go"); }
+		if (n.later) { parts.push(n.later + " Later"); }
+		if (n.no) { parts.push(n.no + " No"); }
+		if (n.open) { parts.push(n.open + " open"); }
+		return parts.join(" · ");
+	}
+
+	function buildReview(r) {
+		var section = document.createElement("section");
+		section.className = "review";
+		var head = document.createElement("div");
+		head.className = "review-head";
+		var line1 = document.createElement("div");
+		line1.className = "line1";
+		var h = document.createElement("h2");
+		h.textContent = r.title;
+		var small = document.createElement("small");
+		(heads[r.id] = heads[r.id] || []).push(small);
+		line1.appendChild(h);
+		line1.appendChild(small);
+		head.appendChild(line1);
+		if (r.note) {
+			var p = document.createElement("p");
+			p.textContent = r.note;
+			head.appendChild(p);
+		}
+		section.appendChild(head);
+		var group = null, lastGroup = null;
+		r.ids.forEach(function (id) {
+			var d = items[id];
+			if (group === null || d.group !== lastGroup) {
+				lastGroup = d.group;
+				group = document.createElement("div");
+				group.className = "group";
+				if (d.group) {
+					var g = document.createElement("h3");
+					g.textContent = d.group;
+					group.appendChild(g);
+				}
+				section.appendChild(group);
+			}
+			paint(id);
+			group.appendChild(els[id].root);
+		});
+		return section;
+	}
+
+	// open reviews newest first; a review with every item marked folds below (unless marked this visit)
+	function render() {
+		var ids = Object.keys(items);
+		emptyEl.hidden = ids.length > 0;
+		var byReview = {};
+		ids.forEach(function (id) {
+			var d = items[id], key = d.review || "review";
+			var r = byReview[key] || (byReview[key] = { id: key, title: "", note: "", added: "", ids: [] });
+			r.ids.push(id);
+			if (!r.title && d.reviewTitle) { r.title = d.reviewTitle; }
+			if (!r.note && d.reviewNote) { r.note = d.reviewNote; }
+			if (d.added && d.added > r.added) { r.added = d.added; }
+		});
+		var list = Object.keys(byReview).map(function (k) { return byReview[k]; });
+		list.forEach(function (r) {
+			r.title = r.title || r.id;
+			r.ids.sort(function (a, b) { return (items[a].order || 0) - (items[b].order || 0) || (a < b ? -1 : 1); });
+			r.n = tally(r.ids);
+		});
+		list.sort(function (a, b) {
+			if (a.added !== b.added) { return a.added < b.added ? 1 : -1; }
+			return a.id < b.id ? -1 : 1;
+		});
+		list.forEach(function (r) { r.fold = r.n.open === 0 && !touched[r.id]; });
+		// a saved mark or note leaves the layout alone, so a box being typed in is never moved
+		var next = list.map(function (r) {
+			return [r.id, r.title, r.note, r.fold ? "f" : "o", r.ids.map(function (id) {
+				return id + "\u0003" + (items[id].group || "");
+			}).join(",")].join("\u0001");
+		}).join("\u0002");
+		if (next !== shape) {
+			shape = next;
+			keepFocus(function () { draw(list); });
+		} else {
+			list.forEach(function (r) { r.ids.forEach(paint); });
+		}
+		list.forEach(function (r) {
+			(heads[r.id] || []).forEach(function (s) { s.textContent = countLine(r.n); });
+		});
+		summary();
+	}
+
+	function draw(list) {
+		Array.prototype.slice.call(reviewsEl.querySelectorAll(".review")).forEach(function (n) { n.remove(); });
+		doneEl.textContent = "";
+		heads = {};
+		var folded = 0;
+		list.forEach(function (r) {
+			var section = buildReview(r);
+			if (r.fold) {
+				var det = document.createElement("details");
+				det.className = "folded";
+				det.open = !!foldOpen[r.id];
+				det.addEventListener("toggle", function () { foldOpen[r.id] = det.open; });
+				var sum = document.createElement("summary");
+				sum.appendChild(document.createTextNode(r.title));
+				var small = document.createElement("small");
+				heads[r.id].push(small);
+				sum.appendChild(small);
+				det.appendChild(sum);
+				section.querySelector(".review-head").hidden = true;
+				det.appendChild(section);
+				doneEl.appendChild(det);
+				folded++;
+			} else {
+				reviewsEl.appendChild(section);
+			}
+		});
+		doneWrap.hidden = folded === 0;
+	}
+
+	function start() {
+		var use = window.claude && window.claude.use;
+		if (!use) {
+			setStatus("Saved marks can't be reached here. Open this list in Claude to mark items.", true);
+			summary();
+			return;
+		}
+		var slow = setTimeout(function () {
+			setStatus("Saved marks can't be reached yet. Still trying…", true);
+		}, 10000);
+		window.claude.use("db").then(function (store) {
+			if (!store) {
+				clearTimeout(slow);
+				readOnly = true;
+				setStatus("Saved marks aren't available in this view. Sign in to Claude to mark items.", true);
+				summary();
+				return;
+			}
+			db = store;
+			db.collection("items").onSnapshot(function (snap) {
+				var seen = {};
+				snap.docs.forEach(function (doc) {
+					var d = doc.data() || {};
+					seen[doc.id] = true;
+					var mine = items[doc.id] || {};
+					items[doc.id] = {
+						review: d.review, reviewTitle: d.reviewTitle, reviewNote: d.reviewNote, added: d.added || "",
+						group: d.group, order: d.order, title: d.title, tags: Array.isArray(d.tags) ? d.tags.map(String) : [],
+						text: d.text, status: d.status || "", note: d.note || ""
+					};
+					// a note being typed stays as typed until it is saved
+					var ui = els[doc.id];
+					if (ui && document.activeElement === ui.note) { items[doc.id].note = mine.note || items[doc.id].note; }
+				});
+				Object.keys(items).forEach(function (id) {
+					if (!seen[id]) { delete items[id]; if (els[id]) { els[id].root.remove(); delete els[id]; } }
+				});
+				if (!snap.metadata.fromCache) {
+					clearTimeout(slow);
+					if (!readOnly) { setStatus(""); }
+				}
+				render();
+			}, function () {
+				clearTimeout(slow);
+				setStatus("Saved marks stopped loading. Reopen the list to try again.", true);
+			});
+		});
+	}
+
+	summary();
+	start();
+})();
+</script>

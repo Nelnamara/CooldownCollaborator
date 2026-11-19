@@ -1,0 +1,167 @@
+[
+  {
+    "id": "A1",
+    "title": "Big raids crash the Essentials bar, and a /reload in one leaves the addon deaf",
+    "group": "Lua errors",
+    "severity": "high",
+    "clients": "All clients",
+    "where": "Essentials.lua:226",
+    "what": "In a group where the Essentials bar needs 10 or more lines (its two headers plus the lust and Battle Rez providers, e.g. 5 lust providers and 3 Battle Rez providers, which is normal for a Retail heroic/LFR raid or a TBC/MoP 25-man), the bar throws a Lua error on every roster change, every cast, every addon message and twice a second while it is shown, and stops resizing. If you /reload while in such a raid the error fires during start-up, so the addon never registers its events: for the rest of the session it hears no one's cooldowns, roster changes or boss ends, never links to CooldownTimeline3, and /cdc roster prints nothing.",
+    "proof": "Essentials.lua:146-186: the capability loop does idx = idx + 1 and 'if idx > MAX_ROWS then break end' (MAX_ROWS = 10), leaving idx at 11 or 12. Lines 205-208: the flask/food strip does idx = idx + 1 again whenever you are grouped (GetGroupBuffStatus counts the player, so total > 0), so exactly 10 used rows also ends at idx 11. Lines 225-228: 'for i = 1, idx do local row = rows[i]; row:ClearAllPoints()' indexes rows[11] = nil. Probe (tools/tests stub, all five clients): a raid of 8 druids is fine, 9 druids gives 'Essentials.lua:228: attempt to index a nil value (local 'row')' from Roster.lua:136 (ScanRoster -> RefreshEssentials) on GROUP_ROSTER_UPDATE. Callers: ScanRoster (Roster.lua:136), RefreshAllViews (CooldownCollaborator.lua:395, so RecordCooldown, RecordCooldownFromComm, RecordReadyFromComm, PollLocalReady), OnUnitLevel (Roster.lua:98), OnBuffStatusMessage (Consumables.lua:253), the 0.5 s ticker (Essentials.lua:123-127), /cdc essentials and /cdc roster. Start-up: CC:Init() ends with self:ScanRoster() (CooldownCollaborator.lua:184), and the ADDON_LOADED branch only registers GROUP_ROSTER_UPDATE, UNIT_LEVEL, ENCOUNTER_START/END, CHAT_MSG_ADDON, INSPECT_READY, PLAYER_LOGOUT and PLAYER_LOGIN after Init returns (lines 565-574). Probe logging in to a 12-member raid (Retail and MoP): CHAT_MSG_ADDON false, GROUP_ROSTER_UPDATE false, ENCOUNTER_END false, PLAYER_LOGOUT false, bridgeRegistered false; only UNIT_SPELLCAST_SUCCEEDED (registered inside Init before ScanRoster, Events.lua:22) survives, and a later addon message produced no handling at all. On a /reload the raid roster is already readable at ADDON_LOADED, which is what makes Init's ScanRoster see it.",
+    "confidence": "high"
+  },
+  {
+    "id": "A2",
+    "title": "Joining, rejoining or reloading shows every Battle Rez and lust as READY",
+    "group": "Players out of sync",
+    "severity": "medium",
+    "clients": "All clients",
+    "where": "Events.lua:116",
+    "what": "Nobody tells a player what is already on cooldown. Someone who joins mid-dungeon, gets re-invited, or types /reload sees every lust and Battle Rez provider as READY (and Request Rez will name a druid whose Rebirth was used 2 minutes ago) until each spell is cast again or a boss ends. Cooldowns you used while solo, before joining, are never sent at all. On Era, TBC and MoP the combat log only fills in casts seen after you arrived.",
+    "proof": "CC.state = {} (CooldownCollaborator.lua:72) is not in the saved variables. The only re-send is BroadcastState (Events.lua:116-126), called only from ENCOUNTER_END (CooldownCollaborator.lua:585-587); nothing sends on GROUP_ROSTER_UPDATE, PLAYER_ENTERING_WORLD or a new member, and there is no request message. SendCooldownSync returns without queueing when 'not chatType' (Comms.lua:47-51), so a solo cast is dropped for good. PruneState (Events.lua:102-112) deletes a member's entries when they leave, so a re-invite starts them empty. With no entry, GetRemaining returns nil (CooldownCollaborator.lua:399-403), bestRemaining stays nil and the provider is 'ready = (bestRemaining or 0) <= 0' = true (Roster.lua:263-281); RequestRez picks the first ready entry (CooldownCollaborator.lua:364-374).",
+    "confidence": "high"
+  },
+  {
+    "id": "A3",
+    "title": "Unticking a spell, or raising the minimum length, stops your own casts reaching the group",
+    "group": "Players out of sync",
+    "severity": "medium",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:250",
+    "what": "The Default Spells checkboxes and the 'Minimum cooldown to track' buttons look like display filters, but they also stop your own casts from being sent. A shaman who unticks Bloodlust to tidy their list, or a healer who sets the minimum to 120 s, never tells the group: everyone else's Essentials bar keeps showing their lust or Pain Suppression as READY after it has been used. Their own bar still looks right (it reads the spellbook), so they never notice.",
+    "proof": "RecordCooldown: 'if data.duration < (self.db.minDuration or 60) then return end' (line 250) and 'if self.db.disabledSpells and self.db.disabledSpells[spellID] then return end' (line 251) both run before 'self:SendCooldownSync(spellID, name, now)' (line 270) and before localActive is set (line 267), so neither the cast nor its ready-now goes out. Options.lua:23 offers 30/60/90/120/180; Options.lua:124-125 write disabledSpells. Receivers already filter for display themselves (UI.lua:160-161). Probe: with 20484 unticked, an own Rebirth cast sent 0 CDCOLLAB messages; with minimum 180, Pain Suppression (Retail 90 s) and Hand of Sacrifice (MoP 120 s) sent 0. Your own Essentials entry uses GetLocalReadiness (Roster.lua:263), so it still looks correct to you.",
+    "confidence": "high"
+  },
+  {
+    "id": "A4",
+    "title": "Your flask and food status never reaches a group you join later",
+    "group": "Players out of sync",
+    "severity": "medium",
+    "clients": "All clients",
+    "where": "Consumables.lua:223",
+    "what": "The flask/food status is sent once, 2 seconds after login, and then only when one of your buffs changes. If you were solo at that moment (the usual case) and join a group afterwards, the group sees you as missing flask and food until a buff changes. A send the game refuses (throttle, boss-fight block) is simply lost. Someone who left and rejoins keeps showing whatever they had last time, because old entries are never cleared.",
+    "proof": "PollConsumables: 'if changed or not self.buffBroadcastDone then self.buffBroadcastDone = true; self:BroadcastBuffStatus(...)' (lines 223-226) sets the flag even when BroadcastBuffStatus returns at 'if not IsInGroup() then return end' (line 239). Nothing resets buffBroadcastDone (only written at 224) and there is no send on GROUP_ROSTER_UPDATE. The result of 'C_ChatInfo.SendAddonMessage(BUFF_PREFIX, msg, chatType)' (line 245) is ignored: no AddonMessageSent check, no retry queue, unlike Comms.lua:69-73. CC.buffRoster (line 24) is only ever written (lines 230, 252), never pruned. Probe (Retail, Era, Forever): log in solo, join a party, run 20 s of polls: 0 CDCBUFF messages sent.",
+    "confidence": "high"
+  },
+  {
+    "id": "A5",
+    "title": "Anyone can pin a fake cooldown on another player's Battle Rez or lust",
+    "group": "Can be abused",
+    "severity": "medium",
+    "clients": "All clients",
+    "where": "Comms.lua:135",
+    "what": "Any group member, or any stranger on the realm by addon whisper, can send one message that shows a chosen player's Rebirth, lust or any tracked spell as on cooldown for hours. The real player's own casts cannot correct it, Request Rez then skips them, and if the target is you, your own client re-broadcasts the fake as your cast at the next boss end. Made-up player names also create timers on CooldownTimeline3, and while you are solo nothing ever clears them.",
+    "proof": "OnAddonMessage(prefix, message, _, sender) drops the channel argument (Comms.lua:95), so WHISPER/GUILD/CHANNEL messages are handled like group ones. The body name is trusted when it differs from the sender: 'if not owner or self:ShortName(owner) ~= playerName then owner = self:ResolveBareName(playerName) end' (lines 135-137); ResolveBareName matches the player too (CooldownCollaborator.lua:112) and falls back to NormalizeSender(bare) for anyone (line 125). secondsAgo is only tonumber'd (line 120), so a negative value gives 'localUsedAt = GetTime() - secondsAgo' in the future (line 130). RecordCooldownFromComm then keeps it against every later real report: 'if not cur or usedAt > cur then' (CooldownCollaborator.lua:304). Probe: '20484:-100000:Tania:DRUID' sent by Brannoc-Realm -> Tania's Rebirth 100600 s left; Tania's own '20484:0.000:Tania:DRUID' afterwards -> still 100595 s; the same from 'Stranger-Realm' over WHISPER works; '20484:0:Nobody:DRUID' creates CC.state['Nobody-Realm'] and BridgeStart (line 306) starts a CDTL3 timer for it, cleared only by PruneState on GROUP_ROSTER_UPDATE (Events.lua:102). A fake naming you lands in your own entry; BroadcastState sends it as yours with secondsAgo = max(0, now - usedAt) = 0 (Events.lua:120-123, Comms.lua:55). Only the real owner's next ready-now (RecordReadyFromComm, line 281) clears it.",
+    "confidence": "high"
+  },
+  {
+    "id": "A6",
+    "title": "One groupmate still on version 1.0 keeps undoing 'ready now' announcements",
+    "group": "Players out of sync",
+    "severity": "medium",
+    "clients": "Retail",
+    "where": "Comms.lua:135",
+    "what": "If anyone in the group still runs CooldownCollaborator 1.0.x, then after the first boss kill every early 'ready now' (a talent-shortened cooldown) snaps back to counting down within two seconds, on every 1.1 user's bars and on CooldownTimeline3, and keeps doing so for the rest of the session.",
+    "proof": "v1.0.3 Events.lua BroadcastState relays every entry it holds for every player ('for name, entry in pairs(self.state) do for spellID, usedAt in pairs(entry.spells) do self:SendCooldownSync(spellID, name, usedAt)'), and v1.0.3 Comms.lua queues on any non-nil result ('if result then table.insert(CC.pendingSyncs, ...)'), so its successful sends (result 0) are re-sent every 2 s for ever; it drops 'R:' messages (tonumber('R') is nil), so it never learns a spell is ready. 1.1.1 accepts the relay for the named player (Comms.lua:135-138) and RecordCooldownFromComm overwrites the ready-now value 'GetTime() - data.duration' (CooldownCollaborator.lua:281) because the relayed cast time is later ('usedAt > cur', line 304) and more than 5 s away. Probe (Retail): Tania's Innervate after 'R:29166' -> 0 s left; a relay '29166:100.000:Tania:DRUID' from Oldie-Realm -> 80 s left, and BridgeStart (line 306) restarts the CDTL3 timer. 1.0.x existed only on Retail.",
+    "confidence": "high"
+  },
+  {
+    "id": "A7",
+    "title": "Retail: paladins and Marksmanship hunters never show as Battle Rez or lust providers",
+    "group": "Wrong or missing timers",
+    "severity": "medium",
+    "clients": "Retail",
+    "where": "Data_Retail.lua:57",
+    "what": "On Retail a paladin's Intercession is a Battle Rez and a Marksmanship hunter's Harrier's Cry is a lust, but neither is in the addon's lists. A group whose only rez is a paladin gets 'No providers in group' on the Essentials bar and 'No living Battle Rez provider available right now' from Request Rez, and those casts are never tracked or synced.",
+    "proof": "CC.Providers.BATTLEREZ = { DRUID = {20484}, DEATHKNIGHT = {61999} } and BLOODLUST = { SHAMAN, MAGE, EVOKER } (Data_Retail.lua:57-67); neither 391054 nor 466904 is in CC.SpellData (lines 3-54), so RecordCooldown returns at 'if not data then return end' (CooldownCollaborator.lua:249). Game data for 12.1.5.70783 (cdtl3-dev spell-list-check cache): SpellName 391054 'Intercession'; SpellCooldowns RecoveryTime 600000; SpellCategories Category 26, the same category as Rebirth 20484; SkillLineAbility ClassMask 2 (Paladin); SpellLevels BaseLevel 19. SpellName 466904 'Harrier's Cry'; SpellCooldowns RecoveryTime 360000; SpecializationSpells spec 254 (Marksmanship); SpellLevels BaseLevel 48. Capabilities are by class (Roster.lua:73-87), so Harrier's Cry would list every hunter, not only Marksmanship; Beast Mastery/Survival lust is the pet's Primal Rage, which RecordCooldown never sees (player only, CooldownCollaborator.lua:596).",
+    "confidence": "high"
+  },
+  {
+    "id": "A8",
+    "title": "Request Rez and the Essentials bar count offline players as ready",
+    "group": "Wrong or missing timers",
+    "severity": "medium",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:367",
+    "what": "A disconnected druid or death knight stays on the Essentials bar as a READY Battle Rez provider, and Request Rez will pick them (it sorts ready providers by name) and announce 'Tania, please Rebirth Brannoc!' in raid warning to someone who can't respond.",
+    "proof": "ScanRoster's addUnit only needs FullName and UnitClass (Roster.lua:104-115), no UnitIsConnected check, and GetCapabilityStatus adds every roster member with the capability (Roster.lua:246-283). RequestRez only skips the target and the dead: 'if entry.ready and entry.name ~= targetName then local token = FindUnitToken(entry.name); if not token or not UnitIsDeadOrGhost(token) then provider = entry' (lines 367-371). Probe (Retail, MoP, Era) with UnitIsConnected('party1') false: Tania-Realm listed ready=true, and RequestRez sent 'Tania, please Rebirth Brannoc!'.",
+    "confidence": "high"
+  },
+  {
+    "id": "A9",
+    "title": "Request Rez goes nowhere in dungeon finder, raid finder and battleground groups",
+    "group": "Windows and controls",
+    "severity": "low",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:385",
+    "what": "In a group made by the dungeon finder or raid finder, or in a battleground, the Rez button and /cdc rez send the request to party or raid chat, which you are not in there, so the game refuses it and nobody sees the call. The addon's own sync already knows to use instance chat in these groups.",
+    "proof": "RequestRez: 'if IsInRaid() then SendChat(msg, \"RAID\"); SendChat(msg, \"RAID_WARNING\") else SendChat(msg, \"PARTY\") end' (lines 385-390), while CC:GroupChannel returns INSTANCE_CHAT when IsInGroup(LE_PARTY_CATEGORY_INSTANCE) (Comms.lua:18-27) for exactly this reason (docs/port-research.md item 9). Probe with INSTANCE_GROUP = true: addon channel INSTANCE_CHAT, Request Rez chat channel PARTY. Mostly Retail and MoP (dungeon/raid finder); battlegrounds on every client.",
+    "confidence": "high"
+  },
+  {
+    "id": "A10",
+    "title": "Request Rez accepts any dead target, including a dead mob",
+    "group": "Windows and controls",
+    "severity": "low",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:356",
+    "what": "A raid leader who still has the dead boss or an add targeted and clicks Rez sends 'Tania, please Rebirth Hogger!' to raid chat and raid warning. On Retail and WoW: Forever, inside an instance fight, the mob's name can be a hidden value, and then the click raises a Lua error instead.",
+    "proof": "The only target checks are 'if not UnitExists(\"target\") or not UnitIsDeadOrGhost(\"target\")' (line 356); nothing checks the target is a player in the group. Probe: dead NPC target -> 'Tania, please Rebirth Hogger!'. Retail and Forever UnitDocumentation mark UnitFullName 'SecretWhenUnitIdentityRestricted', defined as 'produce secret values when the unit isn't player-controlled or in the party/raid'; CC:FullName then compares it, 'if not name or name == \"\" then' (line 87), outside any pcall.",
+    "confidence": "medium"
+  },
+  {
+    "id": "A11",
+    "title": "A 'ready now' that the game blocks during a boss is never sent again",
+    "group": "Wrong or missing timers",
+    "severity": "low",
+    "clients": "Retail, Forever",
+    "where": "Comms.lua:90",
+    "what": "When a talent-shortened cooldown comes back during a boss fight, the 'ready now' message is refused for the whole fight, given up after about 30 seconds, and not repeated when the boss ends. Everyone else keeps seeing that spell counting down to its full base length.",
+    "proof": "SendReadySync re-queues only while 'tries < CC.MAX_SEND_TRIES' (15, every 2 s; Comms.lua:39, 89-92). PollLocalReady has already cleared localActive and set the own entry to 'now - data.duration' (CooldownCollaborator.lua:540-548), and BroadcastState at ENCOUNTER_END only re-sends spells still cooling: '(usedAt + CC.SpellData[spellID].duration) > GetTime()' (Events.lua:122). Probe with sends returning 11 (AddOnMessageLockdown) for 40 s: 15 'R:29166' attempts, queue empty, then 0 new R and 0 new syncs after ENCOUNTER_END. Forever shares Retail's send-result enum and restriction docs; whether its raids block addon messages the same way is not confirmed.",
+    "confidence": "medium"
+  },
+  {
+    "id": "A12",
+    "title": "CooldownTimeline3 loses Challenging Roar (Era) and Earth Elemental Totem (TBC) group timers",
+    "group": "Wrong or missing timers",
+    "severity": "low",
+    "clients": "Classic Era, TBC",
+    "where": "Bridge.lua:26",
+    "what": "With both addons installed, CooldownTimeline3 hands its group cooldowns over to this addon and stops reading them itself. On Era, groupmates' Challenging Roar, and on TBC their Earth Elemental Totem, then vanish from CooldownTimeline3, because this addon doesn't track them. Spells a player unticked in CooldownTimeline3's own list come back too.",
+    "proof": "CC:BridgeActive (Bridge.lua:26-28) is what CDTL3 checks: cdtl3-dev Group.lua:182-193 CollaboratorFeeds returns true while it is on and the cdcgroup type is enabled, and RaidCast returns early on it (Group.lua:205). CDTL3's own lists (Group.lua RAID.era / RAID.tbc) include { 5209, 600 } Challenging Roar and { 2062, 1200 } Earth Elemental Totem; neither ID is in Data_Era.lua or Data_TBC.lua, so MatchSpell (Events.lua:34-40) never matches them and nothing feeds them. CDTL3's per-spell untick (TickedOff, Group.lua:177-180) only gated its own feed; CDTL3:StartTimer (API.lua:244) does not check it for cdcGroup timers. MoP's CDTL3 list is fully covered by Data_Mists.lua.",
+    "confidence": "high"
+  },
+  {
+    "id": "A13",
+    "title": "CooldownTimeline3 still shows groupmates' spells you unticked or set below your minimum",
+    "group": "Wrong or missing timers",
+    "severity": "low",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:306",
+    "what": "Unticking a spell in Default Spells, or raising the minimum length, hides it from this addon's own list, but other players' casts of it still appear on CooldownTimeline3's lanes. Your own casts of it don't, so the two views disagree.",
+    "proof": "RecordCooldownFromComm calls 'self:BridgeStart(playerName, spellID, usedAt, ...)' (line 306) with no disabledSpells or minDuration check; BridgeStart (Bridge.lua:45-64) and BridgeResync (Bridge.lua:74-80) check neither. The main list filters both in BuildRowData (UI.lua:160-161); own casts stop at CooldownCollaborator.lua:250-251. On Era, TBC and MoP the combat-log path (Events.lua:80) feeds the same function.",
+    "confidence": "high"
+  },
+  {
+    "id": "A14",
+    "title": "MoP: a druid's own Stampeding Roar in Cat or Bear Form isn't tracked or sent",
+    "group": "Wrong or missing timers",
+    "severity": "low",
+    "clients": "MoP Classic",
+    "where": "CooldownCollaborator.lua:249",
+    "what": "On MoP Classic, Stampeding Roar cast in Cat Form or Bear Form uses its own spell ID, which the list doesn't have, so the druid's own window never shows it, nothing is sent, and there is no ready-now. Groupmates still see it through the combat log, which also matches by name.",
+    "proof": "Data_Mists.lua:54 lists only 106898 and MoP has no ranks, so RankToBase has no 77761/77764 (Data.lua:45-59). RecordCooldown: BaseSpellID(77764) = 77764, CC.SpellData[77764] = nil, 'if not data then return end' (line 249); unlike MatchSpell (Events.lua:39) it has no name fallback. Game data 5.5.4.70631: 77761 and 77764 are both named 'Stampeding Roar', each with its own SpellCooldowns row (120000 ms; 77764 has the 1.0 s cat GCD), SpellLevels 84, and SpellCategories Category 1257, the same as 106898. Not confirmed in game that the form cast reports 77761/77764.",
+    "confidence": "medium"
+  },
+  {
+    "id": "A15",
+    "title": "Retail: spec labels never appear in /cdc roster",
+    "group": "Windows and controls",
+    "severity": "low",
+    "clients": "Retail",
+    "where": "Roster.lua:203",
+    "what": "/cdc roster says '(spec refinement queued)', but no spec ever shows. The inspect queue still sends inspect requests for the whole group on every roster change, and starts the next one right after any inspect result, including the ones your own Inspect window or other addons asked for.",
+    "proof": "INSPECT_READY's payload is inspecteeGUID (Blizzard_APIDocumentationGenerated/PaperDollInfoDocumentation.lua: '{ Name = \"inspecteeGUID\", Type = \"WOWGUID\" }'). CC:OnInspectReady(unitID) treats it as a unit token: 'local name = CC:FullName(unitID)'; UnitFullName takes a UnitToken (UnitDocumentation.lua), so name is nil and it returns through 'C_Timer.After(0.1, function() CC:ProcessInspectQueue() end)' (Roster.lua:206-210) before GetInspectSpecialization (line 214), so rosterSpecs is never filled. ScanRoster calls QueueInspectAll on every GROUP_ROSTER_UPDATE (Roster.lua:132-134), which rebuilds the queue and calls NotifyInspect (line 192).",
+    "confidence": "medium"
+  }
+]

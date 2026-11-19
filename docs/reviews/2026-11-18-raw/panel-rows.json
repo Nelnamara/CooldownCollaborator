@@ -1,0 +1,962 @@
+[
+ {
+  "id": "2026-11-18-cc-feature-panel-01",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 1,
+   "title": "Sound and flash when a chosen cooldown is ready",
+   "text": "Tank: \"I won't look at a panel mid-fight, but I will hear a ping when the healer's Pain Suppression is back.\"\nPick spells in Settings and get a sound, a screen flash or both when one comes back, yours or a groupmate's. An off switch, a sound picker, and an optional warning a few seconds before.",
+   "tags": [
+    "Partly on Retail and Forever: groupmates only if they run it",
+    "Beginner, Healer, DPS, Tank",
+    "Today: a green READY text, no sound or flash"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-02",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 2,
+   "title": "Show only what my role cares about",
+   "text": "Healer: \"In a 20 man raid I only care about healing cooldowns and externals, not every class's utility.\"\nEach spell gets a kind (externals, raid defensives, battle rez, lust, mana, utility). The panel can group by kind, class or raid group, and one-click presets show only some kinds: Simple (rez, lust, big heals), Healer, Tank, Everything.",
+   "tags": [
+    "Possible on every client",
+    "Beginner, Healer, DPS, Tank, Classic raider",
+    "Today: one list sorted by time; spells are unticked one by one in Settings"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-03",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 3,
+   "title": "Battle rez in one click: a dead list anyone can call from",
+   "text": "Mythic+ leader: \"Someone dies mid-pull and I don't have time to click their corpse, then the rez button, then check who is alive.\"\nWhen a groupmate dies their name shows in a small strip; one click (or a keybind or macro) picks the best living rezzer and calls it. In a 5-player group anyone may call, it goes to instance chat in Group Finder groups, and it can whisper the rezzer. With several dead, the leader's order (healers, tanks, damage) decides who is first.",
+   "tags": [
+    "Partly on Retail and Forever: others' readiness only from players who run it",
+    "Tank, Raid leader, Mythic+ leader",
+    "Today: target the dead player, then /cdc rez or the Rez button; leader or assist only; party or raid chat"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-04",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 4,
+   "title": "Warn when lust or battle rez is missing or down to one",
+   "text": "Raid leader: \"If my only Bloodlust shaman dies or leaves, I want to know before the next pull, not when I call lust.\"\nWhen the group forms or changes, one line says who brings lust and battle rez, and warns when there is none, only one, or the last one is dead or offline. Counts classes, so it works with strangers.",
+   "tags": [
+    "Possible on every client (no lust on Era or Forever)",
+    "Raid leader, Mythic+ leader",
+    "Today: \"No providers in group\" on the Essentials bar, no warning"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-05",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 5,
+   "title": "Grey out a cooldown whose owner is dead or offline",
+   "text": "DPS: \"If my lust shaman is dead, I need that fact now, not when I press the button.\"\nA ready cooldown whose owner is dead, offline (or, out of combat, out of range) shows greyed with a mark, and the Essentials bar skips it and names the next live provider.",
+   "tags": [
+    "Possible on every client",
+    "DPS, Tank",
+    "Today: a dead owner's spell still shows ready"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-06",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 6,
+   "title": "Ready defensives as one number",
+   "text": "Raid leader: \"I don't want to read 25 rows mid-pull, I want to see 4 of 6 raid cooldowns ready and nothing else.\"\nA small tile on the Essentials bar counting ready externals and raid defensives (you pick which count) out of how many the group has, with a tooltip of who and what, and a colour when it drops low.",
+   "tags": [
+    "Partly on Retail and Forever: counts only players who run it",
+    "Raid leader, Mythic+ leader",
+    "Today: the Essentials bar has lust, battle rez and flask or food only"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-07",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 7,
+   "title": "Ready check and pull timer summary",
+   "text": "Tank: \"Before a pull I want one line: lust ready, rez charges, which externals are up.\"\nOn a ready check or when a pull countdown starts (the game's or a boss mod's), one line or a short flash on the Essentials bar: lust ready or not, battle rez charges, externals ready, naming anything still cooling.",
+   "tags": [
+    "Partly on Retail and Forever: only players who run it",
+    "Tank, Mythic+ leader",
+    "Today: /cdc roster lists providers on demand; nothing reacts to a ready check or pull"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-08",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 8,
+   "title": "Click a ready cooldown to ask for it",
+   "text": "Tank: \"One click should ask the right healer for the right button.\"\nClick a ready row to whisper its owner a set line (\"Pain Suppression on me please\"), or Shift-click to announce it to the group. The same for Innervate, Power Infusion and other asks.",
+   "tags": [
+    "Possible on every client",
+    "Healer, DPS, Tank",
+    "Today: rows only display; Request Rez is the only call"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-09",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 9,
+   "title": "A compact icon-only look",
+   "text": "DPS: \"My screen is full already, give me icons and a timer, no names and borders.\"\nA panel style of spell icons with a cooldown swipe and a small class-colour dot, packed in a row or grid, greyed while cooling and bright when ready.",
+   "tags": [
+    "Possible on every client",
+    "Healer, DPS",
+    "Today: text rows, the Essentials bar and the Lane view"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-10",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 10,
+   "title": "Show an external while it's active",
+   "text": "Healer: \"Two externals on one tank wastes both, and I want to know before I press mine.\"\nWhen a tracked external or big defensive is cast, its row shows the effect's own timer (and on Classic who it went on) before switching to the cooldown, so nobody stacks a second one.",
+   "tags": [
+    "Partly: on Retail and Forever only from players who run it, and the target is hidden",
+    "Healer, Tank",
+    "Today: only the cooldown timer"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-11",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 11,
+   "title": "Battle rez charges as one number",
+   "text": "Healer: \"I want to see charges left and who is next up to rez, so we don't burn two on one wipe.\"\nThe Essentials bar shows the raid's battle rez charges and time to the next one, shared by whoever can read it, with the ready rezzers in order so the leader can pick.",
+   "tags": [
+    "Partly on Retail: the pool is readable only for your own spell, so it has to be shared",
+    "Healer, Addon maker",
+    "Today: your own charges are read; nothing shared or shown"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-12",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 12,
+   "title": "Raid cooldown plan",
+   "text": "Healer: \"Our plan says Aura Mastery on the second tank swap, and I want that on screen, not in a Discord note.\"\nThe leader writes who uses what and when (a time or a boss timer from BigWigs or DBM), shares it with the group, and each player gets a prompt when it's their turn. The panel flags a planned spell that won't be back.",
+   "tags": [
+    "Partly on Retail and Forever: ready status only from players who run it",
+    "Healer, Addon maker",
+    "Today: no plan, only the live list"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-13",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 13,
+   "title": "Say who runs the addon and why someone is missing",
+   "text": "Beginner: \"It says No cooldowns tracked and I can't tell if it's broken or my friends just don't have it.\"\nEach copy says hello with its version when it joins a group, and /cdc guild asks the whole guild. The panel and /cdc roster then show who runs it (and who has an old version), and an empty panel says why: nobody else runs it, or nobody has used anything yet.",
+   "tags": [
+    "Possible on every client",
+    "Beginner, Addon maker, Guild master",
+    "Today: messages carry no version; an empty panel says only No cooldowns tracked"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-14",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 14,
+   "title": "Getting started: a welcome note, /cdc help and a first tab",
+   "text": "Guild master: \"A new recruit installs it and sees nothing until they join a group, then they ask me what is wrong.\"\nA one-time note after install says what it does, that the windows open in a group, that on Retail and Forever groupmates need it too, and the commands worth knowing. /cdc help lists them (today any unknown word hides or shows the panel). Settings opens on a Getting Started tab with each window and its on/off, Lock and Reset.",
+   "tags": [
+    "Possible on every client",
+    "Beginner, Guild master",
+    "Today: no help; an unknown /cdc word toggles the panel"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-15",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 15,
+   "title": "Profiles: share a setup with your guild and your alts",
+   "text": "Guild master: \"I want to hand every new member one setup so they stop asking me which spells to untick.\"\nNamed profiles a character picks, alts following the main's (with per-character overrides like position), and an export string to share the tracked spells, custom spells and window places with others.",
+   "tags": [
+    "Possible on every client",
+    "Addon maker, Guild master",
+    "Today: one settings table for the whole account, no export"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-16",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 16,
+   "title": "Fill in a late joiner or a /reload at once",
+   "text": "Classic raider: \"I disconnect in the middle of a three hour raid and my Lay on Hands timer comes back as ready.\"\nRecorded cooldowns are saved with a real clock time and restored after a reload, crash or relog. A player who joins or reloads also asks once, and everyone with the addon answers with their running cooldowns, spread over a few seconds.",
+   "tags": [
+    "Possible on every client (others only if they run it, on Retail and Forever)",
+    "Addon maker, Classic raider",
+    "Today: timers live in memory only; running cooldowns are re-sent only after a boss ends"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-17",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 17,
+   "title": "Flask and food by name, for the whole raid",
+   "text": "Classic raider: \"In a 40 man most of my raid has no addon, so the flask count says 6 of 6 while 34 people are unbuffed.\"\nClick the flask or food count to see who lacks it and post the names to raid chat. On Era, TBC and MoP it reads every raid member's buffs, so players without the addon count too; elsewhere they show as unknown.",
+   "tags": [
+    "Partly: everyone on Era, TBC and MoP; players who run it on Retail and Forever",
+    "Raid leader, Classic raider",
+    "Today: a count from players who run it, no names"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-18",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 18,
+   "title": "More spells: tank cooldowns, taunts and Classic raid tools",
+   "text": "Tank: \"My co-tank's Shield Wall, Last Stand and taunts matter just as much as the healer's cooldowns.\"\nTank personals and group taunts on the lists, and the Classic tools raids plan around (Reincarnation, Fear Ward, Last Stand, Tranquilizing Shot, Goblin Sapper Charge). Each can still be unticked.",
+   "tags": [
+    "Partly on Retail and Forever: the other player must run it",
+    "Tank, Classic raider",
+    "Today: Shield Wall and Challenging Shout only on TBC, Era and Forever; Era and Forever track 12 spells"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-19",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Asked by several players",
+   "order": 19,
+   "title": "A copyable support summary",
+   "text": "Guild master: \"When someone says it does not work, I want one block of text they can paste to me instead of five questions.\"\n/cdc support opens a copy box with the version, client, group type, which groupmates have been heard from, unticked spells and recent send errors (like CDTL3's /cdtl3 report).",
+   "tags": [
+    "Possible on every client",
+    "Guild master, Addon maker",
+    "Today: /cdc debug prints to chat"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-20",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "WoW beginner",
+   "order": 20,
+   "title": "Hover a spell to see what it does",
+   "text": "Beginner: \"I see Spirit Link Totem on the list and have no idea if I should care.\"\nHovering a row, lane icon or Essentials entry shows the spell's own tooltip plus one plain line on when it matters, who owns it and when it's back.",
+   "tags": [
+    "Possible on every client",
+    "Beginner",
+    "Today: hovering a row only highlights it"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-21",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "WoW beginner",
+   "order": 21,
+   "title": "Party and raid layouts that switch by themselves",
+   "text": "Beginner: \"I resized everything for dungeons and then a raid invite wrecked my screen.\"\nPositions and sizes saved once for 5-man and once for raid, switched when the group changes, and one button that puts every window back to its default place.",
+   "tags": [
+    "Possible on every client",
+    "Beginner",
+    "Today: one saved position; /cdc reset moves only the main panel"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-22",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "WoW beginner",
+   "order": 22,
+   "title": "A \"You're the rez\" reminder",
+   "text": "Beginner: \"I don't want to be the one who used Bloodlust at the pull when the healer needed it.\"\nWhen you are the group's lust or battle rez provider, the Essentials bar says so, so you know the group is counting on you.",
+   "tags": [
+    "Possible on every client",
+    "Beginner",
+    "Today: providers are listed by name, yours included"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-23",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "WoW beginner",
+   "order": 23,
+   "title": "Help setting up the CDTL3 link",
+   "text": "Beginner: \"The description says install CDTL3 for lanes but I don't know what lanes are or if I need that.\"\nWithout CDTL3, Settings says in one line what it adds and where to get it; with it, a button opens CDTL3 at Filters › Defaults › Group cooldowns.",
+   "tags": [
+    "Possible on every client",
+    "Beginner",
+    "Today: the bridge box only shows when CDTL3 is loaded"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-24",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro healer",
+   "order": 24,
+   "title": "Mana cooldowns together",
+   "text": "Healer: \"On TBC I live and die by Mana Tide, Innervate and Shadowfiend, and I want those timers together.\"\nA small strip for the mana tools (Mana Tide Totem, Innervate, Shadowfiend, Hymn of Hope) with who has one ready, and an ask button like Request Rez.",
+   "tags": [
+    "Partly: full on Classic Era, TBC and MoP; Retail and Forever have few of these",
+    "Healer",
+    "Today: tracked in the main list only"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-25",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro healer",
+   "order": 25,
+   "title": "What will be back for the next big hit",
+   "text": "Healer: \"I want to line my cooldowns up against the fight and see what will be ready for the next big hit.\"\nType a time or use a pull timer and the Lane view marks which cooldowns will be ready by then, and warns when none will.",
+   "tags": [
+    "Partly on Retail and Forever: only players who run it",
+    "Healer",
+    "Today: no look-ahead"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-26",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro DPS",
+   "order": 26,
+   "title": "Next lust on one line",
+   "text": "DPS: \"I just need one number: how long until I can lust, from anyone in the group.\"\nOne short line or icon with the soonest lust and who holds it (\"Lust: Kaelen 0:42\"), usable instead of the whole Essentials bar.",
+   "tags": [
+    "Not on Classic Era or Forever (no lust there)",
+    "DPS",
+    "Today: every provider on its own row"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-27",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro DPS",
+   "order": 27,
+   "title": "Lust running and Sated timers",
+   "text": "DPS: \"After the lust goes out I want to see the 40 seconds left and when Sated or Exhaustion drops off.\"\nA timer for the lust buff on you and for Sated or Exhaustion, so you know when burst ends and when a second lust is allowed.",
+   "tags": [
+    "Partly on Retail (your own auras only); not on Era or Forever",
+    "DPS",
+    "Today: only the lust cooldown"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-28",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro DPS",
+   "order": 28,
+   "title": "Power Infusion line and Retail PI",
+   "text": "DPS: \"I need to know whether PI is actually up before I line up trinkets.\"\nA Power Infusion line showing which priest has it and if it's ready, with a one-click ask; Retail's list gains Power Infusion.",
+   "tags": [
+    "Partly on Retail and Forever: the priest must run it",
+    "DPS",
+    "Today: PI is on the MoP, TBC, Era and Forever lists, not Retail's"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-29",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro DPS",
+   "order": 29,
+   "title": "Burst window planner",
+   "text": "DPS: \"I want my trinkets and big cooldowns to line up with lust and PI, not guess.\"\nYour own big cooldowns beside the group's lust and PI, with a mark when they line up. You tick which of your spells count.",
+   "tags": [
+    "Partly on Retail and Forever: group timers only from players who run it",
+    "DPS",
+    "Today: nothing combines your cooldowns with the group's"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-30",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro DPS",
+   "order": 30,
+   "title": "Show only in combat or on bosses",
+   "text": "DPS: \"I don't need it open during trash, but I want it up on every boss pull.\"\nShow the panel always, only in combat, or only on boss fights, and fade it when nothing is close to ready.",
+   "tags": [
+    "Possible on every client",
+    "DPS",
+    "Today: shown when in a group, toggled by hand"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-31",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro DPS",
+   "order": 31,
+   "title": "A lighter mode for big raids",
+   "text": "DPS: \"In 25-man I don't want an addon eating frames while I'm trying to hit my rotation.\"\nA setting that slows the panel's updates and skips hidden windows, with the cost shown in /cdc debug.",
+   "tags": [
+    "Possible on every client",
+    "DPS",
+    "Today: the panel redraws every 0.5 s and the Lane view every 0.2 s"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-32",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro tank",
+   "order": 32,
+   "title": "Externals that can reach me",
+   "text": "Tank: \"When I'm about to eat a big hit I need to see at a glance which external can reach me and who owns it.\"\nA small strip of only the externals cast on another player (Guardian Spirit, Pain Suppression, Blessing of Sacrifice, Life Cocoon, Ironbark...) with owner and ready time; Retail gains Blessing of Sacrifice.",
+   "tags": [
+    "Partly on Retail and Forever: only players who run it",
+    "Tank",
+    "Today: one list of everything; no Blessing of Sacrifice on Retail"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-33",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Pro tank",
+   "order": 33,
+   "title": "What got used last pull",
+   "text": "Tank: \"After a wipe I want to see who burned what and when, so I can fix the plan next pull.\"\nA short log of the tracked cooldowns used in the last pull, with the time into the fight and who cast them.",
+   "tags": [
+    "Partly on Retail and Forever: only players who run it",
+    "Tank",
+    "Today: no history"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-34",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Addon maker",
+   "order": 34,
+   "title": "A public feed other addons can read",
+   "text": "Addon maker: \"I want a WeakAura or my own addon to ask who has Bloodlust ready, without scraping your frames.\"\nA small documented set of calls (who has what, when it's back) and messages when a cooldown starts or ends, so WeakAuras and other bar or timeline addons can show group cooldowns, not just CDTL3.",
+   "tags": [
+    "Possible on every client",
+    "Addon maker",
+    "Today: only CDTL3 gets the feed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-35",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Addon maker",
+   "order": 35,
+   "title": "Gentler sending in big raids",
+   "text": "Addon maker: \"A raid of 25 all sending on the same boss cast is how addons get people disconnected.\"\nSeveral cooldowns per message, small random delays so a raid doesn't send at the same moment, and repeats of one cast dropped.",
+   "tags": [
+    "Possible on every client",
+    "Addon maker",
+    "Today: one message per cooldown, a failed send retried every 2 s up to 15 times"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-36",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Addon maker",
+   "order": 36,
+   "title": "Translations",
+   "text": "Addon maker: \"About half my downloads are non English clients and I won't recommend a UI that stays English.\"\nAll text through a locale table, with CurseForge's translation tool filling the other languages (as CDTL3 does). Spell names already come from the game.",
+   "tags": [
+    "Possible on every client",
+    "Addon maker",
+    "Today: English written into the code"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-37",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Addon maker",
+   "order": 37,
+   "title": "Things reviewers look for on the store page",
+   "text": "Addon maker: \"Reviewers skim for a Wago listing, screenshots, a privacy line and a clear statement of what is sent.\"\nA Wago listing beside CurseForge, and a short list of exactly what the addon sends to the group (and that nothing leaves the game).",
+   "tags": [
+    "Possible on every client",
+    "Addon maker",
+    "Today: CurseForge only"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-38",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Raid leader",
+   "order": 38,
+   "title": "Post what's ready to raid chat",
+   "text": "Raid leader: \"I want one click that tells the raid which defensives are up, so my healers stop asking in chat.\"\nA button and a slash command that post one short line to raid or officer chat: what's ready and who has it, and what's back when. You pick which spells go in the line.",
+   "tags": [
+    "Partly on Retail and Forever: only players who run it",
+    "Raid leader",
+    "Today: only Request Rez posts to chat"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-39",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Raid leader",
+   "order": 39,
+   "title": "Rotation order for a cooldown",
+   "text": "Raid leader: \"I rotate Hand of Sacrifice and Guardian Spirit through the same few people, and I want the list to show who is next.\"\nThe leader sets an order for a spell (Kyle, then Ann, then Joe). The panel marks the next ready player in line and moves on when it's used; the order can be shared with the group.",
+   "tags": [
+    "Partly on Retail and Forever: only players who run it",
+    "Raid leader",
+    "Today: no order; Request Rez takes the first ready provider"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-40",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Raid leader",
+   "order": 40,
+   "title": "Rezzers to skip",
+   "text": "Raid leader: \"I never want my main healer's Rebirth or Soulstone called unless there is no one else.\"\nThe leader marks players as last choice or never, and Request Rez passes over them unless nobody else is ready.",
+   "tags": [
+    "Possible on every client",
+    "Raid leader",
+    "Today: Request Rez skips only dead rezzers and the target"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-41",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Guild master",
+   "order": 41,
+   "title": "Guild-wide cooldown view",
+   "text": "Guild master: \"My officers want to see what the other raid team has ready without joining their group.\"\nAn optional guild mode, off by default, that also shares cooldowns over the guild channel, with a small list of who in the guild runs it and what they have ready.",
+   "tags": [
+    "Partly: only guild members who run it, on every client",
+    "Guild master",
+    "Today: messages go only to the group (party, raid or instance)"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-42",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Guild master",
+   "order": 42,
+   "title": "Officers can send a setup to the guild",
+   "text": "Guild master: \"When we change our raid plan I want to send the new spell list to everyone once.\"\nAn officer sends a spell list and a few options over the guild channel; each member gets Accept, Not now or Never from this person, and can undo it.",
+   "tags": [
+    "Possible on every client (members who run it)",
+    "Guild master",
+    "Today: each player sets spells by hand"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-43",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Guild master",
+   "order": 43,
+   "title": "Show only my raid team",
+   "text": "Guild master: \"I run three raid teams and an M+ crowd, and I only care about the team on the pull right now.\"\nSave named teams (a set of players) and pick one to show only them on the panel, Essentials bar and lanes; others are hidden, not forgotten.",
+   "tags": [
+    "Possible on every client",
+    "Guild master",
+    "Today: everyone known in the group shows"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-44",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Mythic+ key leader",
+   "order": 44,
+   "title": "Mark guessed cooldowns on players without the addon",
+   "text": "Mythic+ leader: \"I need to know whether that Shaman really has lust up or whether the addon is just assuming it.\"\nA player who doesn't run the addon and hasn't been seen casting gets a small question mark: \"ready as far as we know\". Confirmed rows (players who run it, your own readable spells) look normal.",
+   "tags": [
+    "Retail and Forever (Era, TBC and MoP see casts in the combat log)",
+    "Mythic+ leader",
+    "Today: an unseen provider always shows ready (Roster.lua: no cast seen counts as 0 s left)"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-45",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Mythic+ key leader",
+   "order": 45,
+   "title": "Clear the board when a key starts",
+   "text": "Mythic+ leader: \"Cooldowns reset when the key starts, and I don't want last dungeon's timers telling me lust is on cooldown.\"\nWhen a key starts (and on entering a new dungeon) tracked cooldowns that the game resets go back to ready and players who left are dropped. One setting turns it off.",
+   "tags": [
+    "Retail for the key start; dungeon entry on every client",
+    "Mythic+ leader",
+    "Today: nothing reacts to a key start or a zone change"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-46",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Classic raider",
+   "order": 46,
+   "title": "Who has a Soulstone on them",
+   "text": "Classic raider: \"I need to see who is carrying a soulstone before the pull, not find out when the tank wipes us.\"\nA small list of who has a Soulstone on them, who placed it and how long is left, warning when a tank or healer has none or a stone is about to run out.",
+   "tags": [
+    "Partly: everyone on Era and TBC; Forever only players who run it",
+    "Classic raider",
+    "Today: only the warlock's Soulstone cooldown"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-47",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Classic raider",
+   "order": 47,
+   "title": "World buffs and more consumables",
+   "text": "Classic raider: \"Half the raid dropped Songflower and Zandalar before the pull and nobody noticed until Onyxia.\"\nStrips like flask and food for world buffs (Dragonslayer, Zandalar, Songflower, Warchief's Blessing, Dire Maul) and for protection potions, elixirs and other consumables, with who lacks them. You choose which show.",
+   "tags": [
+    "Partly: everyone on Era and TBC; Forever only players who run it",
+    "Classic raider",
+    "Today: four flasks and Well Fed built in; extras by /cdc consumable, counted as flask or food"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-feature-panel-48",
+  "data": {
+   "review": "2026-11-18-cc-feature-panel",
+   "reviewTitle": "Feature panel, 18 Nov",
+   "reviewNote": "Nine reviewers read CooldownCollaborator as a WoW beginner, a pro healer, a pro DPS, a pro tank, an addon author, a raid leader, a guild master, a Mythic+ key leader and a Classic raider. Ideas two or more of them asked for are merged at the top. Each \"Today\" line was checked against the code. Go means worth doing; scope comes after.",
+   "added": "2026-11-19T06:30:00Z",
+   "group": "Classic raider",
+   "order": 48,
+   "title": "Every way to bring someone back, in one row",
+   "text": "Classic raider: \"When someone dies I want to see in one line who can bring them back: druid, soulstoned, or shaman Ankh.\"\nOne Resurrection row adding up ready Rebirths, placed Soulstones and Reincarnations, with the next to come back and a call button.",
+   "tags": [
+    "Partly: everyone on Era and TBC; Forever only players who run it",
+    "Classic raider",
+    "Today: Rebirth counts as a battle rez; Soulstone is tracked but never listed as a rez"
+   ],
+   "status": "",
+   "note": ""
+  }
+ }
+]

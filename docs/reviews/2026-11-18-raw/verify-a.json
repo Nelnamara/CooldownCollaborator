@@ -1,0 +1,83 @@
+[
+  {
+    "id": "A2",
+    "verdict": "narrowed",
+    "why": "The core holds: CC.state is not saved (CooldownCollaborator.lua:72), GROUP_ROSTER_UPDATE sends nothing (CooldownCollaborator.lua:576-579) and BroadcastState runs only at ENCOUNTER_END (CooldownCollaborator.lua:585-587), so a joiner, re-invitee or /reloader sees other players' providers READY (Roster.lua:263-281). Two parts are wrong. First, a cast made while solo stays in your own entry (PruneState keeps the player, Events.lua:85-86) and goes out at the next boss end if it is still cooling (Events.lua:116-126). probe-v3 on Retail, MoP, Era and Forever: 0 syncs solo, 0 on joining, 1 after ENCOUNTER_END. Second, on Retail your own lust and Battle Rez rows read the live cooldown (Roster.lua:263). This is a known gap, not a design choice: the unmerged origin/forever-1.1.0 commit 02355b8 had 'state request/reply on login, reload and join'.",
+    "what": "Someone who joins mid-run, is re-invited, or types /reload sees every other player's lust and Battle Rez as READY, and Request Rez can name a druid whose Rebirth was used minutes ago. It corrects itself only when that spell is cast again, or when a boss fight ends and each owner re-sends what is still cooling (casts made while solo included). On Era, TBC and MoP the combat log adds only the casts seen after you arrived.",
+    "clients": "All clients",
+    "where": "Events.lua:116 (called only from CooldownCollaborator.lua:585-587)",
+    "severity": "medium"
+  },
+  {
+    "id": "A5",
+    "verdict": "narrowed",
+    "why": "The mechanics hold: the channel argument is dropped (Comms.lua:95), the name in the message wins over the sender (Comms.lua:135-137), secondsAgo is only passed through tonumber so a negative value lands in the future (Comms.lua:120, 130), and 'usedAt > cur' (CooldownCollaborator.lua:304) keeps it against the owner's later sync or combat-log cast. But it takes a hand-typed addon message, it only changes what is shown, and it clears when the owner's ready-now arrives (CooldownCollaborator.lua:281), when that player leaves the group (Events.lua:102-112), or when the viewer types /reload (state is not saved, CooldownCollaborator.lua:72). Trusting group members is normal for addon comms. The real defects are that WHISPER and GUILD messages are accepted (CHAT_MSG_ADDON delivers both to a registered prefix; whispers work from the same or a connected realm) and that secondsAgo has no bound.",
+    "what": "Anyone who types a hand-made addon message, from inside your group or by whisper from your realm, can make a chosen player's Battle Rez, lust or any tracked spell show as on cooldown for as long as they like. That player's own casts don't fix it, so Request Rez skips them. It clears when their 'ready now' arrives, when they leave the group, or when you /reload. A fake that names you is re-sent by your client as a fresh cast of yours at the next boss end, and made-up names add timers to CooldownTimeline3.",
+    "clients": "All clients",
+    "where": "Comms.lua:95 and Comms.lua:120-137",
+    "severity": "low"
+  },
+  {
+    "id": "A6",
+    "verdict": "narrowed",
+    "why": "The tags confirm it. v1.0.1 to v1.0.3 relay every entry they hold at ENCOUNTER_END (git show v1.0.3:Events.lua lines 38-44) and requeue any non-nil send result (v1.0.3:Comms.lua line 44 'if result then'), so a successful send on Retail (result 0) repeats every 2 s. 1.1.1 accepts the relay for the named player (Comms.lua:135-138), and 'usedAt > cur' (CooldownCollaborator.lua:304) overwrites the ready-now value. v1.0.0 sent its raw GetTime() (v1.0.0:Comms.lua line 19), which lands in the past and is ignored. Only casts the old client already held when a boss ended are affected, and only until that cast's full base length runs out. The result is the base-length countdown the addon showed before 1.0.4, which 1.0.x users see anyway.",
+    "what": "If someone in the group still runs CooldownCollaborator 1.0.1 to 1.0.3 (Retail only), an early 'ready now' can snap back to counting down to the spell's full base length, on every newer user's bars and on CooldownTimeline3. This happens only for casts their client was holding when a boss fight ended, and it lasts until the base length runs out. The spell then simply looks as it did before ready-now announcements existed.",
+    "clients": "Retail",
+    "where": "Comms.lua:135-138 and CooldownCollaborator.lua:304",
+    "severity": "low"
+  },
+  {
+    "id": "A7",
+    "verdict": "held",
+    "why": "Checked against the 12.1.5.70783 cache. 391054 'Intercession': SpellCooldowns 600000/600000 ms; SpellCategories Category 26, which SpellCategory.csv names 'Resurrection (Full)', the same category as Rebirth 20484; SkillLineAbility ClassMask 2 (Paladin) with no TraitDefinition row, so it is baseline; BaseLevel 19. 466904 'Harrier's Cry': RecoveryTime 360000 ms; SpecializationSpells spec 254 (Marksmanship in ChrSpecialization); BaseLevel 48; same dispel type as Fury of the Aspects and Primal Rage. Neither ID is in Data_Retail.lua:3-54 or the Providers table at :57-67, or anywhere in docs/, the plan or the git log, so this is an omission, not a ruling. RecordCooldown drops both at CooldownCollaborator.lua:249. Confidence is high for Intercession and high-medium that Harrier's Cry is the Marksmanship lust (game data plus 11.1 knowledge).",
+    "what": "",
+    "clients": "Retail",
+    "where": "Data_Retail.lua:57-67",
+    "severity": "medium"
+  },
+  {
+    "id": "A11",
+    "verdict": "narrowed",
+    "why": "The mechanics hold: ready-now is retried 15 times (Comms.lua:39, 89-92), PollLocalReady has already marked the spell ready (CooldownCollaborator.lua:540-548), and BroadcastState skips spells that are ready (Events.lua:122). probe-v3 on Retail with result 11: 15 'R:29166' attempts, none after ENCOUNTER_END. A cooldown cast inside the same fight is not affected: its cast sync is refused too and is never re-sent once ready, so others correctly show READY. The harm needs a cast others heard before the pull and a ready-now that lands more than about 30 s before the fight ends, and it lasts only until the base length runs out. Era, TBC and MoP return true, so they have no lockdown; Forever is not confirmed.",
+    "what": "If you use a talent-shortened cooldown before a boss is pulled and it comes back during the fight, your 'ready now' is refused while the fight lasts, dropped after about 30 seconds, and not sent again when the boss ends. Everyone else keeps seeing that spell counting down until its full base length would have run out. A cooldown used inside the fight is not affected.",
+    "clients": "Retail (Forever not confirmed)",
+    "where": "Comms.lua:90 and Events.lua:122",
+    "severity": "low"
+  },
+  {
+    "id": "A12",
+    "verdict": "narrowed",
+    "why": "The mechanics hold: CDTL3's CollaboratorFeeds (cdtl3-dev Group.lua:182-194) makes RaidCast return early (Group.lua:205) while this addon's bridge is on. RAID.era and RAID.tbc hold { 5209, 600 } and { 2062, 1200 } (Group.lua:132-139). Data_Era.lua and Data_TBC.lua leave both out on purpose as 'optional' (docs/CLASSIC_FOREVER_PLAN.md:31). But CDTL3's own raid feed is off by default (Group.lua:24, raidCasts = false), and its 'Spells that count' ticks show only once it is on (Group.lua:966). So only players who turned on 'Track raid cooldowns' lose anything. CDTL3:StartTimer has no per-spell check (cdtl3-dev API.lua:244-305).",
+    "what": "If you have turned on CooldownTimeline3's 'Track raid cooldowns' (off by default) and also run this addon, CooldownTimeline3 hands group cooldowns over to this addon. Your groupmates' Challenging Roar on Era and Earth Elemental Totem on TBC then disappear from CooldownTimeline3, because this addon doesn't track them. Spells you unticked in CooldownTimeline3's 'Spells that count' list come back too.",
+    "clients": "Classic Era, TBC",
+    "where": "Bridge.lua:26 (cdtl3-dev Group.lua:182-205)",
+    "severity": "low"
+  },
+  {
+    "id": "A13",
+    "verdict": "held",
+    "why": "RecordCooldownFromComm calls BridgeStart without checking disabledSpells or minDuration (CooldownCollaborator.lua:304-306), and neither BridgeStart nor BridgeResync checks them (Bridge.lua:45-64, 74-80). CDTL3:StartTimer checks only whether the timer type is on (cdtl3-dev API.lua:251), and it resets 'ignored' on every restart (API.lua:278), so no per-spell filter exists on either side. This addon's own list filters both (UI.lua:160-161). One nuance: your own cast of an unticked spell never reaches the 'Group cooldowns' type (CooldownCollaborator.lua:250-251), but CooldownTimeline3 shows your own spells anyway, so the mismatch the player sees is on groupmates' casts.",
+    "what": "",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:306",
+    "severity": "low"
+  },
+  {
+    "id": "A14",
+    "verdict": "held",
+    "why": "Data_Mists.lua:54 lists only 106898. RankToBase has no 77761 or 77764 (Data.lua:45-59), and RecordCooldown drops an unknown ID at CooldownCollaborator.lua:249 with no name fallback, unlike MatchSpell (Events.lua:39). The 5.5.4.70631 cache shows 77761 and 77764 both named 'Stampeding Roar', each with its own SpellCooldowns row (120000 ms; 77764 has the 1000 ms cat GCD), BaseLevel 84, the same Category 1257 as 106898, and no SkillLineAbility row (form versions, never learned separately). LibOpenRaid in Details (ThingsToMantain_Pandaria.lua:323, 697-698) tracks Stampeding Roar as 77761 and maps 106898 and 77764 onto it, though that file looks copied from Retail. Not seen in game; medium-high confidence.",
+    "what": "",
+    "clients": "MoP Classic",
+    "where": "CooldownCollaborator.lua:249 (Data_Mists.lua:54)",
+    "severity": "low"
+  },
+  {
+    "id": "A15",
+    "verdict": "narrowed",
+    "why": "The groupmate part holds. INSPECT_READY carries inspecteeGUID (Ketho's Annotations/Core/Data/Event.lua:811), and UnitFullName takes a UnitToken (UnitDocumentation.lua:457). So OnInspectReady returns at Roster.lua:206-210, before GetInspectSpecialization (Roster.lua:214), and no groupmate ever gets a spec. But your own spec comes from GetSpecialization in QueueInspectAll (Roster.lua:161-169), so /cdc roster does show it. probe-v3 on Retail prints 'Tester [Feral DRUID]' and 'Tania [DRUID]'. The spec is used only for this label (GetSpecName, called only at CooldownCollaborator.lua:668).",
+    "what": "On Retail, /cdc roster says '(spec refinement queued)', but it only ever shows your own spec, never a groupmate's. The addon still sends inspect requests for the whole group on every roster change. It moves on to the next one right after any inspect result, including results your own Inspect window or other addons asked for.",
+    "clients": "Retail",
+    "where": "Roster.lua:203-210",
+    "severity": "low"
+  }
+]
