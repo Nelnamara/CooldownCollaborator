@@ -34,7 +34,7 @@ local function countSent(prefix, pattern)
 end
 
 local EXPECT = {
-	retail  = { data = "Data_Retail.lua",  spells = 42, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN", log = false },
+	retail  = { data = "Data_Retail.lua",  spells = 43, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN", log = false },
 	mop     = { data = "Data_Mists.lua",   spells = 41, lust = "MAGE,SHAMAN",               rez = "DEATHKNIGHT,DRUID",         log = true  },
 	tbc     = { data = "Data_TBC.lua",     spells = 22, lust = "SHAMAN",                    rez = "DRUID",                     log = true  },
 	era     = { data = "Data_Era.lua",     spells = 15, lust = nil,                         rez = "DRUID",                     log = true  },
@@ -156,7 +156,8 @@ if FLAVOR == "retail" then
 end
 if CC.SpellData[20707] then
 	local ss = CC.SpellData[20707]
-	check("Soulstone tracked; no ready-now poll where its cooldown is the item's", (ss.itemCooldown == true) == (FLAVOR ~= "mop"))
+	check("Soulstone tracked; no ready-now poll where its cooldown is the item's (Era, TBC, Forever)",
+		(ss.itemCooldown == true) == (FLAVOR ~= "mop" and FLAVOR ~= "retail"))
 end
 
 -- rows from the 18 Nov review (R3, R13, P18, P28, P32): base ID -> its base cooldown on each client
@@ -181,6 +182,7 @@ local NEW_ROWS = {
 	[2062]   = { "Earth Elemental Totem", tbc = 1200 },
 	[6346]   = { "Fear Ward", tbc = 180, forever = 180 },         -- Era's is 30 s
 	[20608]  = { "Reincarnation", tbc = 3600, era = 3600, forever = 3600 },
+	[20707]  = { "Soulstone", retail = 600, mop = 600, tbc = 1800, era = 1800, forever = 1800 },
 	[19801]  = { "Tranquilizing Shot (20 s on Era, TBC and Forever)" },
 	[605]    = { "Mind Control (no cooldown)" },
 }
@@ -316,6 +318,10 @@ if FLAVOR == "retail" then
 	GROUP[4].level = 18
 	FireEvent("UNIT_LEVEL", "party4")
 	check("  one below 19 is not", listed("BATTLEREZ", "Aldren-Realm") == nil)
+	GROUP[4] = { unit = "party4", name = "Morwen", realm = "Realm", class = "WARLOCK", guid = "Player-1-0000007" }
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("a warlock groupmate is not a Battle Rez provider (Soulstone is tracked only)",
+		CC.roster["Morwen-Realm"] ~= nil and CC.roster["Morwen-Realm"].capabilities.BATTLEREZ == nil and listed("BATTLEREZ", "Morwen-Realm") == nil)
 	GROUP[4] = { unit = "party4", name = "Vessa", realm = "Realm", class = "HUNTER", guid = "Player-1-0000006" }
 	FireEvent("GROUP_ROSTER_UPDATE")
 	check("a hunter groupmate whose spec we don't know is not a lust provider",

@@ -208,7 +208,7 @@ Ranking of unverified items overall: Soulstone cooldown on Era/TBC/Forever (item
 
 | Client | Tracked (18 Nov 2026) | Before |
 |---|---|---|
-| Retail | 42 | 29 |
+| Retail | 43 | 29 |
 | MoP Classic | 41 (+4 optional) | 32 |
 | TBC Anniversary | 22 | 17 |
 | Classic Era | 15 | 12 |
@@ -245,6 +245,7 @@ Retail's list predates section B; these are the rows the review added, checked t
 | Death Knight | Vampiric Blood | 55233 | 90 | RecoveryTime 90000 | TraitDefinition |
 | Druid | Survival Instincts | 61336 | 180 | charge (category 1469) | TraitDefinition (two talent entries) |
 | Monk | Fortifying Brew | 115203 | 360 | RecoveryTime 360000 | TraitDefinition 388917 shows it as 115203 |
+| Warlock | Soulstone (19 Nov; tracked, not a Battle Rez provider) | 20707 | 600 | CategoryRecoveryTime 600000, category 831 "Soulstone" (Rebirth and Intercession are category 26 "Resurrection (Full)", Raise Ally its own 1555; none of the four has a charge category); icon 136210 | SkillLineAbility Warlock; BaseLevel 14 |
 | Demon Hunter | Metamorphosis (Vengeance) | 187827 | 120 | charge (category 2469 "Metamorphosis (Vengeance)") | SpecializationSpells 581 Vengeance |
 
 Not on Retail: Challenging Roar, Mocking Banner. Not added: other IDs with the same names and charge categories (Guardian of Ancient Kings 212641, Survival Instincts 236156) have no class, talent or spec tie, so nothing shows a player casts them.
@@ -287,7 +288,7 @@ The 29 rows Retail had before the port, checked the same way as the Classic list
 | Evoker | Time Dilation | 357170 | 60 | one charge: ChargeRecoveryTime 60000 (category 2411); RecoveryTime 1000 | 4622478 | cooldown 90 -> 60; icon 4622460 -> 4622478 |
 | Evoker | Fury of the Aspects | 390386 | 300 | RecoveryTime 300000 | 4723908 | - |
 
-Removed: Demonic Gateway 111771. The 12.1.5 data gives it `RecoveryTime` 10000 (10 s) with no category or charge cooldown, and no Demonic Gateway ID in the data has a cooldown over 30 s (the longest, 362227 and 1214675, are 30 s). A 10 s gateway is not a group cooldown worth a row, and the old 90 s was wrong, so Retail no longer tracks it (Warlock has no Retail rows now).
+Removed: Demonic Gateway 111771. The 12.1.5 data gives it `RecoveryTime` 10000 (10 s) with no category or charge cooldown, and no Demonic Gateway ID in the data has a cooldown over 30 s (the longest, 362227 and 1214675, are 30 s). A 10 s gateway is not a group cooldown worth a row, and the old 90 s was wrong, so Retail no longer tracks it. (Warlock keeps Soulstone, B7.)
 
 
 ---------------------------------------------------------------------------------------------------

@@ -51,6 +51,11 @@ CC.SpellData = {
     [80353]  = { name = "Time Warp",                 duration = 300, icon = 458224,  class = "MAGE",        level = 49 },
     [45438]  = { name = "Ice Block",                 duration = 240, icon = 135841,  class = "MAGE"        },
 
+    -- Warlock. Soulstone: a pre-placed self-resurrect, tracked but not a Battle Rez
+    -- provider. In 12.1.5 it has its own cooldown category (831 "Soulstone", 10 min),
+    -- not Rebirth's and Intercession's 26 "Resurrection (Full)".
+    [20707]  = { name = "Soulstone",                 duration = 600, icon = 136210,  class = "WARLOCK"     },
+
     -- Monk
     [115310] = { name = "Revival",                   duration = 180, icon = 1020466, class = "MONK"        },
     [116849] = { name = "Life Cocoon",               duration = 120, icon = 627485,  class = "MONK"        },
