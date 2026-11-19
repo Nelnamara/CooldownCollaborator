@@ -459,11 +459,17 @@ local function NoteOldCopy(owner)
     end
 end
 
--- An old copy in the group still needs the per-spell 1.x lines at a boss end.
+-- A possible old copy in the group still needs the per-spell 1.x lines at a boss end:
+-- true unless every other current member is known (by their hello) to run format 2.
+-- A member not heard from yet may be a 1.x copy, which never says hello.
 function CC:OldCopyInGroup()
     local active = self:GetActiveGroupNames()
-    for name, peer in pairs(self.peers) do
-        if peer.proto == 1 and active[name] then return true end
+    local me = self:FullName("player")
+    for name in pairs(active) do
+        if name ~= me then
+            local peer = self.peers[name]
+            if not peer or (peer.proto or 0) < 2 then return true end
+        end
     end
     return false
 end

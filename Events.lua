@@ -134,8 +134,8 @@ function CC:PruneState()
 end
 
 -- A boss ended: what the fight held back goes out. Our own running cooldowns as
--- one S (format 2 copies), and as the per-spell 1.x lines only while an old copy
--- is in the group; ready-nows the game refused during the fight, once (R9); our
+-- one S (format 2 copies), and as the per-spell 1.x lines unless every member is
+-- known to run format 2 (a member not heard from may be a 1.x copy); ready-nows the game refused during the fight, once (R9); our
 -- Soulstones (Retail and Forever).
 -- Identity travels with the sender, so only our own entries are ever sent.
 function CC:BroadcastState()

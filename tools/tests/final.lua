@@ -85,6 +85,44 @@ do
 	check("  a logout before the profile went in writes no profile", d.CC.db.profiles.Tank.disabled[1] == 22222)
 end
 
+---------------------------------------------------------------- F2: boss end, 1.x lines unless everyone is known to run format 2
+do
+	local function bossEnd(hello)
+		local c = Fresh(function(env)
+			env.PLAYER.class = "DRUID"
+			env.GROUP = { { unit = "party1", name = "Old", realm = "Realm", class = "PRIEST", guid = "Player-1-51" } }
+		end)
+		c.KNOWN[20484] = true
+		c.Login()
+		c.FireEvent("GROUP_ROSTER_UPDATE")
+		c.Advance(5)
+		if hello then From(c, "H:2:1.2.0:retail", "PARTY", "Old") end
+		c.FireEvent("ENCOUNTER_START", 1, "Boss", 16, 20)
+		local lockdown = true
+		c.SendResult = function() if lockdown then return 11 end return c.RETAILAPI and 0 or true end
+		c.SPELLCD[20484] = { startTime = c.NOW, duration = 600, isEnabled = true, isActive = true }
+		c.FireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-1", 20484)
+		c.Advance(120)
+		lockdown = false
+		c.FireEvent("ENCOUNTER_END", 1, "Boss", 16, 20, 1)
+		local before = #c.SENT
+		c.Advance(10)
+		local line, s = false, false
+		for i = before + 1, #c.SENT do
+			local m = c.SENT[i]
+			if m.prefix == "CDCOLLAB" and not m.refused then
+				if m.msg:match("^%d+:") then line = true end
+				if m.msg:match("^S:2:") then s = true end
+			end
+		end
+		return line, s
+	end
+	local line, s = bossEnd(false)
+	check("F2: a boss end sends the 1.x line when a member hasn't been heard (it may be a 1.x copy)", line and s)
+	line, s = bossEnd(true)
+	check("  and only the S state when every member has said a format 2 hello", s and not line)
+end
+
 ---------------------------------------------------------------- the whole run
 check("no Lua errors in any copy", Errors() == 0, FirstError())
 OUTPUT(string.format("RESULT final %s %s: checks %d, fails %d, lua errors %d",
