@@ -555,11 +555,13 @@ function Painters.icons(line, m)
         slot:Show()
     end
     for i = n + 1, #line.slots do line.slots[i]:Hide() end
+    -- the button stays the bar's own; it sits on this line, above it
     local btn = CC.essentialsRezBtn
     if m.rezButton then
-        btn:SetParent(line)
         btn:ClearAllPoints()
         btn:SetPoint("RIGHT", line, "RIGHT", -4, 0)
+        local level = line:GetFrameLevel()
+        if level then btn:SetFrameLevel(level + 2) end
         btn:Show()
     end
     return 32
@@ -854,7 +856,8 @@ end
 local auraWatch = {}   -- spellID -> { seenAt = GetTime() it came on, as far as we saw }
 local auraWatchStarted = false
 
-local function TimerBarInfo(id, aura, length, color, now)
+-- fallback: the bar's name and icon (SpellMisc) when the client can't name the spell
+local function TimerBarInfo(id, aura, length, color, now, fallback, fallbackIcon)
     local w = auraWatch[id]
     if not w then
         -- the first look this session can't tell when it came on
@@ -862,16 +865,12 @@ local function TimerBarInfo(id, aura, length, color, now)
         auraWatch[id] = w
     end
     w.live = true
-    local okName, name = pcall(CC.Compat.GetSpellInfo, id)
+    local ok, name, icon = pcall(CC.Compat.GetSpellInfo, id)
     local data = CC.SpellData[id]
-    local okIcon, icon = pcall(function()
-        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(id)
-        return info and info.iconID
-    end)
     return {
         spellID = id, aura = aura, length = length, color = color, seenAt = w.seenAt,
-        label = (okName and type(name) == "string" and name ~= "") and name or (data and data.name) or "",
-        icon = (okIcon and icon) or (data and data.icon) or 136012,
+        label = (ok and type(name) == "string" and name ~= "") and name or (data and data.name) or fallback,
+        icon = (ok and icon) or (data and data.icon) or fallbackIcon,
     }
 end
 
@@ -881,9 +880,9 @@ function CC:LustBars()
     for _, w in pairs(auraWatch) do w.live = false end
     local bars = {}
     local id, aura = FindOwnAura(LUST_BUFFS[client], "HELPFUL")
-    if id then bars[#bars + 1] = TimerBarInfo(id, aura, LUST_LENGTH, COLORS.lust, now) end
+    if id then bars[#bars + 1] = TimerBarInfo(id, aura, LUST_LENGTH, COLORS.lust, now, "Bloodlust", 136012) end
     id, aura = FindOwnAura(SATED_DEBUFFS[client], "HARMFUL")
-    if id then bars[#bars + 1] = TimerBarInfo(id, aura, SATED_LENGTH, COLORS.sated, now) end
+    if id then bars[#bars + 1] = TimerBarInfo(id, aura, SATED_LENGTH, COLORS.sated, now, "Sated", 136090) end
     for key, w in pairs(auraWatch) do
         if not w.live then auraWatch[key] = nil end
     end
@@ -1061,7 +1060,7 @@ function CC:CountedDefensives(kinds)
                 counts = self:KnownRank(id) ~= nil
             elseif counts then
                 local okLevel, low = pcall(function()
-                    local level = UnitLevel(unit)
+                    local level = unit and UnitLevel(unit)
                     return data.level and level and level > 0 and level < data.level
                 end)
                 if okLevel and low then counts = false end
@@ -1074,11 +1073,15 @@ function CC:CountedDefensives(kinds)
             if counts then
                 local remaining = isSelf and self:GetLocalReadiness(id) or nil
                 if remaining == nil then remaining = self:GetRemaining(name, id) or 0 end
-                local okC, connected = pcall(function() return UnitIsConnected(unit) and true or false end)
-                local okD, dead = pcall(function() return UnitIsDeadOrGhost(unit) and true or false end)
+                -- online and alive as far as the game says (an unreadable answer counts as yes)
+                local online, alive = true, true
+                if unit then
+                    local okC, connected = pcall(function() return UnitIsConnected(unit) and true or false end)
+                    local okD, dead = pcall(function() return UnitIsDeadOrGhost(unit) and true or false end)
+                    online, alive = (not okC) or connected, (not okD) or not dead
+                end
                 local d = { name = name, class = info.class, spellID = id, remaining = remaining,
-                    online = (not unit) or (not okC) or connected, alive = (not unit) or (not okD) or not dead,
-                    guessed = not isSelf and not seen and not runsIt }
+                    online = online, alive = alive, guessed = not isSelf and not seen and not runsIt }
                 d.state = StateOf(d)
                 list[#list + 1] = d
             end
@@ -1119,16 +1122,16 @@ end
 
 -- The banner's summary for a ready check or pull (P7).
 local function BannerLine(self, sections)
-    local b = self.essentialsBanner
-    if not b then return nil end
+    local banner = self.essentialsBanner
+    if not banner then return nil end
     local now = GetTime()
-    if b.endsAt and now >= b.endsAt then
+    if banner.endsAt and now >= banner.endsAt then
         self.essentialsBanner = nil
         return nil
     end
     local title = "Ready check"
-    if b.pull then
-        title = b.known and ("Pull in " .. math.max(0, math.ceil(b.endsAt - now))) or "Pull timer"
+    if banner.pull then
+        title = banner.known and ("Pull in " .. math.max(0, math.ceil(banner.endsAt - now))) or "Pull timer"
     end
     local parts, cooling = {}, {}
     local lust = sections.BLOODLUST
@@ -1296,9 +1299,7 @@ function CC:RefreshEssentials()
 
     local model = self:EssentialsModel()
     local used, shown = {}, {}
-    local btn = self.essentialsRezBtn
-    btn:Hide()
-    btn:SetParent(self.essentialsFrame)
+    self.essentialsRezBtn:Hide()
 
     local y = TITLE_HEIGHT
     for _, m in ipairs(model) do
@@ -1448,6 +1449,8 @@ end
 -- (DBM:RegisterCallback, "DBM_TimerBegin" / older "DBM_TimerStart" with the timer's type
 -- "pull" sixth), each once and in a pcall.
 function CC:WatchBossMods()
+    -- BigWigs' and DBM's own globals, there only while that addon is loaded
+    ---@diagnostic disable-next-line: undefined-field
     local bw = _G.BigWigsLoader
     if bw and bw.RegisterMessage and not self.watchingBigWigs then
         self.watchingBigWigs = pcall(bw.RegisterMessage, self, "BigWigs_StartPull", function(_, _, seconds)
@@ -1455,6 +1458,7 @@ function CC:WatchBossMods()
         end)
         pcall(bw.RegisterMessage, self, "BigWigs_StopPull", function() CC:StopEssentialsBanner(true) end)
     end
+    ---@diagnostic disable-next-line: undefined-field
     local dbm = _G.DBM
     if dbm and dbm.RegisterCallback and not self.watchingDBM then
         local function onTimer(_, _, _, timer, _, timerType)
@@ -1579,15 +1583,16 @@ function CC:PostBuffMissing(key)
     local channel = self:GroupChannel()
     if not count or #count.missing == 0 or not channel then return end
     local head = string.format("Missing %s (%d): ", count.name, #count.missing)
-    local msgs, cur = {}, head
-    for i, name in ipairs(count.missing) do
-        local piece = CC:ShortName(name) .. (i < #count.missing and ", " or "")
-        if #cur + #piece > 250 then
+    local msgs, cur, fresh = {}, head, true
+    for _, name in ipairs(count.missing) do
+        local piece = (fresh and "" or ", ") .. CC:ShortName(name)
+        if not fresh and #cur + #piece > 250 then
             msgs[#msgs + 1] = cur
-            cur = piece
+            cur = CC:ShortName(name)
         else
             cur = cur .. piece
         end
+        fresh = false
     end
     if #count.unknown > 0 then cur = cur .. string.format("; %d not known", #count.unknown) end
     msgs[#msgs + 1] = cur

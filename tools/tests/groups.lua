@@ -168,7 +168,7 @@ local expectReload = LUST and "Bloodlust/Heroism: 3 +4 | Battle Rez: 3 +2 | stri
 check("  bar: three providers a heading, '+N more' for the rest, flask/food strip last",
 	bar and bar.text == expectReload and barAddsUp(bar), bar and bar.text or why)
 check("  Request Rez sits after the Battle Rez icons (raid leader)", CC.essentialsRezBtn:IsShown()
-	and CC.essentialsRezBtn:GetParent().lineKind == "icons")
+	and CC.essentialsRezBtn.__points[1][2].lineKind == "icons")
 local p0 = #PRINTS
 SlashCmdList["COOLDOWNCOLLABORATOR"]("roster")
 local members = 0
