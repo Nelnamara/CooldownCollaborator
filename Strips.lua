@@ -301,7 +301,7 @@ function CC:RefreshManaStrip()
         local tile, t = list[i], f.tiles[i]
         local e = tile.next
         self:SetRingIcon(t.icon, TileLook(e, tile.ready > 0))
-        t.lines[1]:SetText(string.format("%d of %d", tile.ready, tile.total))
+        t.lines[1]:SetText(string.format(L["%d of %d"], tile.ready, tile.total))
         t.lines[1]:SetTextColor(0.7, 0.7, 0.7)
         local c = CC.ClassColors[e.class] or CC.ClassColors.UNKNOWN
         t.lines[2]:SetText(self:ShortName(e.name))

@@ -191,7 +191,10 @@ Methods.GetCenter = function() return 0, 0 end
 Methods.GetEffectiveScale = function() return 1 end
 Methods.SetAlpha = function(s, a) s.__alpha = a end
 Methods.GetAlpha = function(s) return s.__alpha end
-Methods.SetText = function(s, t) s.__text = t end
+Methods.SetText = function(s, t)
+	s.__text = t
+	if TEXT_LOG then TEXT_LOG[#TEXT_LOG + 1] = t end   -- locale.lua collects what the windows show
+end
 Methods.GetText = function(s) return s.__text end
 Methods.SetEnabled = function(s, v) s.__enabled = v and true or false end
 Methods.IsEnabled = function(s) return s.__enabled end
@@ -515,7 +518,9 @@ function LoadTOC(tocName)
 	end
 	for _, f in ipairs(files) do
 		local path = SRC .. "/" .. f
-		local fn, err = loadfile(path)
+		local stub = STUB_FILES and STUB_FILES[f:lower()]
+		local fn, err
+		if stub then fn = function() stub() end else fn, err = loadfile(path) end
 		if not fn then
 			errh("LOAD " .. path .. ": " .. tostring(err))
 		else

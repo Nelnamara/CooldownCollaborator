@@ -20,6 +20,7 @@ flask/food status, and a minimap button.
 - `Tooltip.lua` — `CC:ShowCooldownTooltip(anchor, owner, spellID)` / `CC:HideCooldownTooltip()`: the game's spell tooltip, then when it matters (from the row's `kind`), the owner and time left, guessed and old-copy notes.
 - `Alerts.lua` — `db.alerts[spellID]`: `CC:FireReadyAlert(owner, spellID)` once per ready (sound, row and Essentials flash, optional mid-screen icon, optional warning N s before).
 - `Options.lua`, `Minimap.lua`.
+- `Locales/` — translations. `Locales.lua` makes `CC.L` (a missing phrase returns itself: the English text is the key) and `CC.NewLocale(name)`; `enUS.lua` lists every phrase as `L["text"] = true` (rebuild with `python tools/gen-enus.py`) and one stub per other language holds the CurseForge packager line. Every player-visible string goes through `L[...]`; names and spell names are data inserted with `string.format` into a translated pattern. Slash words, saved keys, the wire format and debug output (`-- debug`, or between `debug begin` / `debug end`) stay English. `tools/tests/locale.lua` (plain and `pseudo`) checks it.
 - `tools/tests/` (not packaged) — the test suite, see Build.
 
 ## Midnight API gotchas (critical)
