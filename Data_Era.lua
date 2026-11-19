@@ -1,10 +1,12 @@
 -- Classic Era (1.15.9): tracked spells, checked against the game data of build
--- 1.15.9.70576 (SpellName, SpellCooldowns, SpellMisc icons). Ranks lowest first.
+-- 1.15.9.70576 (SpellName, SpellCooldowns, SpellMisc icons). Ranks lowest first;
+-- variants = other IDs the same spell casts with, recorded under the base ID too.
 -- No Bloodlust, Heroism or Time Warp on this client.
 CC.SpellData = {
     -- Warrior
     [871]   = { name = "Shield Wall",            duration = 1800, icon = 132362, class = "WARRIOR" },
     [1161]  = { name = "Challenging Shout",      duration = 600,  icon = 132091, class = "WARRIOR" },
+    [12975] = { name = "Last Stand",             duration = 600,  icon = 135871, class = "WARRIOR" },
 
     -- Paladin
     [633]   = { name = "Lay on Hands",           duration = 3600, icon = 135928, class = "PALADIN", ranks = { 633, 2800, 10310 } },
@@ -15,18 +17,22 @@ CC.SpellData = {
     [10060] = { name = "Power Infusion",         duration = 180,  icon = 135939, class = "PRIEST" },
     [724]   = { name = "Lightwell",              duration = 600,  icon = 135980, class = "PRIEST",  ranks = { 724, 27870, 27871 } },
 
-    -- Shaman
+    -- Shaman. Reincarnation: the spellbook has the passive 20608, the rez itself
+    -- casts 21169 (same cooldown category), which records under 20608.
     [16190] = { name = "Mana Tide Totem",        duration = 300,  icon = 135861, class = "SHAMAN",  ranks = { 16190, 17354, 17359 } },
+    [20608] = { name = "Reincarnation",          duration = 3600, icon = 136080, class = "SHAMAN",  variants = { 21169 } },
 
     -- Warlock. The cooldown sits on the soulstone item (these spells have no
     -- SpellCooldowns row), so the game can't say when it is ready again: 30 min
-    -- as CooldownTimeline3 has it, and no "ready now" announcement.
+    -- (every soulstone item's ItemEffect category cooldown), and no "ready now"
+    -- announcement.
     [20707] = { name = "Soulstone Resurrection", duration = 1800, icon = 136210, class = "WARLOCK", ranks = { 20707, 20762, 20763, 20764, 20765 }, itemCooldown = true },
 
     -- Druid
     [29166] = { name = "Innervate",              duration = 360,  icon = 136048, class = "DRUID" },
     [20484] = { name = "Rebirth",                duration = 1800, icon = 136080, class = "DRUID",   ranks = { 20484, 20739, 20742, 20747, 20748 }, level = 20 },
     [740]   = { name = "Tranquility",            duration = 300,  icon = 136107, class = "DRUID",   ranks = { 740, 8918, 9862, 9863 } },
+    [5209]  = { name = "Challenging Roar",       duration = 600,  icon = 132117, class = "DRUID" },
 }
 
 -- Who can provide each raid-wide capability (Roster.lua). No lust here.
