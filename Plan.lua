@@ -102,7 +102,7 @@ function CC:CanSharePlan()
 end
 
 -- The leader shares a saved plan with the group; it becomes their own active plan too.
-function CC:SharePlan(name)
+function CC:SharePlan(name, delay)
     local plan = self.db.plans[name]
     if type(plan) ~= "table" then return false end
     if not self:CanSharePlan() then
@@ -118,10 +118,27 @@ function CC:SharePlan(name)
     local id = PlanID(name)
     for i = 1, parts do
         local text = string.format("P:2:%s:%d/%d:%s", id, i, parts, data:sub((i - 1) * CHUNK + 1, i * CHUNK))
-        self:QueueSend(self.PREFIX, text, { kind = "plan" })
+        self:QueueSend(self.PREFIX, text, { kind = "plan", delay = delay, key = id .. ":" .. i })
     end
     self.db.activePlan = name
     return true
+end
+
+-- Our rotation orders and our own active plan again, for a joiner or a state request. Quiet:
+-- only the group's leader or a raid assist speaks, and only for orders and a plan that are ours.
+function CC:SendSharedOrders(delay)
+    if not self:GroupChannel() then return end
+    local me = self:FullName("player")
+    if self:CanShareRotation(me) then
+        for spellID in pairs(self.db.rotations or {}) do
+            if self.rotations[spellID] then self:SendRotation(spellID, delay) end
+        end
+    end
+    local name = self.db.activePlan
+    local plan = name and self.db.plans and self.db.plans[name]
+    if type(plan) == "table" and not plan.from and self:CanSharePlan() then
+        self:SharePlan(name, delay)
+    end
 end
 
 -- Plans the sync lane has put together (CC.payloads.P, Comms.lua): one from our
@@ -137,7 +154,12 @@ function CC:TakeSharedPlans()
                 taken[key] = payload.at
                 local unit = self:UnitTokenFor(owner)
                 local name, plan = self:DecodePlan(payload.data)
-                if name and plan and unit and Leads(unit) then
+                local have = name and self.db.plans[name]
+                if name and plan and unit and Leads(unit) and have and have.from == owner
+                    and self:EncodePlan(name, have) == payload.data then
+                    -- the same plan sent again (a joiner asked): nothing new to say
+                    self.db.activePlan = name
+                elseif name and plan and unit and Leads(unit) then
                     plan.from, plan.at = owner, time()
                     self.db.plans[name] = plan
                     self.db.activePlan = name

@@ -400,6 +400,7 @@ function CC:ScheduleJoinSync()
         CC:SendState()
         CC:SendBuffStatus()
         CC:SendOwnStones()
+        CC:SendSharedOrders()
     end)
 end
 
@@ -416,6 +417,7 @@ function CC:AnswerStateRequest()
             self:SendHello(wait)
             self:SendBuffStatus(wait)
             self:SendOwnStones(wait)
+            self:SendSharedOrders(wait)
             return
         end
     end
@@ -425,6 +427,7 @@ function CC:AnswerStateRequest()
     self:SendState(delay)
     self:SendBuffStatus(delay)
     self:SendOwnStones(delay)
+    self:SendSharedOrders(delay)
 end
 
 -------------------------------------------------------------------------------

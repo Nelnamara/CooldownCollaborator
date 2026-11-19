@@ -246,12 +246,13 @@ function CC:SetRotation(spellID, names)
 end
 
 -- Our order for a spell to the group, in parts of at most 200 characters.
-function CC:SendRotation(spellID)
+function CC:SendRotation(spellID, delay)
     local data = self:EncodeRotation(spellID, self.rotations[spellID] or {})
     local parts = {}
     for i = 1, #data, 200 do parts[#parts + 1] = data:sub(i, i + 199) end
     for i, part in ipairs(parts) do
-        self:QueueSend(self.PREFIX, string.format("P:2:rot-%d:%d/%d:%s", spellID, i, #parts, part), { kind = "plan" })
+        self:QueueSend(self.PREFIX, string.format("P:2:rot-%d:%d/%d:%s", spellID, i, #parts, part),
+            { kind = "plan", delay = delay, key = string.format("rot-%d:%d", spellID, i) })
     end
 end
 
