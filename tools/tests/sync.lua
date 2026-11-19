@@ -50,6 +50,11 @@ local function FirstError()
 end
 
 ---------------------------------------------------------------- the channel
+-- the group's channels reach the group; GUILD reaches every copy whose player is in the guild
+local function Hears(c, channel)
+	if GROUP_CHANNELS[channel] then return InGroup(c.cname) end
+	return channel == "GUILD" and c.STUB_IN_GUILD == true
+end
 local delivered = {}
 local function Deliver()
 	local again = true
@@ -61,10 +66,10 @@ local function Deliver()
 				n = n + 1
 				delivered[c] = n
 				local m = c.SENT[n]
-				if not m.refused and GROUP_CHANNELS[m.channel] and InGroup(c.cname) then
+				if not m.refused and Hears(c, m.channel) then
 					WIRE[#WIRE + 1] = { from = c.cname, prefix = m.prefix, msg = m.msg, channel = m.channel, wall = wall }
 					for _, d in ipairs(live) do
-						if InGroup(d.cname) then d.FireEvent("CHAT_MSG_ADDON", m.prefix, m.msg, m.channel, full(c.cname)) end
+						if Hears(d, m.channel) then d.FireEvent("CHAT_MSG_ADDON", m.prefix, m.msg, m.channel, full(c.cname)) end
 					end
 				end
 				again = true
@@ -762,6 +767,83 @@ if FLAVOR == "retail" then
 else
 	check("no inspects off Retail", #A3.INSPECTED == 0 and #B.INSPECTED == 0)
 end
+
+---------------------------------------------------------------- P41: the guild channel, kept apart from the group
+SetGroup({ "Ayla", "Bram", "Cyr" })
+Run(5)
+Member("Gwen", "DRUID")   -- a guildmate outside the group, guild sharing on
+for _, c in ipairs({ A3, B, C }) do c.STUB_IN_GUILD = true end
+local g0 = #WIRE
+local G = NewClient("Gwen", 9000, { guildSync = true }, function(env) env.STUB_IN_GUILD = true end)
+Run(8)
+local function GuildFrom(mark, who, pattern)
+	local n = 0
+	for _, w in ipairs(WireSince(mark, who, pattern)) do if w.channel == "GUILD" then n = n + 1 end end
+	return n
+end
+check("P41: guild sharing is off by default: those copies send nothing over GUILD and drop what they hear",
+	GuildFrom(g0, "Ayla") + GuildFrom(g0, "Bram") + GuildFrom(g0, "Cyr") == 0 and GuildFrom(g0, "Gwen", "^H:2:") == 1
+	and next(B.CC.guildPeers) == nil and next(A3.CC.guildPeers) == nil)
+B.CC:SetGuildSync(true)
+Run(14)   -- ours after 3 to 6 s, then Gwen's answer after 0 to 5 s more
+check("  turned on: hello, request and state over GUILD, into the guild's own tables",
+	B.CC.guildPeers[full("Gwen")] ~= nil and B.CC.guildPeers[full("Gwen")].version == B.CC.version
+	and G.CC.guildPeers[full("Bram")] ~= nil and B.CC.guildState[full("Gwen")] ~= nil
+	and next(A3.CC.guildPeers) == nil)
+local g1 = #WIRE
+Cast(G, 20484)
+Run(2)
+local gs = B.CC.guildState[full("Gwen")]
+local gwenRebirth = gs and gs.spells[20484] and (gs.spells[20484] + B.CC.SpellData[20484].duration - B.NOW)
+check("  a guildmate's cast reaches the guild as their state message", gwenRebirth ~= nil
+	and near(gwenRebirth, B.CC.SpellData[20484].duration - 2, 1.5) and GuildFrom(g1, "Gwen", "^S:2:DRUID:") >= 1,
+	tostring(gwenRebirth))
+check("  and never the group's tables", B.CC.state[full("Gwen")] == nil and B.CC.peers[full("Gwen")] == nil
+	and A3.CC.state[full("Gwen")] == nil and next(A3.CC.guildState) == nil)
+B.CC.db.panelTab = "guild"
+B.CC:RefreshRows()
+local headLine, rezLine = B.CC.rows[1], B.CC.rows[2]
+check("  the Guild tab: who outside the group runs it, with their Battle Rez",
+	headLine.__shown and headLine.headText.__text == "Outside your group: 1 run it" and rezLine.__shown
+	and rezLine.spellText.__text == B.CC.SpellData[20484].name and rezLine.timeText.__text ~= "READY"
+	and rezLine.info and rezLine.info.name == full("Gwen"), headLine.headText.__text)
+ComesBack(G, 20484)
+Run(4)
+B.CC:RefreshRows()
+check("  her ready-now reaches the guild too (her state leaves it out): READY",
+	B.CC.guildState[full("Gwen")].spells[20484] == nil and B.CC.rows[2].timeText.__text == "READY")
+C.CC:SetGuildSync(true)
+Run(8)
+local _, runnersOut = B.CC:GuildRows()
+check("  a guildmate in our group runs it too, but isn't on the Guild tab", B.CC.guildPeers[full("Cyr")] ~= nil
+	and runnersOut == 1)
+Run(40)
+local g2 = #WIRE
+Inject("Q:2", "GUILD", "Guildie", B)
+Run(8)
+local answers1 = GuildFrom(g2, "Bram", "^S:2:")
+Inject("Q:2", "GUILD", "Guildie", B)
+Run(8)
+local answers2 = GuildFrom(g2, "Bram", "^S:2:")
+Run(30)
+local answers3 = GuildFrom(g2, "Bram", "^S:2:")
+check("  a guild state request is answered after a random wait, once per 30 s (a later one when that's up)",
+	answers1 == 1 and answers2 == 1 and answers3 == 2, answers1 .. "/" .. answers2 .. "/" .. answers3)
+Inject("S:2:MAGE:20484,5.0", "GUILD", "Guildie", B)
+check("  a guild state is its sender's, and goes only into the guild's table",
+	B.CC.guildState[full("Guildie")] ~= nil and B.CC.state[full("Guildie")] == nil)
+B.CC:SetGuildSync(false)
+local g3 = #WIRE
+Cast(B, 29166)
+Cast(G, 29166)
+Run(3)
+check("  turned off: nothing goes out over GUILD, what comes in is dropped, the tab goes back to All",
+	GuildFrom(g3, "Bram") == 0 and next(B.CC.guildState) == nil and next(B.CC.guildPeers) == nil
+	and B.CC:PanelTab() == "all")
+ComesBack(B, 29166)
+ComesBack(G, 29166)
+for _, c in ipairs({ A3, B, C }) do c.STUB_IN_GUILD = false end
+Drop(G)
 
 ---------------------------------------------------------------- the whole run
 local spaced = true

@@ -181,6 +181,15 @@ local DEFAULTS = {
     planLead         = 5,      -- seconds the prompt bar shows before a planned use
     planBarX         = 0,
     planBarY         = 160,
+
+    -- look-panel lane: the main panel, its alerts and the guild channel
+    panelClosed = false,   -- closed by the player: stays shut until /cdc or the minimap opens it (R19)
+    panelStyle  = "text",  -- "text" rows, or "icons" (a row of spell icons, P9)
+    panelTab    = "all",   -- "all", "guild" or "team:<name>"
+    teams       = {},      -- [team name] = { "Name-Realm", ... } (P43)
+    rotations   = {},      -- [spellID] = { "Name-Realm", ... }: our own rotation orders (P39)
+    alerts      = {},      -- [spellID] = { sound = <SoundKit ID, file or true>, flash = true, midscreen = false, warn = 0 } (P1)
+    guildSync   = false,   -- also share over the guild channel; the panel gets a Guild tab (P41)
 }
 
 function CC:Init()
@@ -1150,8 +1159,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
             print("  (no cooldowns recorded yet — try /cdc verbose, then use a tracked CD)")
         end
     else
-        if CC.frame then
-            CC.frame:SetShown(not CC.frame:IsShown())
-        end
+        -- the panel: a close here (or with its button) lasts until /cdc or the minimap opens it (R19)
+        CC:TogglePanel()
     end
 end

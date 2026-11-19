@@ -60,9 +60,7 @@ function CC:BuildMinimapButton()
         if button == "RightButton" then
             CC:OpenOptions()
         else
-            if CC.frame then
-                CC.frame:SetShown(not CC.frame:IsShown())
-            end
+            CC:TogglePanel()
         end
     end)
 

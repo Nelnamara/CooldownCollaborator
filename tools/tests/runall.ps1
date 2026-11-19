@@ -1,4 +1,4 @@
-# Runs tools/tests/checks.lua, groups.lua, sync.lua, looks.lua and essentials.lua against every TOC (all six
+# Runs tools/tests/checks.lua, groups.lua, sync.lua, looks.lua, essentials.lua and panel.lua against every TOC (all six
 # clients) and prints one RESULT line per harness and TOC, plus any FAIL or Lua
 # error lines. A harness that dies before its RESULT line prints NO RESULT, so a
 # crash can't pass for green.
@@ -16,7 +16,7 @@ $tocs = @(
     @{ Toc = 'CooldownCollaborator.toc';          Interface = 16001 }
 )
 $runner = Join-Path $PSScriptRoot 'run.js'
-$harnesses = @('checks.lua', 'groups.lua', 'sync.lua', 'looks.lua', 'essentials.lua')
+$harnesses = @('checks.lua', 'groups.lua', 'sync.lua', 'looks.lua', 'essentials.lua', 'panel.lua')
 $bad = 0
 foreach ($h in $harnesses) {
     $harness = Join-Path $PSScriptRoot $h

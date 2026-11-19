@@ -16,6 +16,10 @@
 --       spec     = a provider only one specialization has (its ChrSpecialization
 --                  ID): a groupmate counts once we know their spec (Roster.lua).
 --       itemCooldown = the cooldown sits on an item (no ready-now watch).
+--       kind     = what it is for: rez, lust, external, raid, personal, mana or
+--                  utility (the tooltip's line, the views' groupings).
+--       effect   = externals and raid defensives: the effect's length in
+--                  seconds (SpellDuration), for the panel's effect bar.
 --   CC.Providers[capability][CLASS] = { baseID, ... }  (Roster.lua)
 --   CC.BuiltinConsumables[spellID] = { ..., consumable = true, category }
 --   CC.ConsumableMatch = "id" (Retail, Forever) or "name" (Era, TBC, MoP)

@@ -76,8 +76,9 @@ it). The receiver's `CC.rezCharges = { charges, max, nextAt, from }` comes from 
 - `secondsAgo` must lie in 0 .. the spell's duration; a negative, huge or not-a-number value is dropped, not
   stored (in `S` an entry must be `<digits>,<digits and a point>`).
 - Messages are accepted only from the group channels (`PARTY`, `RAID`, `INSTANCE_CHAT`) and only from a current
-  group member; whispers are ignored, and so are our own messages coming back. `GUILD` is read only for `O`,
-  into its own table, never into the group's.
+  group member; whispers are ignored, and so are our own messages coming back. `GUILD` is read only for `O`
+  and, with guild sharing on, `H`, `Q` and `S` (The guild channel, below), each into the guild's own tables,
+  never into the group's.
 
 ## A copy's version
 
@@ -95,15 +96,38 @@ All CDCOLLAB and CDCBUFF sends go through one queue: at most one message every 0
 the game refuses counts), answers jittered as above, the same text on the same channel again within 1 s dropped,
 and the 1.x retry rule kept (a send the game refuses is tried again every 2 s, 15 times at most). A message is
 built when it goes out, so waiting in the queue doesn't age its `secondsAgo`. After a boss ends, ready-nows the
-game refused during that fight are re-sent once, for spells still ready (R9). Nothing is queued while solo: a
-cast made solo reaches the group in the `S` sent on joining.
+game refused during that fight are re-sent once, for spells still ready (R9). Nothing is queued for the group
+while solo: a cast made solo reaches the group in the `S` sent on joining (guild sends, below, still go).
 
 ## Chunks
 
 `P` and `O` data is the same text encoding the profile export uses (P15): a version, then key=value pairs,
 escaped for `:` `;` `,`. Split into parts of at most 200 bytes of data; the receiver keeps parts for 30 s and
 uses the content only when all parts of one id have arrived: `CC.payloads[kind][sender][id] = { data, at }`
-(ids are letters, digits, `_` and `-`, 32 at most; 64 parts at most). Nothing reads them yet.
+(ids are letters, digits, `_` and `-`, 32 at most; 64 parts at most).
+
+Rotation orders (P39, 19 Nov) are the first reader: `P:2:rot-<spellID>:<part>/<parts>:<data>` with data
+`1;s=<spellID>;o=<Name-Realm>,<Name-Realm>,...` (each name with `%` `:` `;` `,` `=` written as `%XX`; an empty
+`o=` clears the order). The panel takes one only from the group's leader or (in a raid) an assistant, the newest
+first, into `CC.rotations[spellID] = { names }`; ours (`CC:SetRotation`, from Settings) are saved in
+`db.rotations` and go to the group while we lead it or assist.
+
+## The guild channel (P41, 19 Nov)
+
+Optional and off by default (`db.guildSync`; `CC:SetGuildSync(on)`). With it on, the same format 2 messages also
+go over `GUILD`: `H` and `Q` and our `S` a few seconds after login or after turning it on (a random 3 to 6 s),
+our `S` again 1 s after each of our own casts and ready-nows (one message for a burst; no 1.x lines go over the
+guild), and `H` every 5 minutes. A guild `Q` is answered with `H` and `S` after a random 0 to 5 s, once per 30 s
+(a request inside the 30 s is answered when it is up). Each goes through the one send queue with its own
+spacing; a guild send waiting while it is turned off is dropped.
+
+What the guild sends is read into its own tables, never the group's: `CC.guildPeers[name] = { version, client,
+proto, heardAt }` from `H` (an `S` heard first counts as a hello) and `CC.guildState[name] = { class, spells =
+{ [id] = usedAt }, heardAt }` from `S` (each `S` replaces the sender's whole list; `;+` parts are joined the same
+way as the group's). A guildmate not heard for 11 minutes is forgotten. The panel's Guild tab lists the ones
+outside our group with their lust and Battle Rez (by their class's provider spells; a spell their last `S` leaves
+out is ready). Off: nothing goes out over `GUILD`, guild `H`, `Q` and `S` are dropped and the tables are let go.
+`O` stays as above either way.
 
 ## Saved timers (R4, P16)
 
