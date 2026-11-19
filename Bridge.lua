@@ -3,6 +3,8 @@
 -- CDTL3 is the screen. Every call is guarded so CC works with no CDTL3 or an
 -- older CDTL3 that lacks the API.
 
+local L = CC.L
+
 local TIMER_TYPE = "cdcGroup"
 local ICON_PATH  = "Interface\\AddOns\\CooldownCollaborator\\Media\\icon.tga"
 
@@ -32,7 +34,7 @@ function CC:BridgeRegister()
     if self.bridgeRegistered or not self:BridgeAvailable() then return end
     local api = Api() --[[@as table]] -- BridgeAvailable just checked it
     local ok = pcall(api.RegisterTimerType, api, TIMER_TYPE, {
-        name = "Group cooldowns",
+        name = L["Group cooldowns"],
         icon = ICON_PATH,
     })
     if ok then

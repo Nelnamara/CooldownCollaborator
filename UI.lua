@@ -10,6 +10,8 @@
 -- opens it again (R19). Team tabs (db.teams) narrow it to one team; with guild
 -- sharing on, a Guild tab lists guildmates outside the group (Comms.lua).
 
+local L = CC.L
+
 local FRAME_WIDTH  = 320
 local WIDE_WIDTH   = 380   -- two columns
 local WIDE_FROM    = 10    -- a group this big gets two columns
@@ -126,6 +128,9 @@ local function UnitMark(unit)
 end
 
 CC.UnitMark = UnitMark   -- Roster.lua's OwnerState reads a name's state through it
+
+-- What a state shows as; the codes DEAD and OFFLINE themselves stay as data.
+local STATE_WORD = { DEAD = L["DEAD"], OFFLINE = L["OFFLINE"] }
 
 -------------------------------------------------------------------------------
 -- Teams (P43) and tabs
@@ -406,13 +411,13 @@ end
 -- Why the panel is empty (P13): nobody else runs it, or nothing was used yet.
 function CC:PanelEmptyText(data)
     if data and data.hiddenReady and data.hiddenReady > 0 then
-        return "Nothing is cooling down. Ready cooldowns are hidden (Settings: Show ready cooldowns)."
+        return L["Nothing is cooling down. Ready cooldowns are hidden (Settings: Show ready cooldowns)."]
     end
     if self:PanelTab():match("^team:") then
-        return "Nobody on this team has used a tracked cooldown yet."
+        return L["Nobody on this team has used a tracked cooldown yet."]
     end
     if not IsInGroup() then
-        return "Nothing used yet. Your own cooldowns show here once you use one; in a group, everyone's do."
+        return L["Nothing used yet. Your own cooldowns show here once you use one; in a group, everyone's do."]
     end
     local me = self:FullName("player")
     local total, runners = 0, {}
@@ -423,16 +428,16 @@ function CC:PanelEmptyText(data)
     table.sort(runners)
     if #runners == 0 then
         if self.retailAPI then
-            return "Nobody else here runs CooldownCollaborator, so only your own cooldowns can show. Nothing has been used yet."
+            return L["Nobody else here runs CooldownCollaborator, so only your own cooldowns can show. Nothing has been used yet."]
         end
-        return "Nobody else here runs CooldownCollaborator; casts seen in the combat log still show. Nothing has been used yet."
+        return L["Nobody else here runs CooldownCollaborator; casts seen in the combat log still show. Nothing has been used yet."]
     end
-    local who = ""
     if #runners <= 3 then
-        who = " (" .. table.concat(runners, ", ") .. " and you)"
+        return string.format(L["%d of %d here run CooldownCollaborator (%s and you). Nothing has been used yet; cooldowns show once someone uses one."],
+            #runners + 1, total, table.concat(runners, ", "))
     end
-    return string.format("%d of %d here run CooldownCollaborator%s. Nothing has been used yet; cooldowns show once someone uses one.",
-        #runners + 1, total, who)
+    return string.format(L["%d of %d here run CooldownCollaborator. Nothing has been used yet; cooldowns show once someone uses one."],
+        #runners + 1, total)
 end
 
 -- The soonest lust (P26) on a client that has lust: ready first, a dead or
@@ -456,11 +461,11 @@ function CC:NextLustText()
     local c = ClassColor(s.class)
     local when
     if s.ready then
-        when = Hex(GREEN) .. "READY|r" .. (s.guessed and (Hex(SOON) .. "?|r") or "")
+        when = Hex(GREEN) .. L["READY"] .. "|r" .. (s.guessed and (Hex(SOON) .. "?|r") or "")
     else
         when = Hex(RED) .. self:FormatTime(s.remaining) .. "|r"
     end
-    return Hex(HEAD) .. "Lust|r " .. Hex(c) .. self:ShortName(s.name) .. "|r " .. when
+    return Hex(HEAD) .. L["Lust"] .. "|r " .. Hex(c) .. self:ShortName(s.name) .. "|r " .. when
 end
 
 -- "4 of 5": how many in the group run it (us included), in a group
@@ -472,7 +477,7 @@ function CC:RunsCountText()
         if name == me or self.peers[name] then runs = runs + 1 end
     end
     if total <= 1 then return "" end
-    return string.format("%d of %d", runs, total)
+    return string.format(L["%d of %d"], runs, total)
 end
 
 -------------------------------------------------------------------------------
@@ -513,7 +518,7 @@ local function SendChatLine(msg, chatType, target)
     local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
     if not send then return false end
     local ok = pcall(send, msg, chatType, nil, target)
-    if not ok then print("|cFF54a3ffCDC|r The game didn't let that message go out just now.") end
+    if not ok then print("|cFF54a3ffCDC|r " .. L["The game didn't let that message go out just now."]) end
     return ok
 end
 
@@ -538,9 +543,9 @@ function CC:AskForCooldown(info, toGroup)
     if toGroup then
         local channel = self:GroupChannel()
         if not channel then return false end
-        return SendChatLine(string.format("%s, %s on me please", self:ShortName(owner), data.name), channel)
+        return SendChatLine(string.format(L["%s, %s on me please"], self:ShortName(owner), data.name), channel)
     end
-    return SendChatLine(string.format("%s on me please", data.name), "WHISPER", owner)
+    return SendChatLine(string.format(L["%s on me please"], data.name), "WHISPER", owner)
 end
 
 -------------------------------------------------------------------------------
@@ -578,7 +583,7 @@ local function ShowTooltipFor(widget)
         owner = {}
         for _, o in ipairs(info.owners) do owner[#owner + 1] = o.name end
     end
-    local hint = CC:AskTarget(info) and "Click: whisper to ask for it. Shift-click: ask in group chat." or nil
+    local hint = CC:AskTarget(info) and L["Click: whisper to ask for it. Shift-click: ask in group chat."] or nil
     CC:ShowCooldownTooltip(widget, owner, info.spellID, hint)
 end
 
@@ -798,8 +803,8 @@ function CC:BuildUI()
     post:SetScript("OnEnter", function(widget)
         postText:SetTextColor(1, 1, 1)
         GameTooltip:SetOwner(widget, "ANCHOR_BOTTOM")
-        GameTooltip:SetText("Post to chat")
-        GameTooltip:AddLine("Says what is ready, and who has it, in group chat (the spells picked in Settings).", 1, 1, 1, true)
+        GameTooltip:SetText(L["Post to chat"])
+        GameTooltip:AddLine(L["Says what is ready, and who has it, in group chat (the spells picked in Settings)."], 1, 1, 1, true)
         GameTooltip:Show()
     end)
     post:SetScript("OnLeave", function() postText:SetTextColor(0.7, 0.7, 0.7); GameTooltip:Hide() end)
@@ -819,8 +824,8 @@ function CC:BuildUI()
     close:SetScript("OnClick", function() CC:ClosePanel() end)
     close:SetScript("OnEnter", function(widget)
         GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Close")
-        GameTooltip:AddLine("It stays shut until /cdc or the minimap button opens it.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine(L["Close"])
+        GameTooltip:AddLine(L["It stays shut until /cdc or the minimap button opens it."], 0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
     close:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -838,7 +843,7 @@ function CC:BuildUI()
     emptyLabel:SetWidth(FRAME_WIDTH - 28)
     emptyLabel:SetWordWrap(true)
     emptyLabel:SetJustifyH("CENTER")
-    emptyLabel:SetText("Nothing used yet.")
+    emptyLabel:SetText(L["Nothing used yet."])
     self.emptyLabel = emptyLabel
 
     self.rows = {}
@@ -888,9 +893,9 @@ function CC:LayoutTabs(top)
     local list = {}
     local teams = self:TeamNames()
     if #teams > 0 or self.db.guildSync then
-        list[1] = { key = "all", label = #teams > 0 and "All" or "Group" }
+        list[1] = { key = "all", label = #teams > 0 and L["All"] or L["Group"] }
         for _, team in ipairs(teams) do list[#list + 1] = { key = "team:" .. team, label = team } end
-        if self.db.guildSync then list[#list + 1] = { key = "guild", label = "Guild" } end
+        if self.db.guildSync then list[#list + 1] = { key = "guild", label = L["Guild"] } end
     end
     local current = self:PanelTab()
     local x = PADDING
@@ -1043,7 +1048,7 @@ local function ShowCooldownRow(line, row, look, width)
         line.spellText:Show()
     end
     if greyed then
-        line.timeText:SetText(row.state)
+        line.timeText:SetText(STATE_WORD[row.state] or row.state)
         line.timeText:SetTextColor(GREY[1], GREY[2], GREY[3])
     elseif row.remaining > 0 then
         local t = TimeColor(row.remaining)
@@ -1051,10 +1056,10 @@ local function ShowCooldownRow(line, row, look, width)
         line.timeText:SetTextColor(t[1], t[2], t[3])
         StartEffect(line, row)
     elseif row.next then
-        line.timeText:SetText("NEXT")
+        line.timeText:SetText(L["NEXT"])
         line.timeText:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
     else
-        line.timeText:SetText("READY" .. (row.guessed and (Hex(SOON) .. "?|r") or ""))
+        line.timeText:SetText(L["READY"] .. (row.guessed and (Hex(SOON) .. "?|r") or ""))
         line.timeText:SetTextColor(GREEN[1], GREEN[2], GREEN[3])
     end
     line.timeText:Show()
@@ -1092,7 +1097,7 @@ local function ShowReadyLine(line, item, look, width)
         line.icon:SetVertexColor(0.55, 0.55, 0.55)
         line.spellText:SetTextColor(GREY[1], GREY[2], GREY[3])
         line.ownersText:SetText(Hex(GREY) .. CC:ShortName(item.name) .. "|r" .. Dot(CC:VersionMark(item.name)))
-        line.timeText:SetText(item.state)
+        line.timeText:SetText(STATE_WORD[item.state] or item.state)
         line.timeText:SetTextColor(GREY[1], GREY[2], GREY[3])
         return
     end
@@ -1123,10 +1128,15 @@ end
 -- "+3 more running, 8 spells ready"
 local function MoreText(hiddenRunning, hiddenReady)
     local parts = {}
-    if hiddenRunning > 0 then parts[#parts + 1] = string.format("+%d more running", hiddenRunning) end
+    if hiddenRunning > 0 then parts[#parts + 1] = string.format(L["+%d more running"], hiddenRunning) end
     if hiddenReady > 0 then
-        local what = hiddenReady == 1 and "spell" or "spells"
-        parts[#parts + 1] = string.format(#parts == 0 and "+%d more %s ready" or "%d %s ready", hiddenReady, what)
+        local text
+        if hiddenReady == 1 then
+            text = #parts == 0 and L["+%d more spell ready"] or L["%d spell ready"]
+        else
+            text = #parts == 0 and L["+%d more spells ready"] or L["%d spells ready"]
+        end
+        parts[#parts + 1] = string.format(text, hiddenReady)
     end
     return table.concat(parts, ", ")
 end
@@ -1164,7 +1174,7 @@ function CC:LayoutLines(top, data)
         cells(cooling, showCooling, function(line, row, w) ShowCooldownRow(line, row, "cell", w) end)
         if showReady > 0 then
             local head = take()
-            ShowTextLine(head, "head", "Ready", GREEN, inner)
+            ShowTextLine(head, "head", L["Ready"], GREEN, inner)
             Place(head, PADDING, y, inner, HEAD_HEIGHT)
             y = y + HEAD_HEIGHT
             cells(ready, showReady, function(line, item, w) ShowReadyLine(line, item, "foldcell", w) end)
@@ -1178,7 +1188,7 @@ function CC:LayoutLines(top, data)
         end
         if showReady > 0 then
             local head = take()
-            ShowTextLine(head, "head", "Ready", GREEN, inner)
+            ShowTextLine(head, "head", L["Ready"], GREEN, inner)
             Place(head, PADDING, y, inner, HEAD_HEIGHT)
             y = y + HEAD_HEIGHT
             for i = 1, showReady do
@@ -1268,7 +1278,7 @@ function CC:LayoutIcons(top, data)
                 b.edge:Hide()
                 b.icon:SetDesaturated(true)
                 b.icon:SetVertexColor(0.45, 0.45, 0.45)
-                b.time:SetText(row.state == "DEAD" and "DEAD" or "OFF")
+                b.time:SetText(row.state == "DEAD" and L["DEAD"] or L["OFF"])
                 b.time:SetTextColor(GREY[1], GREY[2], GREY[3])
             else
                 -- ready: bright, a green edge (gold for the rotation's NEXT)
@@ -1293,7 +1303,7 @@ function CC:LayoutIcons(top, data)
     local n = 0
     if #list > show then
         n = 1
-        ShowTextLine(lines[1], "more", string.format("+%d more", #list - show), MUTED, FRAME_WIDTH - PADDING * 2)
+        ShowTextLine(lines[1], "more", string.format(L["+%d more"], #list - show), MUTED, FRAME_WIDTH - PADDING * 2)
         Place(lines[1], PADDING, y, FRAME_WIDTH - PADDING * 2, MORE_HEIGHT)
         y = y + MORE_HEIGHT
     end
@@ -1324,7 +1334,7 @@ function CC:LayoutGuild(top)
     local lines = self.rows
     local y = top
     local n = 1
-    ShowTextLine(lines[1], "head", string.format("Outside your group: %d run it", runners), HEAD, inner)
+    ShowTextLine(lines[1], "head", string.format(L["Outside your group: %d run it"], runners), HEAD, inner)
     lines[1].divider:Hide()
     Place(lines[1], PADDING, y, inner, HEAD_HEIGHT)
     y = y + HEAD_HEIGHT
@@ -1352,7 +1362,7 @@ function CC:LayoutGuild(top)
             line.timeText:SetText(self:FormatTime(row.remaining))
             line.timeText:SetTextColor(t[1], t[2], t[3])
         else
-            line.timeText:SetText("READY")
+            line.timeText:SetText(L["READY"])
             line.timeText:SetTextColor(GREEN[1], GREEN[2], GREEN[3])
         end
         line.timeText:Show()
@@ -1361,7 +1371,7 @@ function CC:LayoutGuild(top)
     end
     if #rows > show then
         n = n + 1
-        ShowTextLine(lines[n], "more", string.format("+%d more", #rows - show), MUTED, inner)
+        ShowTextLine(lines[n], "more", string.format(L["+%d more"], #rows - show), MUTED, inner)
         Place(lines[n], PADDING, y, inner, MORE_HEIGHT)
         y = y + MORE_HEIGHT
     end

@@ -10,6 +10,8 @@
 -- A setup is { disabled = { spellID, ... }, custom = { [id] = { name, duration, icon } },
 -- alerts = { [id] = { sound, flash, midscreen, warn } }, places = { [windowKey] = { x, y } } }.
 
+local L = CC.L
+
 local SETUP_FORMAT = "1"
 local CHUNK = 200
 local MAX_PARTS = 64
@@ -189,18 +191,18 @@ function CC:DescribeSetup(setup)
     for _, id in ipairs(now.disabled) do offNow[id] = true end
     for _, id in ipairs(setup.disabled) do offNew[id] = true end
     local d = Differs(offNow, offNew)
-    if d > 0 then lines[#lines + 1] = string.format("%d default spells ticked or unticked (%d unticked afterwards)", d, Count(offNew)) end
+    if d > 0 then lines[#lines + 1] = string.format(d == 1 and L["%d default spell ticked or unticked (%d unticked afterwards)"] or L["%d default spells ticked or unticked (%d unticked afterwards)"], d, Count(offNew)) end
     d = Differs(now.custom, setup.custom)
-    if d > 0 then lines[#lines + 1] = string.format("%d custom spells added or removed (%d afterwards)", d, Count(setup.custom)) end
+    if d > 0 then lines[#lines + 1] = string.format(d == 1 and L["%d custom spell added or removed (%d afterwards)"] or L["%d custom spells added or removed (%d afterwards)"], d, Count(setup.custom)) end
     d = Differs(now.alerts, setup.alerts)
-    if d > 0 then lines[#lines + 1] = string.format("%d ready alerts added or removed (%d afterwards)", d, Count(setup.alerts)) end
+    if d > 0 then lines[#lines + 1] = string.format(d == 1 and L["%d ready alert added or removed (%d afterwards)"] or L["%d ready alerts added or removed (%d afterwards)"], d, Count(setup.alerts)) end
     local moved = 0
     for key, p in pairs(setup.places) do
         local q = now.places[key]
         if not q or q[1] ~= p[1] or q[2] ~= p[2] then moved = moved + 1 end
     end
-    if moved > 0 then lines[#lines + 1] = string.format("%d windows moved", moved) end
-    if #lines == 0 then lines[1] = "Nothing changes: this is what you have now." end
+    if moved > 0 then lines[#lines + 1] = string.format(moved == 1 and L["%d window moved"] or L["%d windows moved"], moved) end
+    if #lines == 0 then lines[1] = L["Nothing changes: this is what you have now."] end
     return lines
 end
 
@@ -370,7 +372,7 @@ function CC:ShowCopyBox(title, text, onAccept, acceptLabel)
         f.close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
         f.close:SetSize(80, 22)
         f.close:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 14)
-        f.close:SetText("Close")
+        f.close:SetText(L["Close"])
         f.close:SetScript("OnClick", function() f:Hide() end)
         self.copyBox = f
     end
@@ -378,7 +380,7 @@ function CC:ShowCopyBox(title, text, onAccept, acceptLabel)
     f.edit:SetText(text or "")
     f.onAccept = onAccept
     f.accept:SetShown(onAccept ~= nil)
-    f.accept:SetText(acceptLabel or "Import")
+    f.accept:SetText(acceptLabel or L["Import"])
     f.accept:SetScript("OnClick", function()
         if f.onAccept then f.onAccept(f.edit:GetText()) end
     end)
@@ -392,22 +394,22 @@ end
 -- Import: paste text, then see what it would change and confirm.
 function CC:ShowImportBox()
     local box
-    box = self:ShowCopyBox("Import a setup: paste it here", "", function(text)
+    box = self:ShowCopyBox(L["Import a setup: paste it here"], "", function(text)
         local setup = CC:DecodeSetup(text)
         if not setup then
-            box.note:SetText("|cFFFF4444That isn't a CooldownCollaborator setup.|r")
+            box.note:SetText("|cFFFF4444" .. L["That isn't a CooldownCollaborator setup."] .. "|r")
             return
         end
         if box.pending ~= text then
             box.pending = text
-            box.note:SetText("It will change:\n- " .. table.concat(CC:DescribeSetup(setup), "\n- ") .. "\nClick Import again to do it.")
+            box.note:SetText(string.format(L["It will change:\n- %s\nClick Import again to do it."], table.concat(CC:DescribeSetup(setup), "\n- ")))
             return
         end
         CC:ApplySetup(setup)
         box.pending = nil
         box:Hide()
-        print("|cFF54a3ffCDC|r Setup imported. Settings > Profiles can undo it.")
-    end, "Import")
+        print("|cFF54a3ffCDC|r " .. L["Setup imported. Settings > Profiles can undo it."])
+    end, L["Import"])
     box.pending = nil
     return box
 end
@@ -429,13 +431,13 @@ end
 
 function CC:SendOfficerSetup()
     if not self:IsOfficer() then
-        print("|cFF54a3ffCDC|r Only a guild officer can send a setup to the guild.")
+        print("|cFF54a3ffCDC|r " .. L["Only a guild officer can send a setup to the guild."])
         return false
     end
     local data = self:ExportSetup("Guild setup")
     local parts = math.ceil(#data / CHUNK)
     if parts > MAX_PARTS then
-        print("|cFF54a3ffCDC|r That setup is too long to send.")
+        print("|cFF54a3ffCDC|r " .. L["That setup is too long to send."])
         return false
     end
     local id = "s" .. tostring(time())
@@ -496,14 +498,14 @@ function CC:ShowSetupDialog()
             b:SetText(label)
             b:SetScript("OnClick", onClick)
         end
-        Button(16, "Accept", function() CC:AnswerSetup("accept") end)
-        Button(140, "Not now", function() CC:AnswerSetup("later") end)
-        Button(264, "Never", function() CC:AnswerSetup("never") end)
+        Button(16, L["Accept"], function() CC:AnswerSetup("accept") end)
+        Button(140, L["Not now"], function() CC:AnswerSetup("later") end)
+        Button(264, L["Never"], function() CC:AnswerSetup("never") end)
         self.setupDialog = f
     end
     local rank = self:GuildRankOf(pending.owner)
     pending.rank = rank
-    f.text:SetText(string.format("%s%s sent a setup to the guild.\nIt will change:\n- %s\n\nAccept it, not now, or never from this person?",
+    f.text:SetText(string.format(L["%s%s sent a setup to the guild.\nIt will change:\n- %s\n\nAccept it, not now, or never from this person?"],
         self:ShortName(pending.owner), rank and (" (" .. rank .. ")") or "",
         table.concat(self:DescribeSetup(pending.setup), "\n- ")))
     f:Show()
@@ -516,7 +518,7 @@ function CC:AnswerSetup(answer)
     if not pending then return end
     if answer == "accept" then
         self:ApplySetup(pending.setup)
-        print("|cFF54a3ffCDC|r Setup from " .. self:ShortName(pending.owner) .. " accepted. Settings > Profiles can undo it.")
+        print("|cFF54a3ffCDC|r " .. string.format(L["Setup from %s accepted. Settings > Profiles can undo it."], self:ShortName(pending.owner)))
     elseif answer == "never" then
         self.db.setupNever = self.db.setupNever or {}
         self.db.setupNever[pending.owner] = true
@@ -579,6 +581,11 @@ function CC:NotePullUse(owner, spellID)
     p.entries[#p.entries + 1] = { t = t, owner = owner, spellID = spellID }
 end
 
+-- "3 tracked cooldowns used"
+local function UsedText(n)
+    return string.format(n == 1 and L["%d tracked cooldown used"] or L["%d tracked cooldowns used"], n)
+end
+
 function CC:PullLines()
     local p = self.lastPull
     if not p then return {} end
@@ -593,12 +600,16 @@ end
 function CC:PrintLastPull()
     local p = self.lastPull
     if not p then
-        print("|cFF54a3ffCDC|r No pull logged yet.")
+        print("|cFF54a3ffCDC|r " .. L["No pull logged yet."])
         return
     end
     local lines = self:PullLines()
-    print(string.format("|cFF54a3ffCDC|r Last pull%s: %s, %d tracked cooldowns used.",
-        p.boss and (" (" .. p.boss .. ")") or "", CC:LookClock(math.floor(p.length or 0)), #lines))
+    local clock = CC:LookClock(math.floor(p.length or 0))
+    if p.boss then
+        print("|cFF54a3ffCDC|r " .. string.format(L["Last pull (%s): %s, %s."], p.boss, clock, UsedText(#lines)))
+    else
+        print("|cFF54a3ffCDC|r " .. string.format(L["Last pull: %s, %s."], clock, UsedText(#lines)))
+    end
     for _, l in ipairs(lines) do print("    " .. l) end
 end
 
@@ -634,7 +645,7 @@ function CC:PostLines()
             if has and name == me then has = self:KnownRank(id) ~= nil and self:KnownRank(id) ~= false end
             if has then
                 local rem = self:GetRemaining(name, id)
-                who[#who + 1] = self:ShortName(name) .. " " .. ((rem and rem > 0) and self:LookClock(math.ceil(rem)) or "ready")
+                who[#who + 1] = self:ShortName(name) .. " " .. ((rem and rem > 0) and self:LookClock(math.ceil(rem)) or L["ready"])
             end
         end
         table.sort(who)
@@ -646,12 +657,12 @@ end
 function CC:PostReady()
     local channel = self:GroupChannel()
     if not channel then
-        print("|cFF54a3ffCDC|r Join a group first.")
+        print("|cFF54a3ffCDC|r " .. L["Join a group first."])
         return false
     end
     local lines = self:PostLines()
     if #lines == 0 then
-        print("|cFF54a3ffCDC|r Nothing to post for the spells picked.")
+        print("|cFF54a3ffCDC|r " .. L["Nothing to post for the spells picked."])
         return false
     end
     ---@diagnostic disable-next-line: deprecated
@@ -680,6 +691,7 @@ end
 CC.sendErrors = CC.sendErrors or {}
 
 function CC:SupportText()
+    -- debug begin: the support report is read by the developer, so it stays in English
     local lines = {
         "CooldownCollaborator " .. self.version,
         string.format("Client: %s (interface %s), retailAPI %s", tostring(self:ClientTag()), tostring(self.tocversion), tostring(self.retailAPI)),
@@ -703,6 +715,7 @@ function CC:SupportText()
     local errs = {}
     for i = math.max(1, #self.sendErrors - 9), #self.sendErrors do errs[#errs + 1] = self.sendErrors[i] end
     lines[#lines + 1] = "Recent send errors (" .. #errs .. "): " .. (#errs > 0 and table.concat(errs, ", ") or "none")
+    -- debug end
     return table.concat(lines, "\n")
 end
 
@@ -826,8 +839,8 @@ ev:SetScript("OnEvent", function(_, event, ...)
         CC:EndPull(name, success == 1)
         CC:FireAPI("end", name, success == 1)
         if db.lastPullOffer and CC.lastPull then
-            print(string.format("|cFF54a3ffCDC|r %s %s: %d tracked cooldowns used. /cdc lastpull to see them.",
-                name or "Fight", success == 1 and "kill" or "wipe", #CC.lastPull.entries))
+            print("|cFF54a3ffCDC|r " .. string.format(L["%s %s: %s. /cdc lastpull to see them."],
+                name or L["Fight"], success == 1 and L["kill"] or L["wipe"], UsedText(#CC.lastPull.entries)))
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         if CC.pullLog.active and not CC.inEncounter then

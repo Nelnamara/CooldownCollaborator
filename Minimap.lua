@@ -4,6 +4,8 @@
 -- The orbit follows the minimap's live size (the Forever minimap is larger than the old one,
 -- and Edit Mode can rescale it): the button's center sits just past the rim, so it rides the
 -- border instead of floating inside the map. Same rule as CooldownTimeline3's button.
+local L = CC.L
+
 local function AngleToOffset(angle)
     local radius = (Minimap:GetWidth() / 2) + 4
     return radius * math.cos(math.rad(angle)), radius * math.sin(math.rad(angle))
@@ -48,9 +50,9 @@ function CC:BuildMinimapButton()
     btn:SetScript("OnEnter", function(widget)
         GameTooltip:SetOwner(widget, "ANCHOR_LEFT")
         GameTooltip:AddLine("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
-        GameTooltip:AddLine("Left-click: Toggle panel", 1, 1, 1)
-        GameTooltip:AddLine("Right-click: Open settings", 1, 1, 1)
-        GameTooltip:AddLine("Drag: Reposition button", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(L["Left-click: Toggle panel"], 1, 1, 1)
+        GameTooltip:AddLine(L["Right-click: Open settings"], 1, 1, 1)
+        GameTooltip:AddLine(L["Drag: Reposition button"], 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     btn:SetScript("OnLeave", function() GameTooltip:Hide() end)

@@ -13,6 +13,8 @@
 -- need be there, and on Retail a timer's text or length can be hidden (it is
 -- then only ever read inside a pcall, and a hidden one matches nothing).
 
+local L = CC.L
+
 local PLAN_FORMAT = "1"
 local CHUNK       = 200   -- bytes of plan data per P message
 local MAX_PARTS   = 64
@@ -104,13 +106,13 @@ function CC:SharePlan(name)
     local plan = self.db.plans[name]
     if type(plan) ~= "table" then return false end
     if not self:CanSharePlan() then
-        print("|cFF54a3ffCDC|r Only the group's leader or a raid assist can share a plan.")
+        print("|cFF54a3ffCDC|r " .. L["Only the group's leader or a raid assist can share a plan."])
         return false
     end
     local data = self:EncodePlan(name, plan)
     local parts = math.ceil(#data / CHUNK)
     if parts > MAX_PARTS then
-        print("|cFF54a3ffCDC|r That plan is too long to share.")
+        print("|cFF54a3ffCDC|r " .. L["That plan is too long to share."])
         return false
     end
     local id = PlanID(name)
@@ -139,7 +141,7 @@ function CC:TakeSharedPlans()
                     plan.from, plan.at = owner, time()
                     self.db.plans[name] = plan
                     self.db.activePlan = name
-                    print(string.format("|cFF54a3ffCDC|r %s shared the raid plan \"%s\" (%d rows).",
+                    print(string.format("|cFF54a3ffCDC|r " .. L["%s shared the raid plan \"%s\" (%d rows)."],
                         self:ShortName(owner), name, #plan.rows))
                 end
             end
@@ -353,7 +355,7 @@ function CC:RefreshPlanBars()
             local data = CC.SpellData[p.row.spellID]
             local left = p.due - now
             bar.icon:SetTexture(data and data.icon or 134400)
-            bar.left:SetText((data and data.name or ("Spell " .. p.row.spellID)) .. ": " .. p.label)
+            bar.left:SetText(string.format("%s: %s", data and data.name or string.format(L["Spell %d"], p.row.spellID), p.label))
             bar.right:SetText(self:LookClock(math.ceil(left)))
             bar:SetMinMaxValues(0, p.length)
             bar:SetValue(math.min(left, p.length))

@@ -9,6 +9,8 @@
 -- cooldown as a swipe; on Retail and Forever that value can be hidden, and a hidden
 -- value only ever goes into that widget.
 
+local L = CC.L
+
 local WIDTH, HEIGHT = 312, 100
 local LEFT, SPAN, SECONDS = 54, 240, 120   -- "now" at LEFT, 2:00 at LEFT + SPAN
 local TOP = 20                             -- room for the band's gold time above it
@@ -135,11 +137,11 @@ function CC:BuildBurstLine()
 
     local youLabel = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     youLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -(TOP + 12))
-    youLabel:SetText("You")
+    youLabel:SetText(L["You"])
     local groupLabel = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     groupLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -(TOP + GROUP_Y + 4))
-    groupLabel:SetText("Group")
-    Label(f, "now", LEFT, TOP + TICK_Y + 5)
+    groupLabel:SetText(L["Group"])
+    Label(f, L["now"], LEFT, TOP + TICK_Y + 5)
     Label(f, "1:00", LEFT + SPAN / 2, TOP + TICK_Y + 5)
     Label(f, "2:00", LEFT + SPAN, TOP + TICK_Y + 5)
 

@@ -276,6 +276,7 @@ local function member(u)
 	for _, m in ipairs(GROUP) do if m.unit == u then return m end end
 end
 function GetBuildInfo() return "test", "70000", "Nov 14 2026", TOC end
+function GetLocale() return GAME_LOCALE or "enUS" end
 function GetNormalizedRealmName() return PLAYER.realm end
 function UnitName(u)
 	local m = member(u)

@@ -89,7 +89,7 @@ function CC:IsOlderVersion(version)
     return c1 < c2
 end
 
-function CC:PeerNote(name)
+function CC:PeerNote(name)   -- the /cdc roster dump only: English on purpose
     if name == self:FullName("player") then return "you, " .. self.version end
     local peer = self.peers[name]
     if not peer then return "no hello" end
@@ -176,7 +176,7 @@ function CC:DrainSendQueue()
                 local ok, result = pcall(C_ChatInfo.SendAddonMessage, q.prefix, text, channel)
                 lastSendAt[channel] = now
                 if self.verbose then
-                    print(string.format("|cFF54a3ffCDC|r send: %s %s via %s (result=%s)",
+                    print(string.format("|cFF54a3ffCDC|r send: %s %s via %s (result=%s)", -- debug
                         q.prefix, text, channel, ok and tostring(result) or "error"))
                 end
                 if ok and self:AddonMessageSent(result) then
@@ -223,7 +223,7 @@ end)
 function CC:SendCooldownSync(spellID, playerName, usedAt, tries)
     self:GuildStateChanged()
     if not self:GroupChannel() then
-        if CC.verbose then print("|cFF54a3ffCDC|r sync skipped: not in a group") end
+        if CC.verbose then print("|cFF54a3ffCDC|r sync skipped: not in a group") end -- debug
         return
     end
     local entry = self.state[playerName]
@@ -475,7 +475,7 @@ local function OnCastLine(self, owner, message)
     local spellID, ago = tonumber(spellIDStr), tonumber(agoStr)
     if not spellID or not ago or not bare or bare == "" then return end
     if bare ~= self:ShortName(owner) then
-        if self.verbose then print("|cFF54a3ffCDC|r dropped a relay from " .. owner .. ": " .. message) end
+        if self.verbose then print("|cFF54a3ffCDC|r dropped a relay from " .. owner .. ": " .. message) end -- debug
         return
     end
     NoteOldCopy(owner)
@@ -623,7 +623,7 @@ function CC:OnAddonMessage(prefix, message, channel, sender)
     -- our own echo: already applied here
     if not owner or owner == self:FullName("player") then return end
     if CC.verbose then
-        print(string.format("|cFF54a3ffCDC|r heard %s from %s via %s: %s",
+        print(string.format("|cFF54a3ffCDC|r heard %s from %s via %s: %s", -- debug
             prefix, tostring(sender), tostring(channel), message))
     end
 
@@ -641,7 +641,7 @@ function CC:OnAddonMessage(prefix, message, channel, sender)
         return
     end
     if not GROUP_CHANNELS[channel] or not self:IsGroupMember(owner) then
-        if CC.verbose then print("|cFF54a3ffCDC|r dropped: not from a group member on a group channel") end
+        if CC.verbose then print("|cFF54a3ffCDC|r dropped: not from a group member on a group channel") end -- debug
         return
     end
 

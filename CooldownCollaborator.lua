@@ -10,6 +10,9 @@ CC.version     = "1.1.1"
 CC.PREFIX      = "CDCOLLAB"   -- cooldowns (Comms.lua, docs/MESSAGE_FORMAT_2.md)
 CC.BUFF_PREFIX = "CDCBUFF"    -- flask and food status
 
+-- The translations load after this file (Locales/), so L looks each phrase up in CC.L when it is used.
+local L = setmetatable({}, { __index = function(_, key) return CC.L[key] end })
+
 -------------------------------------------------------------------------------
 -- Client detection (the same rules as CooldownTimeline3). WoW: Forever runs
 -- the modern engine and API (the old spell globals are gone, values can be
@@ -276,7 +279,7 @@ function CC:LoadCustomSpells()
     for idStr, data in pairs(self.db.customSpells) do
         local spellID = tonumber(idStr)
         if spellID and data.duration and data.duration > 0 then
-            ApplyCustomSpell(spellID, data.name or ("Spell " .. spellID), data.duration, data.icon)
+            ApplyCustomSpell(spellID, data.name or string.format(L["Spell %d"], spellID), data.duration, data.icon)
         end
     end
 end
@@ -288,7 +291,7 @@ function CC:AddCustomSpell(spellID, duration)
     local name, icon = CC.Compat.GetSpellInfo(spellID)
 
     if not name then
-        print("|cFF54a3ffCooldownCollaborator|r Unknown spell ID: " .. spellID)
+        print("|cFF54a3ffCooldownCollaborator|r " .. string.format(L["Unknown spell ID: %d"], spellID))
         return false
     end
 
@@ -298,7 +301,7 @@ function CC:AddCustomSpell(spellID, duration)
         icon     = icon or 134400,
     }
     ApplyCustomSpell(spellID, name, duration, icon)
-    print(string.format("|cFF54a3ffCooldownCollaborator|r Added: %s (%ds)", name, duration))
+    print(string.format("|cFF54a3ffCooldownCollaborator|r " .. L["Added: %s (%ds)"], name, duration))
     return true
 end
 
@@ -325,7 +328,7 @@ function CC:RecordCooldown(unitToken, spellID, usedAt)
     spellID = self:BaseSpellID(spellID)
     local data = CC.SpellData[spellID]
     if CC.verbose then
-        print(string.format("|cFF54a3ffCDC|r cast seen: unit=%s spellID=%s known=%s",
+        print(string.format("|cFF54a3ffCDC|r cast seen: unit=%s spellID=%s known=%s", -- debug
             tostring(unitToken), tostring(castID), tostring(data ~= nil)))
     end
     if not data then return end
@@ -673,8 +676,8 @@ function CC:NoRezChargesText()
     local charges, _, nextAt = self:RezPool()
     if charges ~= 0 then return nil end
     local wait = nextAt and math.max(0, nextAt - GetTime())
-    return "No Battle Rez charges" .. (wait and string.format("; next in %d:%02d",
-        math.floor(wait / 60), math.floor(wait % 60)) or ".")
+    if not wait then return L["No Battle Rez charges."] end
+    return string.format(L["No Battle Rez charges; next in %d:%02d"], math.floor(wait / 60), math.floor(wait % 60))
 end
 
 -- The rezzer who would answer a call for targetName: the first ready one who is
@@ -698,7 +701,7 @@ end
 
 function CC:RequestRez()
     if not self:CanRequestRez() then
-        print("|cFF54a3ffCDC|r Only the raid leader or an assist can request a rez in a raid.")
+        print("|cFF54a3ffCDC|r " .. L["Only the raid leader or an assist can request a rez in a raid."])
         return
     end
     -- Nobody targeted: the top of the dead list (DeadList.lua), if anyone is dead.
@@ -711,13 +714,13 @@ function CC:RequestRez()
     -- (a Battle Rez works on them). A dead monster or enemy is refused.
     if not UnitExists("target") or not UnitIsPlayer("target")
         or not UnitIsFriend("player", "target") or not UnitIsDeadOrGhost("target") then
-        print("|cFF54a3ffCDC|r Target a dead friendly player first.")
+        print("|cFF54a3ffCDC|r " .. L["Target a dead friendly player first."])
         return
     end
 
     local targetName = TargetName()
     if not targetName then
-        print("|cFF54a3ffCDC|r Can't read that target's name. Target a dead friendly player first.")
+        print("|cFF54a3ffCDC|r " .. L["Can't read that target's name. Target a dead friendly player first."])
         return
     end
     self:CallRez(targetName)
@@ -727,7 +730,7 @@ end
 -- channel that reaches the whole group.
 function CC:CallRez(targetName)
     if not self:CanRequestRez() then
-        print("|cFF54a3ffCDC|r Only the raid leader or an assist can request a rez in a raid.")
+        print("|cFF54a3ffCDC|r " .. L["Only the raid leader or an assist can request a rez in a raid."])
         return
     end
     local noCharges = self:NoRezChargesText()
@@ -737,13 +740,13 @@ function CC:CallRez(targetName)
     end
     local provider = self:BestRezzer(targetName)
     if not provider then
-        print("|cFF54a3ffCDC|r No living Battle Rez provider available right now.")
+        print("|cFF54a3ffCDC|r " .. L["No living Battle Rez provider available right now."])
         return
     end
 
     local data = CC.SpellData[provider.spellID]
-    local spellName = data and data.name or "Battle Rez"
-    local msg = string.format("%s, please %s %s!", self:ShortName(provider.name), spellName, self:ShortName(targetName))
+    local spellName = data and data.name or L["Battle Rez"]
+    local msg = string.format(L["%s, please %s %s!"], self:ShortName(provider.name), spellName, self:ShortName(targetName))
 
     -- The channel that reaches the whole group (instance chat in Dungeon Finder, Raid Finder and
     -- battlegrounds, where /party and /raid are the home group's). A raid warning only goes out
@@ -1119,7 +1122,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
         -- Era, TBC and MoP only (Events.lua): other players' casts
         local ok, err = pcall(CC.OnCombatLog, CC)
         if not ok and CC.verbose then
-            print("|cFF54a3ffCDC|r combat log error: " .. tostring(err))
+            print("|cFF54a3ffCDC|r combat log error: " .. tostring(err)) -- debug
         end
     elseif event == "INSPECT_READY" then
         CC:OnInspectReady(...)
@@ -1147,29 +1150,29 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     local cmd = (msg or ""):match("^%s*(%S*)"):lower()
     if cmd == "lock" then
         CC:SetWindowsLocked(true)
-        print("|cFF54a3ffCooldownCollaborator|r windows locked.")
+        print("|cFF54a3ffCooldownCollaborator|r " .. L["windows locked."])
     elseif cmd == "unlock" then
         CC:SetWindowsLocked(false)
-        print("|cFF54a3ffCooldownCollaborator|r windows unlocked.")
+        print("|cFF54a3ffCooldownCollaborator|r " .. L["windows unlocked."])
     elseif cmd == "reset" then
         CC.db.x, CC.db.y = 0, 200
         CC.frame:ClearAllPoints()
         CC.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
-        print("|cFF54a3ffCooldownCollaborator|r position reset.")
+        print("|cFF54a3ffCooldownCollaborator|r " .. L["position reset."])
     elseif cmd == "settings" then
         CC:OpenOptions()
     elseif cmd == "verbose" then
         CC.verbose = not CC.verbose
-        print("|cFF54a3ffCooldownCollaborator|r verbose cast logging: " .. (CC.verbose and "ON" or "OFF"))
+        print("|cFF54a3ffCooldownCollaborator|r " .. string.format(L["verbose cast logging: %s"], CC.verbose and L["ON"] or L["OFF"]))
     elseif cmd == "essentials" then
         CC.db.essentialsEnabled = not CC.db.essentialsEnabled
         CC:RefreshEssentials()
-        print("|cFF54a3ffCooldownCollaborator|r Essentials bar: " .. (CC.db.essentialsEnabled and "ON" or "OFF"))
+        print("|cFF54a3ffCooldownCollaborator|r " .. string.format(L["Essentials bar: %s"], CC.db.essentialsEnabled and L["ON"] or L["OFF"]))
     elseif cmd == "lanes" then
         CC.db.laneEnabled = not CC.db.laneEnabled
         CC:RefreshLanes()
-        local soloHint = (CC.db.laneEnabled and not IsInGroup()) and " (it shows when you're in a group)" or ""
-        print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF") .. soloHint)
+        local soloHint = (CC.db.laneEnabled and not IsInGroup()) and (" " .. L["(it shows when you're in a group)"]) or ""
+        print("|cFF54a3ffCooldownCollaborator|r " .. string.format(L["Lane view: %s"], CC.db.laneEnabled and L["ON"] or L["OFF"]) .. soloHint)
     elseif cmd == "rez" then
         CC:RequestRez()
     elseif cmd == "lastpull" then
@@ -1177,7 +1180,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     elseif cmd == "post" then
         CC:PostReady()
     elseif cmd == "support" then
-        CC:ShowCopyBox("Support: copy this into your report", CC:SupportText())
+        CC:ShowCopyBox(L["Support: copy this into your report"], CC:SupportText())
     elseif cmd == "nexthit" then
         -- /cdc nexthit <seconds or M:SS> | off: the Lane view's look-ahead (Lanes.lua)
         CC:NextHitCommand(msg:match("^%s*%S+%s*(.-)%s*$") or "")
@@ -1193,7 +1196,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
             local spellID = tonumber(spellIDStr)
             local dur = tonumber(durStr)
             if not spellID or not dur then
-                print("|cFF54a3ffCooldownCollaborator|r usage: /cdc consumable <spellID> <seconds> <flask|food|other> <name>  |  /cdc consumable remove <spellID>")
+                print("|cFF54a3ffCooldownCollaborator|r " .. L["usage: /cdc consumable <spellID> <seconds> <flask|food|other> <name>  |  /cdc consumable remove <spellID>"])
             else
                 -- a lowercase flask / food / other right after the seconds is the category
                 local category, name = tail:match("^(%l+)%s+(.+)$")
@@ -1204,6 +1207,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
             end
         end
     elseif cmd == "roster" then
+        -- debug begin: the roster and debug dumps stay in English
         CC:ScanRoster()
         print("|cFF54a3ffCooldownCollaborator|r roster" .. (CC.isRetail and " (spec refinement queued)" or "") .. ":")
         for name, info in pairs(CC.roster or {}) do
@@ -1234,6 +1238,7 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         if not any then
             print("  (no cooldowns recorded yet — try /cdc verbose, then use a tracked CD)")
         end
+        -- debug end
     else
         -- the panel: a close here (or with its button) lasts until /cdc or the minimap opens it (R19)
         CC:TogglePanel()

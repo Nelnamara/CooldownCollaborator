@@ -6,6 +6,8 @@
 -- in finder groups, R16) and its no-charges line. Opens when someone dies in
 -- combat, closes when nobody is dead. /cdc rez with nobody targeted calls the top.
 
+local L = CC.L
+
 local WIDTH    = 240
 local TITLE_H  = 20
 local HEAD_H   = 18
@@ -15,7 +17,7 @@ local FOOT_H   = 24
 local MAX_ROWS = 10   -- after a wipe the rest are "+N more"
 
 local ROLE_ORDER = { HEALER = 1, TANK = 2, DAMAGER = 3 }
-local ROLE_LABEL = { HEALER = "Healer", TANK = "Tank", DAMAGER = "Damage" }
+local ROLE_LABEL = { HEALER = L["Healer"], TANK = L["Tank"], DAMAGER = L["Damage"] }
 
 CC.deaths = CC.deaths or {}   -- [Name-Realm] = GetTime() we first saw them dead
 
@@ -149,7 +151,7 @@ local function NewRow(f, i)
     local call = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     call:SetSize(50, 16)
     call:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-    call:SetText("Call")
+    call:SetText(L["Call"])
     call:GetFontString():SetFontObject("GameFontHighlightSmall")
     call:SetScript("OnClick", function(widget)
         if widget.target then CC:CallRez(widget.target) end
@@ -162,7 +164,7 @@ end
 function CC:BuildDeadList()
     local f = self:NewLookWindow({
         width = WIDTH, height = TITLE_H + HEAD_H + ROW_H + FOOT_H + 6, xKey = "deadListX", yKey = "deadListY",
-        title = "|cFF54a3ffDead list|r",
+        title = "|cFF54a3ff" .. L["Dead list"] .. "|r",
         onClose = function()
             CC.deadOpen = false
             CC.deadFrame:Hide()
@@ -201,10 +203,10 @@ function CC:DeadListFoot(top)
     local noCharges = self:NoRezChargesText()
     if noCharges then return "|cFFFF6666" .. noCharges .. "|r" end
     local rezzer = top and self:BestRezzer(top.name)
-    if not rezzer then return "|cFF808080Nobody living has a Battle Rez ready|r" end
+    if not rezzer then return "|cFF808080" .. L["Nobody living has a Battle Rez ready"] .. "|r" end
     local data = CC.SpellData[rezzer.spellID]
-    return "Answers: " .. self:ClassColorName(rezzer.name, rezzer.class) .. ", "
-        .. (data and data.name or "Battle Rez") .. " |cFF4DFF4DREADY|r"
+    return string.format(L["Answers: %s, %s |cFF4DFF4DREADY|r"], self:ClassColorName(rezzer.name, rezzer.class),
+        data and data.name or L["Battle Rez"])
 end
 
 function CC:RefreshDeadList()
@@ -230,7 +232,7 @@ function CC:RefreshDeadList()
         return
     end
 
-    f.head:SetText(string.format("Dead (%d)%s", #list, UnitIsGroupLeader("player") and ", in your order" or ""))
+    f.head:SetText(UnitIsGroupLeader("player") and string.format(L["Dead (%d), in your order"], #list) or string.format(L["Dead (%d)"], #list))
     local canCall = self:CanRequestRez()
     local now = GetTime()
     local shown = math.min(#list, MAX_ROWS)
@@ -254,7 +256,7 @@ function CC:RefreshDeadList()
     if #list > shown then
         f.more:ClearAllPoints()
         f.more:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -(y + 2))
-        f.more:SetText(string.format("+%d more", #list - shown))
+        f.more:SetText(string.format(L["+%d more"], #list - shown))
         f.more:Show()
         y = y + MORE_H
     else

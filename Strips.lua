@@ -11,6 +11,8 @@
 -- confirmed (no copy, no cast seen) carries the "?" (P44); a dead or offline
 -- owner's icon is greyed with a mark.
 
+local L = CC.L
+
 local EXT_TILE, EXT_GAP, EXT_COLS, EXT_ROWS = 46, 8, 5, 4
 local MANA_TILE, MANA_GAP = 64, 14
 local ICON = 28
@@ -130,7 +132,7 @@ end
 
 function CC:BuildExternalsStrip()
     local f = self:NewLookWindow({
-        width = 130, height = 60, xKey = "externalsX", yKey = "externalsY", title = "|cFF54a3ffExternals|r",
+        width = 130, height = 60, xKey = "externalsX", yKey = "externalsY", title = "|cFF54a3ff" .. L["Externals"] .. "|r",
         onClose = function()
             CC.db.externalsEnabled = false
             CC.externalsFrame:Hide()
@@ -189,7 +191,7 @@ function CC:RefreshExternalsStrip()
     end
     local width, height = LayoutTiles(f, f.tiles, count, EXT_COLS, EXT_TILE, EXT_TILE_H, EXT_GAP)
     if #list > count then
-        f.more:SetText(string.format("+%d more", #list - count))
+        f.more:SetText(string.format(L["+%d more"], #list - count))
         f.more:Show()
         height = height + 12
     else
@@ -234,21 +236,21 @@ function CC:AskForMana()
         local e = tile.ask
         if e then
             local data = CC.SpellData[tile.spellID]
-            local spellName = data and data.name or "Mana"
-            local sent = pcall(C_ChatInfo.SendChatMessage, spellName .. " on me please", "WHISPER", nil, e.name)
+            local spellName = data and data.name or L["Mana"]
+            local sent = pcall(C_ChatInfo.SendChatMessage, string.format(L["%s on me please"], spellName), "WHISPER", nil, e.name)
             if sent then
-                print(string.format("|cFF54a3ffCDC|r asked %s for %s.", self:ShortName(e.name), spellName))
+                print(string.format("|cFF54a3ffCDC|r " .. L["asked %s for %s."], self:ShortName(e.name), spellName))
                 return e.name, tile.spellID
             end
         end
     end
-    print("|cFF54a3ffCDC|r Nobody else in the group has a mana spell ready.")
+    print("|cFF54a3ffCDC|r " .. L["Nobody else in the group has a mana spell ready."])
     return nil
 end
 
 function CC:BuildManaStrip()
     local f = self:NewLookWindow({
-        width = 130, height = 80, xKey = "manaX", yKey = "manaY", title = "|cFF54a3ffMana|r",
+        width = 130, height = 80, xKey = "manaX", yKey = "manaY", title = "|cFF54a3ff" .. L["Mana"] .. "|r",
         onClose = function()
             CC.db.manaEnabled = false
             CC.manaFrame:Hide()
@@ -260,7 +262,7 @@ function CC:BuildManaStrip()
     local ask = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     ask:SetSize(50, 16)
     ask:SetPoint("BOTTOM", f, "BOTTOM", 0, 6)
-    ask:SetText("Ask")
+    ask:SetText(L["Ask"])
     ask:GetFontString():SetFontObject("GameFontHighlightSmall")
     ask:SetScript("OnClick", function() CC:AskForMana() end)
     ask:SetScript("OnEnter", function(widget)
@@ -271,10 +273,10 @@ function CC:BuildManaStrip()
         end
         if who then
             local data = CC.SpellData[who.spellID]
-            GameTooltip:AddLine("Whisper " .. CC:ShortName(who.ask.name) .. ":")
-            GameTooltip:AddLine((data and data.name or "Mana") .. " on me please", 1, 1, 1)
+            GameTooltip:AddLine(string.format(L["Whisper %s:"], CC:ShortName(who.ask.name)))
+            GameTooltip:AddLine(string.format(L["%s on me please"], data and data.name or L["Mana"]), 1, 1, 1)
         else
-            GameTooltip:AddLine("Nobody else in the group has a mana spell ready.")
+            GameTooltip:AddLine(L["Nobody else in the group has a mana spell ready."])
         end
         GameTooltip:Show()
     end)

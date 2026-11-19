@@ -17,9 +17,11 @@
 -- from the client's providers (CC.Providers, Data_<client>.lua). A capability
 -- nobody can provide on this client (no lust on Era or Forever) gets no entry,
 -- so it has no lane, header or Essentials slot.
+local L = CC.L
+
 local CAPABILITY_LABELS = {
-    BLOODLUST = "Bloodlust/Heroism",
-    BATTLEREZ = "Battle Rez",
+    BLOODLUST = L["Bloodlust/Heroism"],
+    BATTLEREZ = L["Battle Rez"],
 }
 
 -- Ordered list for stable display
@@ -168,7 +170,7 @@ function CC:ScanRoster()
     if CC.verbose then
         local count = 0
         for _ in pairs(roster) do count = count + 1 end
-        print(string.format("|cFF54a3ffCDC|r roster scanned: %d member(s)", count))
+        print(string.format("|cFF54a3ffCDC|r roster scanned: %d member(s)", count)) -- debug
     end
 
     -- Queue a spec refinement pass now that we have fresh unit tokens
@@ -302,7 +304,7 @@ function CC:OnInspectReady(guid)
                 info.capabilities = self:CapabilitiesFor(unit, info.class)
             end
             if CC.verbose then
-                print(string.format("|cFF54a3ffCDC|r inspect: %s is %s", pending.name,
+                print(string.format("|cFF54a3ffCDC|r inspect: %s is %s", pending.name, -- debug
                     tostring(self:GetSpecName(pending.name) or specID)))
             end
             self:RefreshView("RefreshEssentials")

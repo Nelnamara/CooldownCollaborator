@@ -18,6 +18,8 @@
 -- The bar never runs out of lines: they come from pools that grow.
 -- Hidden values (Retail and Forever) only go into widgets or a pcall.
 
+local L = CC.L
+
 local FRAME_WIDTH   = 220
 local INNER_WIDTH   = FRAME_WIDTH - 8
 local TITLE_HEIGHT  = 16
@@ -70,7 +72,7 @@ local function Clock(secs)
 end
 
 -- What each capability is called in "You're the ..."
-local NOUNS = { BLOODLUST = "lust", BATTLEREZ = "Battle Rez" }
+local NOUNS = { BLOODLUST = L["lust"], BATTLEREZ = L["Battle Rez"] }
 
 -- The lust buff on you (40 s: SpellMisc DurationIndex 64 in each build) and the
 -- debuff that blocks the next one (10 min: DurationIndex 6), by client; IDs from
@@ -267,7 +269,7 @@ function Painters.heading(line, m)
         line.timeText:SetPoint("LEFT", line.label, "RIGHT", 6, 0)
     end
     if m.noCharges then
-        line.timeText:SetText("no charges" .. (m.timeText and (" " .. m.timeText) or ""))
+        line.timeText:SetText(m.timeText and string.format(L["no charges %s"], m.timeText) or L["no charges"])
         line.timeText:SetTextColor(COLORS.cd[1], COLORS.cd[2], COLORS.cd[3])
     else
         line.timeText:SetText(m.timeText or "")
@@ -317,10 +319,10 @@ function Makers.provider()
         local data = CC.SpellData[m.entry.spellID]
         local lines = { { text = data and data.name or "", r = COLORS.head[1], g = COLORS.head[2], b = COLORS.head[3] } }
         if m.state == "dead" or m.state == "offline" then
-            lines[#lines + 1] = { text = m.state == "dead" and "Dead: can't use it now." or "Offline." }
+            lines[#lines + 1] = { text = m.state == "dead" and L["Dead: can't use it now."] or L["Offline."] }
         elseif m.guessed then
-            lines[#lines + 1] = { text = "Doesn't run CooldownCollaborator and hasn't been seen casting." }
-            lines[#lines + 1] = { text = "Ready as far as we know.", r = COLORS.soon[1], g = COLORS.soon[2], b = COLORS.soon[3] }
+            lines[#lines + 1] = { text = L["Doesn't run CooldownCollaborator and hasn't been seen casting."] }
+            lines[#lines + 1] = { text = L["Ready as far as we know."], r = COLORS.soon[1], g = COLORS.soon[2], b = COLORS.soon[3] }
         end
         ShowLines(self, CC:ShortName(m.entry.name), lines)
     end)
@@ -344,11 +346,11 @@ function Painters.provider(line, m)
 
     local t, tc
     if m.state == "dead" then
-        t, tc = "DEAD", COLORS.greyed
+        t, tc = L["DEAD"], COLORS.greyed
     elseif m.state == "offline" then
-        t, tc = "OFFLINE", COLORS.greyed
+        t, tc = L["OFFLINE"], COLORS.greyed
     elseif m.state == "ready" then
-        t, tc = "READY", COLORS.ready
+        t, tc = L["READY"], COLORS.ready
     else
         t, tc = FormatTime(entry.remaining), entry.remaining < 30 and COLORS.soon or COLORS.cd
     end
@@ -411,7 +413,7 @@ function Painters.banner(line, m)
     end
     line.first:SetText(table.concat(parts, Hex(COLORS.white) .. " · |r"))
     if m.cooling ~= "" then
-        line.second:SetText("cooling: " .. m.cooling)
+        line.second:SetText(string.format(L["cooling: %s"], m.cooling))
         line.second:Show()
         line:SetHeight(38)
         return 38
@@ -572,7 +574,7 @@ function Makers.defensives()
     local line = NewLine("defensives")
     line.label = FontString(line, "GameFontNormalSmall", COLORS.head)
     line.label:SetPoint("TOPLEFT", line, "TOPLEFT", 4, -4)
-    line.label:SetText("Defensives")
+    line.label:SetText(L["Defensives"])
     line.pipHolder = NewPips(line)
     line.pipHolder:SetPoint("TOPLEFT", line, "TOPLEFT", 74, -5)
     line.flash = line:CreateTexture(nil, "BACKGROUND")
@@ -588,15 +590,15 @@ function Makers.defensives()
         for _, d in ipairs(m.list) do
             local data = CC.SpellData[d.spellID]
             local c = CC.ClassColors[d.class] or CC.ClassColors.UNKNOWN
-            local right, rc = "READY", COLORS.ready
-            if d.state == "dead" then right, rc = "DEAD", COLORS.greyed
-            elseif d.state == "offline" then right, rc = "OFFLINE", COLORS.greyed
+            local right, rc = L["READY"], COLORS.ready
+            if d.state == "dead" then right, rc = L["DEAD"], COLORS.greyed
+            elseif d.state == "offline" then right, rc = L["OFFLINE"], COLORS.greyed
             elseif d.state == "cool" then right, rc = Clock(d.remaining), COLORS.cd
-            elseif d.guessed then right = "READY ?" end
+            elseif d.guessed then right = L["READY"] .. " ?" end
             lines[#lines + 1] = { text = CC:ShortName(d.name) .. "  " .. (data and data.name or ""), r = c[1], g = c[2], b = c[3],
                 right = right, rr = rc[1], rg = rc[2], rb = rc[3] }
         end
-        ShowLines(self, string.format("Defensives: %d of %d ready", m.ready, #m.list), lines)
+        ShowLines(self, string.format(L["Defensives: %d of %d ready"], m.ready, #m.list), lines)
     end)
     line:SetScript("OnLeave", function() GameTooltip:Hide() end)
     return line
@@ -701,7 +703,7 @@ function CC:BuildEssentialsBar()
 
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     title:SetPoint("TOP", f, "TOP", 0, -3)
-    title:SetText("|cFFFFD100Essentials|r")
+    title:SetText("|cFFFFD100" .. L["Essentials"] .. "|r")
 
     self.essentialsFrame = f
     self.essentialsPools = {}
@@ -709,13 +711,13 @@ function CC:BuildEssentialsBar()
 
     local rezBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     rezBtn:SetSize(50, 16)
-    rezBtn:SetText("Rez")
+    rezBtn:SetText(L["Rez"])
     rezBtn:GetFontString():SetFontObject("GameFontHighlightSmall")
     rezBtn:SetScript("OnClick", function() CC:RequestRez() end)
     rezBtn:SetScript("OnEnter", function(widget)
         GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Target a dead player, then click to announce")
-        GameTooltip:AddLine("which Battle Rez provider should rez them.")
+        GameTooltip:AddLine(L["Target a dead player, then click to announce"])
+        GameTooltip:AddLine(L["which Battle Rez provider should rez them."])
         GameTooltip:Show()
     end)
     rezBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -799,9 +801,9 @@ local function MoreText(rest)
             end
         end
     end
-    if ready > 0 then return string.format("+%d more, %d ready", #rest, ready) end
-    if nextIn then return string.format("+%d more, next %s", #rest, Clock(nextIn)) end
-    return string.format("+%d more", #rest)
+    if ready > 0 then return string.format(L["+%d more, %d ready"], #rest, ready) end
+    if nextIn then return string.format(L["+%d more, next %s"], #rest, Clock(nextIn)) end
+    return string.format(L["+%d more"], #rest)
 end
 
 -- The charge pool as pips: lit per banked charge, the next one filling. How
@@ -880,9 +882,9 @@ function CC:LustBars()
     for _, w in pairs(auraWatch) do w.live = false end
     local bars = {}
     local id, aura = FindOwnAura(LUST_BUFFS[client], "HELPFUL")
-    if id then bars[#bars + 1] = TimerBarInfo(id, aura, LUST_LENGTH, COLORS.lust, now, "Bloodlust", 136012) end
+    if id then bars[#bars + 1] = TimerBarInfo(id, aura, LUST_LENGTH, COLORS.lust, now, L["Bloodlust"], 136012) end
     id, aura = FindOwnAura(SATED_DEBUFFS[client], "HARMFUL")
-    if id then bars[#bars + 1] = TimerBarInfo(id, aura, SATED_LENGTH, COLORS.sated, now, "Sated", 136090) end
+    if id then bars[#bars + 1] = TimerBarInfo(id, aura, SATED_LENGTH, COLORS.sated, now, L["Sated"], 136090) end
     for key, w in pairs(auraWatch) do
         if not w.live then auraWatch[key] = nil end
     end
@@ -915,9 +917,10 @@ function CC:RezIcons(status)
         end
         if have > 0 then
             local data = CC.SpellData[id]
-            local title = (data and data.name or "") .. (id == CC.SOULSTONE_ID and " on the dead" or "")
+            local title = data and data.name or ""
+            if id == CC.SOULSTONE_ID then title = string.format(L["%s on the dead"], title) end
             icons[#icons + 1] = { key = "spell:" .. id, icon = data and data.icon or 136080, count = ready,
-                tip = { title = string.format("%s: %d ready", title, ready), lines = names } }
+                tip = { title = string.format(L["%s: %d ready"], title, ready), lines = names } }
         end
     end
 
@@ -935,7 +938,7 @@ function CC:RezIcons(status)
         end
         if stones > 0 or warlock then
             icons[#icons + 1] = { key = "stones", icon = CC.SpellData[CC.SOULSTONE_ID].icon, count = stones,
-                edge = COLORS.stone, tip = { title = string.format("Soulstones placed: %d", stones), lines = lines } }
+                edge = COLORS.stone, tip = { title = string.format(L["Soulstones placed: %d"], stones), lines = lines } }
         end
     end
 
@@ -947,7 +950,7 @@ function CC:RezIcons(status)
         if left == nil then left = self:GetRemaining(self:FullName("player"), 20608) or 0 end
         local ready = left <= 0 and 1 or 0
         icons[#icons + 1] = { key = "reincarnation", icon = reinc.icon, count = ready,
-            tip = { title = "Reincarnation (yours): " .. (ready == 1 and "ready" or Clock(left)), lines = {} } }
+            tip = { title = string.format(L["Reincarnation (yours): %s"], ready == 1 and L["ready"] or Clock(left)), lines = {} } }
     end
     return icons
 end
@@ -1000,16 +1003,16 @@ function CC:StoneLines()
             if stoned[name] then healerStones = healerStones + 1 end
         end
     end
-    local text = Hex(COLORS.stone) .. "Soulstones " .. #stones .. "|r"
+    local text = Hex(COLORS.stone) .. string.format(L["Soulstones %d"], #stones) .. "|r"
     local roles = {}
-    if tanks > 0 then roles[#roles + 1] = Hex(tankStones == 0 and COLORS.amber or COLORS.white) .. "tank " .. tankStones .. "|r" end
-    if healers > 0 then roles[#roles + 1] = Hex(healerStones == 0 and COLORS.amber or COLORS.white) .. "healer " .. healerStones .. "|r" end
+    if tanks > 0 then roles[#roles + 1] = Hex(tankStones == 0 and COLORS.amber or COLORS.white) .. string.format(L["tank %d"], tankStones) .. "|r" end
+    if healers > 0 then roles[#roles + 1] = Hex(healerStones == 0 and COLORS.amber or COLORS.white) .. string.format(L["healer %d"], healerStones) .. "|r" end
     if #roles > 0 then
         text = text .. "  " .. table.concat(roles, Hex(COLORS.white) .. " · |r")
     elseif #stones > 0 then
         local names = {}
         for i = 1, math.min(2, #stones) do names[i] = CC:ShortName(stones[i].name) end
-        text = text .. Hex(COLORS.white) .. "  on " .. table.concat(names, ", ") .. (#stones > 2 and ", ..." or "") .. "|r"
+        text = text .. Hex(COLORS.white) .. "  " .. string.format(L["on %s"], table.concat(names, ", ") .. (#stones > 2 and ", ..." or "")) .. "|r"
     end
     local lines = { { kind = "text", key = "stones", text = text, color = COLORS.white, count = #stones,
         tank = tankStones, healer = healerStones } }
@@ -1017,7 +1020,7 @@ function CC:StoneLines()
         local s = stones[i]
         if s.left < STONE_WARN then
             lines[#lines + 1] = { kind = "text", key = "stonewarn", target = s.name, color = COLORS.amber,
-                text = string.format("%s's runs out in %s", CC:ShortName(s.name), Clock(s.left)) }
+                text = string.format(L["%s's runs out in %s"], CC:ShortName(s.name), Clock(s.left)) }
         end
     end
     return lines
@@ -1129,9 +1132,9 @@ local function BannerLine(self, sections)
         self.essentialsBanner = nil
         return nil
     end
-    local title = "Ready check"
+    local title = L["Ready check"]
     if banner.pull then
-        title = banner.known and ("Pull in " .. math.max(0, math.ceil(banner.endsAt - now))) or "Pull timer"
+        title = banner.known and string.format(L["Pull in %d"], math.max(0, math.ceil(banner.endsAt - now))) or L["Pull timer"]
     end
     local parts, cooling = {}, {}
     local lust = sections.BLOODLUST
@@ -1142,10 +1145,10 @@ local function BannerLine(self, sections)
             elseif StateOf(e) == "cool" and (not soonest or e.remaining < soonest) then soonest = e.remaining end
         end
         if ready > 0 then
-            parts[#parts + 1] = { label = "lust", value = "ready", ok = true }
+            parts[#parts + 1] = { label = L["lust"], value = L["ready"], ok = true }
         else
-            parts[#parts + 1] = { label = "lust", value = soonest and Clock(soonest) or "none", ok = false }
-            if soonest then cooling[#cooling + 1] = { text = "lust", left = soonest } end
+            parts[#parts + 1] = { label = L["lust"], value = soonest and Clock(soonest) or L["none"], ok = false }
+            if soonest then cooling[#cooling + 1] = { text = L["lust"], left = soonest } end
         end
     end
     if sections.BATTLEREZ then
@@ -1157,9 +1160,9 @@ local function BannerLine(self, sections)
                 if StateOf(e) == "ready" then value = value + 1 end
             end
         elseif value == 0 and nextAt then
-            cooling[#cooling + 1] = { text = "rez charges", left = math.max(0, nextAt - now) }
+            cooling[#cooling + 1] = { text = L["rez charges"], left = math.max(0, nextAt - now) }
         end
-        parts[#parts + 1] = { label = "rez", value = tostring(value), ok = value > 0 }
+        parts[#parts + 1] = { label = L["rez"], value = tostring(value), ok = value > 0 }
     end
     local externals = self:CountedDefensives({ external = true })
     if #externals > 0 then
@@ -1173,7 +1176,7 @@ local function BannerLine(self, sections)
                 cool[#cool + 1] = { text = data and data.name or "", left = d.remaining }
             end
         end
-        parts[#parts + 1] = { label = "externals", value = ready .. "/" .. #externals, ok = ready > 0 }
+        parts[#parts + 1] = { label = L["externals"], value = ready .. "/" .. #externals, ok = ready > 0 }
         for _, c in ipairs(cool) do cooling[#cooling + 1] = c end
     end
     table.sort(cooling, function(a, b) return a.left < b.left end)
@@ -1209,9 +1212,9 @@ function CC:EssentialsModel()
             local noun = NOUNS[capKey] or CC.CAPABILITIES[capKey].label
             lines[#lines + 1] = live <= 1
                 and { kind = "text", key = "you", cap = capKey, only = true, color = COLORS.amber,
-                      text = string.format("You're the %s, the only one", noun) }
+                      text = string.format(L["You're the %s, the only one"], noun) }
                 or { kind = "text", key = "you", cap = capKey, only = false, color = COLORS.head,
-                      text = string.format("You're a %s, one of %d", noun, live) }
+                      text = string.format(L["You're a %s, one of %d"], noun, live) }
         end
     end
 
@@ -1536,25 +1539,25 @@ function CC:FillBuffMissing()
         f:Hide()
         return false
     end
-    f.title:SetText(string.format("%s: %d missing", count.name, #count.missing))
+    f.title:SetText(string.format(L["%s: %d missing"], count.name, #count.missing))
     local shown = {}
     for i = 1, math.min(MISSING_NAMES, #count.missing) do shown[i] = ColoredName(count.missing[i]) end
     local text = table.concat(shown, ", ")
     if #count.missing > MISSING_NAMES then
-        text = text .. " " .. Hex(COLORS.tipGrey) .. string.format("and %d more", #count.missing - MISSING_NAMES) .. "|r"
+        text = text .. " " .. Hex(COLORS.tipGrey) .. string.format(L["and %d more"], #count.missing - MISSING_NAMES) .. "|r"
     end
     f.names:SetText(text)
     f.names:SetShown(#count.missing > 0)
     if #count.unknown > 0 then
-        f.unknown:SetText(string.format("%d not known (they don't run CooldownCollaborator)", #count.unknown))
+        f.unknown:SetText(string.format(L["%d not known (they don't run CooldownCollaborator)"], #count.unknown))
         f.unknown:Show()
     else
         f.unknown:SetText("")
         f.unknown:Hide()
     end
     local channel = self:GroupChannel()
-    local where = ({ RAID = "raid", PARTY = "party", INSTANCE_CHAT = "instance" })[channel or ""] or "group"
-    f.post:SetText("Post to " .. where)
+    local postTo = { RAID = L["Post to raid"], PARTY = L["Post to party"], INSTANCE_CHAT = L["Post to instance"] }
+    f.post:SetText(postTo[channel or ""] or L["Post to group"])
     f.post:ClearAllPoints()
     f.post:SetPoint("TOPLEFT", (#count.unknown > 0) and f.unknown or f.names, "BOTTOMLEFT", 0, -6)
     f.post:SetEnabled(#count.missing > 0 and channel ~= nil)
@@ -1582,7 +1585,7 @@ function CC:PostBuffMissing(key)
     local count = status and status.counts[key]
     local channel = self:GroupChannel()
     if not count or #count.missing == 0 or not channel then return end
-    local head = string.format("Missing %s (%d): ", count.name, #count.missing)
+    local head = string.format(L["Missing %s (%d): "], count.name, #count.missing)
     local msgs, cur, fresh = {}, head, true
     for _, name in ipairs(count.missing) do
         local piece = (fresh and "" or ", ") .. CC:ShortName(name)
@@ -1594,7 +1597,7 @@ function CC:PostBuffMissing(key)
         end
         fresh = false
     end
-    if #count.unknown > 0 then cur = cur .. string.format("; %d not known", #count.unknown) end
+    if #count.unknown > 0 then cur = cur .. string.format(L["; %d not known"], #count.unknown) end
     msgs[#msgs + 1] = cur
     -- Deliberate fallback to the old global.
     ---@diagnostic disable-next-line: deprecated

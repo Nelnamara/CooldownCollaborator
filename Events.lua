@@ -85,7 +85,7 @@ function CC:OnCombatLog()
         if unit and not UnitIsDeadOrGhost(unit) then self:PlaceStone(owner, target, GetTime()) end
     end
     if CC.verbose then
-        print(string.format("|cFF54a3ffCDC|r combat log cast: %s %s (%s)",
+        print(string.format("|cFF54a3ffCDC|r combat log cast: %s %s (%s)", -- debug
             tostring(owner), tostring(spellName), tostring(spellID)))
     end
     self:RecordCooldownFromComm(owner, baseID, GetTime(), ClassFromGUID(srcGUID), "log")

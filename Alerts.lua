@@ -11,6 +11,8 @@
 -- middle of the screen, fading after 2 s. warn = N fires the same alert N
 -- seconds before it is back (the mid-screen text then says "in Ns").
 
+local L = CC.L
+
 local DEFAULT_SOUND  = SOUNDKIT and SOUNDKIT.RAID_WARNING or 8959
 local MIDSCREEN_TIME = 2
 local FADE_TIME      = 0.5
@@ -114,7 +116,7 @@ function CC:ShowMidscreenAlert(owner, spellID, secondsLeft)
     local f = MidscreenFrame()
     f.icon:SetTexture(data.icon)
     if secondsLeft then
-        f.nameText:SetText(string.format("%s in %ds", data.name, math.ceil(secondsLeft)))
+        f.nameText:SetText(string.format(L["%s in %ds"], data.name, math.ceil(secondsLeft)))
     else
         f.nameText:SetText(data.name)
     end

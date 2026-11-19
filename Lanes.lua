@@ -11,6 +11,8 @@
 -- Strips.lua, Burst.lua): a window with a title and a close button, and the
 -- ring icon.
 
+local L = CC.L
+
 local LANE_WIDTH  = 240
 local LANE_HEIGHT = 28
 local ICON_SIZE   = 22
@@ -251,18 +253,18 @@ function CC:NextHitCommand(arg)
     local tag = "|cFF54a3ffCooldownCollaborator|r "
     if arg == "off" or arg == "clear" then
         self:SetNextHit(nil)
-        print(tag .. "next hit cleared.")
+        print(tag .. L["next hit cleared."])
         return
     end
     local m, s = arg:match("^(%d+):(%d%d)$")
     local secs = m and (tonumber(m) * 60 + tonumber(s)) or tonumber(arg)
     if not secs or secs <= 0 or secs > 3600 then
-        print(tag .. "usage: /cdc nexthit <seconds or M:SS>  |  /cdc nexthit off")
+        print(tag .. L["usage: /cdc nexthit <seconds or M:SS>  |  /cdc nexthit off"])
         return
     end
     self:SetNextHit(secs, "typed")
-    print(tag .. "next hit in " .. self:LookClock(secs) .. ": cooldowns back by then get a gold ring on the Lane view"
-        .. (self.db.laneEnabled and "." or " (it's off: /cdc lanes)."))
+    print(tag .. string.format(self.db.laneEnabled and L["next hit in %s: cooldowns back by then get a gold ring on the Lane view."]
+        or L["next hit in %s: cooldowns back by then get a gold ring on the Lane view (it's off: /cdc lanes)."], self:LookClock(secs)))
 end
 
 -------------------------------------------------------------------------------
@@ -324,11 +326,11 @@ function CC:BuildLaneView()
     local f = self:NewLookWindow({
         name = "CCLaneFrame", width = LANE_WIDTH + 16, height = 0, xKey = "laneX", yKey = "laneY",
         edge = { 0.3, 0.5, 0.7 },
-        title = "|cFF54a3ffLanes|r",
+        title = "|cFF54a3ff" .. L["Lanes"] .. "|r",
         onClose = function()
             CC.db.laneEnabled = false
             CC.laneFrame:Hide()
-            print("|cFF54a3ffCooldownCollaborator|r Lane view: OFF (/cdc lanes brings it back)")
+            print("|cFF54a3ffCooldownCollaborator|r " .. L["Lane view: OFF (/cdc lanes brings it back)"])
         end,
     })
     f:SetScale(db.laneScale or 1.0)
@@ -450,7 +452,7 @@ local function FillReadyRow(row, ready)
     else
         row.more:Hide()
     end
-    row.label:SetText(#ready > 0 and "Ready" or "none ready")
+    row.label:SetText(#ready > 0 and L["Ready"] or L["none ready"])
 end
 
 function CC:RefreshLanes()
@@ -461,8 +463,8 @@ function CC:RefreshLanes()
     end
 
     local hitIn = self:NextHitIn()
-    self.laneFrame.title:SetText("|cFF54a3ffLanes|r"
-        .. (hitIn and ("  |cFFFFD100next hit " .. self:LookClock(math.ceil(hitIn)) .. "|r") or ""))
+    self.laneFrame.title:SetText("|cFF54a3ff" .. L["Lanes"] .. "|r"
+        .. (hitIn and ("  |cFFFFD100" .. string.format(L["next hit %s"], self:LookClock(math.ceil(hitIn))) .. "|r") or ""))
 
     local heights = {}
     for i, capKey in ipairs(CC.CAPABILITY_ORDER) do

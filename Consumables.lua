@@ -32,6 +32,8 @@
 --   "food"   = counts toward group food counter
 --   nil/""   = tracked but not counted in either group total
 
+local L = CC.L
+
 CC.consumableActive = CC.consumableActive or {}   -- [spellID] = present at the last poll (nil: not polled yet)
 CC.buffRoster       = CC.buffRoster or {}        -- [playerName] = { flask=bool, food=bool, cats={[key]=bool} } (CDCBUFF)
 CC.auraRoster       = CC.auraRoster or {}        -- [playerName] = { flask, food, cats } read from their auras (Era, TBC, MoP)
@@ -47,12 +49,12 @@ CC.auraRoster       = CC.auraRoster or {}        -- [playerName] = { flask, food
 -------------------------------------------------------------------------------
 
 local WORLD_BUFFS = {
-    { key = "ds", label = "Dragonslayer",        name = "Rallying Cry of the Dragonslayer", ids = { 22888, 355363 } },
-    { key = "zg", label = "Zandalar",            name = "Spirit of Zandalar",               ids = { 24425 } },
-    { key = "sf", label = "Songflower",          name = "Songflower Serenade",              ids = { 15366 } },
-    { key = "wb", label = "Warchief's Blessing", name = "Warchief's Blessing",              ids = { 16609 } },
+    { key = "ds", label = L["Dragonslayer"],        name = L["Rallying Cry of the Dragonslayer"], ids = { 22888, 355363 } },
+    { key = "zg", label = L["Zandalar"],            name = L["Spirit of Zandalar"],               ids = { 24425 } },
+    { key = "sf", label = L["Songflower"],          name = L["Songflower Serenade"],              ids = { 15366 } },
+    { key = "wb", label = L["Warchief's Blessing"], name = L["Warchief's Blessing"],              ids = { 16609 } },
     -- Fengus' Ferocity, Mol'dar's Moxie, Slip'kik's Savvy: any one counts
-    { key = "dm", label = "Dire Maul",           name = "Dire Maul buffs",                  ids = { 22817, 22818, 22820 } },
+    { key = "dm", label = L["Dire Maul"],           name = L["Dire Maul buffs"],                  ids = { 22817, 22818, 22820 } },
 }
 -- Fire, Frost, Holy, Nature, Shadow, Arcane: the Greater potions (1.x), then the plain ones
 local PROTECTION_ERA = { 17543, 17544, 17545, 17546, 17548, 17549, 7233, 7239, 7248, 7254, 7242 }
@@ -80,12 +82,12 @@ local function BuildCategories(client)
     if client == "era" or client == "forever" or client == "tbc" then
         for _, c in ipairs(WORLD_BUFFS) do cats[#cats + 1] = c end
         local tbc = client == "tbc"
-        cats[#cats + 1] = { key = "pp", label = "Protection potion", name = "Protection potion",
+        cats[#cats + 1] = { key = "pp", label = L["Protection potion"], name = L["Protection potion"],
             ids = tbc and Join(PROTECTION_ERA, PROTECTION_TBC) or PROTECTION_ERA }
-        cats[#cats + 1] = { key = "el", label = "Elixir", name = "Elixir",
+        cats[#cats + 1] = { key = "el", label = L["Elixir"], name = L["Elixir"],
             ids = tbc and Join(ELIXIRS_ERA, ELIXIRS_TBC) or ELIXIRS_ERA }
     elseif client == "mists" then
-        cats[#cats + 1] = { key = "el", label = "Elixir", name = "Elixir", ids = ELIXIRS_MOP }
+        cats[#cats + 1] = { key = "el", label = L["Elixir"], name = L["Elixir"], ids = ELIXIRS_MOP }
     end
     return cats
 end
@@ -93,8 +95,8 @@ end
 -- This client's extra counts, in order, and every count (flask and food first) by key.
 CC.BuffCategories = BuildCategories(CC:ClientTag())
 CC.BuffCounts = {
-    flask = { key = "flask", label = "Flask", name = "Flask" },
-    food  = { key = "food",  label = "Food",  name = "Food" },
+    flask = { key = "flask", label = L["Flask"], name = L["Flask"] },
+    food  = { key = "food",  label = L["Food"],  name = L["Food"] },
 }
 local categoryByID = {}   -- spell ID -> category key
 for _, c in ipairs(CC.BuffCategories) do
@@ -128,7 +130,7 @@ function CC:LoadConsumableBuffs()
         local spellID = tonumber(idStr)
         if spellID and data.duration and data.duration > 0 then
             CC.SpellData[spellID] = {
-                name       = data.name or ("Consumable " .. spellID),
+                name       = data.name or string.format(L["Consumable %d"], spellID),
                 duration   = data.duration,
                 icon       = data.icon or 134400,
                 class      = "UNKNOWN",
@@ -170,7 +172,7 @@ function CC:AddConsumableBuff(spellID, duration, name, category)
             category = GuessCategory(name)
         end
     end
-    name = (name and name ~= "") and name or ("Consumable " .. spellID)
+    name = (name and name ~= "") and name or string.format(L["Consumable %d"], spellID)
 
     self.db.consumableBuffs[tostring(spellID)] = {
         name     = name,
@@ -187,7 +189,7 @@ function CC:AddConsumableBuff(spellID, duration, name, category)
         category   = category,
     }
     local catStr = category and (" [" .. category .. "]") or ""
-    print(string.format("|cFF54a3ffCooldownCollaborator|r tracking consumable: %s (%ds)%s",
+    print(string.format("|cFF54a3ffCooldownCollaborator|r " .. L["tracking consumable: %s (%ds)%s"],
         name, duration, catStr))
     if self.RefreshSpellList then self:RefreshSpellList() end
     return true
@@ -201,8 +203,7 @@ function CC:RemoveConsumableBuff(spellID, say)
     local key = tostring(spellID)
     if not self.db.consumableBuffs[key] then
         if say then
-            print("|cFF54a3ffCooldownCollaborator|r no consumable you added has spell ID " .. spellID
-                .. " (the built-in ones can't be removed).")
+            print("|cFF54a3ffCooldownCollaborator|r " .. string.format(L["no consumable you added has spell ID %d (the built-in ones can't be removed)."], spellID))
         end
         return
     end
@@ -214,7 +215,7 @@ function CC:RemoveConsumableBuff(spellID, say)
     end
     self.consumableActive[spellID] = nil
     if say then
-        print("|cFF54a3ffCooldownCollaborator|r stopped tracking consumable: " .. tostring(was))
+        print("|cFF54a3ffCooldownCollaborator|r " .. string.format(L["stopped tracking consumable: %s"], tostring(was)))
     end
     self:RefreshAllViews()
     if self.RefreshSpellList then self:RefreshSpellList() end
@@ -474,7 +475,7 @@ function CC:ScanGroupAuras()
     end
     local function scan(unit)
         local ok, err = pcall(self.ScanUnitAuras, self, unit)
-        if not ok and CC.verbose then print("|cFF54a3ffCDC|r aura read: " .. tostring(err)) end
+        if not ok and CC.verbose then print("|cFF54a3ffCDC|r aura read: " .. tostring(err)) end -- debug
     end
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do scan("raid" .. i) end
