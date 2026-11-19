@@ -268,7 +268,11 @@ function CC:SaveProfile(name)
     name = type(name) == "string" and name:gsub("^%s+", ""):gsub("%s+$", "") or ""
     if name == "" then return false end
     self.db.profiles = self.db.profiles or {}
-    self.db.profiles[name] = self:SnapshotSetup(self:KeepsOwnPlaces())
+    local old = self.db.profiles[name]
+    local keep = self:KeepsOwnPlaces()
+    local snap = self:SnapshotSetup(keep)
+    if keep and old then snap.places = old.places or {} end
+    self.db.profiles[name] = snap
     return true
 end
 
@@ -318,7 +322,12 @@ end
 -- At logout the profile in use keeps what was changed since.
 function CC:SaveCurrentProfile()
     local name = self:CurrentProfile()
-    if name then self.db.profiles[name] = self:SnapshotSetup(self:KeepsOwnPlaces()) end
+    if name then
+        local keep = self:KeepsOwnPlaces()
+        local snap = self:SnapshotSetup(keep)
+        if keep then snap.places = self.db.profiles[name].places or {} end   -- the profile's own places stay
+        self.db.profiles[name] = snap
+    end
     if self:KeepsOwnPlaces() then self.db.charPlaces[self:FullName("player")] = self:SnapshotPlaces() end
 end
 
@@ -692,15 +701,11 @@ function CC:SupportText()
     return table.concat(lines, "\n")
 end
 
-local realSent = CC.AddonMessageSent
-function CC:AddonMessageSent(result)
-    local ok = realSent(self, result)
-    if not ok then
-        local list = self.sendErrors
-        list[#list + 1] = string.format("%s at %s", tostring(result), self:LookClock(math.floor(GetTime())))
-        while #list > 30 do table.remove(list, 1) end
-    end
-    return ok
+-- Comms.lua calls this when the game refuses a send.
+function CC:NoteSendError(result)
+    local list = self.sendErrors
+    list[#list + 1] = string.format("%s at %s", tostring(result), self:LookClock(math.floor(GetTime())))
+    while #list > 30 do table.remove(list, 1) end
 end
 
 -------------------------------------------------------------------------------
@@ -709,6 +714,7 @@ end
 
 local API = { version = 1 }
 CC.API = API
+_G.CooldownCollaboratorAPI = API   -- how other addons reach it
 local callbacks = { start = {}, ready = {}, ["end"] = {} }
 local running = {}   -- ["Name\tspellID"] = when we told about it, while it is running
 
@@ -766,17 +772,13 @@ function CC:NoteCooldownStart(owner, spellID)
     self:FireAPI("start", owner, spellID, data.duration)
 end
 
-local realRecord = CC.RecordCooldown
-function CC:RecordCooldown(unitToken, spellID, usedAt)
-    realRecord(self, unitToken, spellID, usedAt)
+hooksecurefunc(CC, "RecordCooldown", function(self, unitToken, spellID)
     if unitToken == "player" then self:NoteCooldownStart(self:FullName("player"), self:BaseSpellID(spellID)) end
-end
+end)
 
-local realRecordComm = CC.RecordCooldownFromComm
-function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag, how)
-    realRecordComm(self, playerName, spellID, usedAt, classTag, how)
+hooksecurefunc(CC, "RecordCooldownFromComm", function(self, playerName, spellID)
     self:NoteCooldownStart(playerName, self:BaseSpellID(spellID))
-end
+end)
 
 -- A cooldown we told about that is back: told once.
 function CC:CheckAPIReady()
@@ -797,7 +799,7 @@ C_Timer.NewTicker(1, function() if next(running) then CC:CheckAPIReady() end end
 -- Events for all of the above
 -------------------------------------------------------------------------------
 
-local ev = CreateFrame("Frame", "CCSetupEventFrame")
+local ev = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ENCOUNTER_START", "ENCOUNTER_END",
     "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT" }) do
     ev:RegisterEvent(e)

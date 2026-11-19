@@ -200,6 +200,254 @@ do
 	check("  normal again", CC:TickRate("panel") == 0.5 and CC:TickRate("lanes") == 0.2)
 end
 
+---------------------------------------------------------------- editors
+do
+	local e1 = #ERRORS
+	local rb = CC.SpellByName["Rebirth"]
+	local ok, n, skipped = CC:SavePlan("Boss1", {
+		{ trigger = "Bomb 2", player = "Aaa", spell = "Rebirth" },
+		{ trigger = "1:30", player = "Bbb", spell = tostring(rb) },
+		{ trigger = "", player = "", spell = "" },
+		{ trigger = "45", player = "", spell = "Rebirth" },
+	})
+	local plan = db.plans.Boss1
+	check("plan editor: timer text and 1:30 rows saved, an empty row ignored, a partial one skipped",
+		ok and n == 2 and skipped == 1 and plan.rows[1].timer == "Bomb 2" and plan.rows[2].at == 90
+		and plan.rows[2].spellID == rb and plan.rows[1].player:find("Aaa", 1, true) == 1)
+	local back = CC:PlanInputsFromRows(plan.rows)
+	check("  and shows again as typed", back[1].trigger == "Bomb 2" and back[2].trigger == "1:30" and back[2].spell == "Rebirth")
+	check("  Share is Plan.lua's SharePlan", type(CC.SharePlan) == "function" and CC.db.plans.Boss1 ~= nil)
+	local ok2, sid = CC:SaveRotationFromText("Rebirth", "Aaa, Bbb\nCcc")
+	check("rotation editor: a spell and its players in order", ok2 and sid == rb and #db.rotations[rb] == 3
+		and db.rotations[rb][3]:find("Ccc", 1, true) == 1 and CC.rotations[rb] ~= nil)
+	CC:SaveRotationFromText("Rebirth", "")
+	check("  an empty order clears it", db.rotations[rb] == nil)
+	CC:SaveTeam("Healers", { "Aaa", " Bbb ", "" })
+	check("teams editor: saved with its members, and the panel can pick it",
+		#db.teams.Healers == 2 and db.teams.Healers[2] == "Bbb" and CC:TeamNames()[1] == "Healers")
+	CC:SetPanelTab("team:Healers")
+	check("  the team tab reads it", CC:PanelTab() == "team:Healers")
+	CC:RemoveTeam("Healers")
+	check("  removed: back to All", CC:PanelTab() == "all" and CC:RemoveTeam("Healers") == false)
+	check("the editors raise no Lua error", #ERRORS == e1, ERRORS[e1 + 1])
+end
+
+---------------------------------------------------------------- setups and profiles
+do
+	local rb = CC.SpellByName["Rebirth"]
+	SPELLINFO[777002] = { "Odd Spell", 5 }
+	CC:AddCustomSpell(777002, 90)
+	db.disabledSpells[rb] = true
+	CC:SetAlertEnabled(rb, true); CC:SetAlertField(rb, "warn", 7); CC:SetAlertField(rb, "sound", 8960)
+	db.laneX, db.laneY = 123, -45
+	local text = CC:ExportSetup("Mine")
+	local setup, name = CC:DecodeSetup(text)
+	check("export: a setup survives its text", setup and name == "Mine" and setup.disabled[1] ~= nil
+		and setup.custom[777002] and setup.custom[777002].duration == 90 and setup.alerts[rb].warn == 7
+		and setup.alerts[rb].sound == 8960 and setup.places.lanes[1] == 123 and setup.places.lanes[2] == -45)
+	check("  text that is not a setup is refused", CC:DecodeSetup("hello") == nil and CC:DecodeSetup(nil) == nil
+		and CC:DecodeSetup("1;k=plan;n=x") == nil and CC:DecodeSetup("2;k=setup") == nil)
+	local bad = CC:DecodeSetup("1;k=setup;c=5,x,99999999,1;w=lanes,999999,1;a=abc,t,1,0,0")
+	check("  out of range numbers are dropped", bad and next(bad.custom) == nil and next(bad.places) == nil and next(bad.alerts) == nil)
+	-- change things, then import
+	db.disabledSpells = {}
+	CC:RemoveCustomSpell(777002)
+	CC:SetAlertEnabled(rb, false)
+	db.laneX, db.laneY = 0, 0
+	local lines = CC:DescribeSetup(setup)
+	check("import shows what it will change", #lines >= 3 and lines[1]:find("%d") ~= nil, table.concat(lines, " | "))
+	CC:ApplySetup(setup)
+	check("  applying brings it all back", db.disabledSpells[rb] == true and db.customSpells["777002"] ~= nil
+		and CC.SpellData[777002] ~= nil and CC:GetAlert(rb) and CC:GetAlert(rb).warn == 7 and db.laneX == 123)
+	check("  and the same setup then changes nothing", CC:DescribeSetup(setup)[1]:find("Nothing changes", 1, true) ~= nil)
+	check("  undo puts back what was there", CC:UndoSetup() and db.disabledSpells[rb] == nil and db.customSpells["777002"] == nil
+		and CC:GetAlert(rb) == nil and db.laneX == 0 and CC:UndoSetup() == false)
+	-- profiles
+	CC:ApplySetup(setup, { noUndo = true })
+	check("profile: saved", CC:SaveProfile("Raid") and CC:ProfileNames()[1] == "Raid")
+	CC:UseProfile("Raid")
+	check("  it is the one this character follows", CC:CurrentProfile() == "Raid")
+	db.disabledSpells = {}; db.laneX = 5
+	CC:ApplyCharacterProfile()
+	check("  login puts it in place", db.disabledSpells[rb] == true and db.laneX == 123)
+	CC:SetKeepOwnPlaces(true)
+	db.laneX = 77
+	CC:SaveCurrentProfile()
+	CC:ApplyCharacterProfile()
+	check("  a character keeping its own places keeps them over the profile's", db.laneX == 77 and db.profiles.Raid.places.lanes[1] == 123)
+	CC:SetKeepOwnPlaces(false)
+	db.defaultProfile = "Raid"; db.charProfile = {}
+	check("  alts follow the default profile", CC:CurrentProfile() == "Raid")
+	check("  deleting it lets go of everyone", CC:DeleteProfile("Raid") and CC:CurrentProfile() == nil and db.defaultProfile == false)
+	CC:ApplyShowPreset("everything")
+	CC:ApplySetup({ disabled = {}, custom = {}, alerts = {}, places = {} }, { noUndo = true })
+	CC:ResetWindow(window("lanes"))
+end
+
+---------------------------------------------------------------- officer setups
+do
+	local rb = CC.SpellByName["Rebirth"]
+	local setup = CC:DecodeSetup(CC:ExportSetup("Guild"))
+	setup.disabled = { rb }
+	local text = CC:EncodeSetup(setup, "Guild")
+	check("officer setup: only an officer sends", CC:IsOfficer() == false and CC:SendOfficerSetup() == false)
+	STUB_IN_GUILD = true
+	C_GuildInfo = { CanEditOfficerNote = function() return true end }
+	local s0 = #SENT
+	check("  an officer's goes out on the guild channel, guild sharing off or not",
+		db.guildSync == false and CC:SendOfficerSetup() == true)
+	Advance(10)
+	local parts, guild = 0, true
+	for i = s0 + 1, #SENT do
+		if SENT[i].msg:match("^O:2:s%d+:%d+/%d+:") then
+			parts = parts + 1
+			if SENT[i].channel ~= "GUILD" or #SENT[i].msg > 255 then guild = false end
+		end
+	end
+	check("  in parts under 255 bytes", parts >= 1 and guild, parts)
+	C_GuildInfo = nil
+	-- receiving
+	local sender = "Boss-Realm"
+	CC.payloads.O[sender] = { s1 = { data = text, at = GetTime() } }
+	local e1 = #ERRORS
+	CC:OnOfficerSetup(sender, "s1")
+	check("  a member gets a dialog naming the sender", CC.pendingSetup and CC.pendingSetup.owner == sender
+		and CC.setupDialog and CC.setupDialog:IsShown() and CC.setupDialog.text.__text:find("Boss", 1, true) ~= nil)
+	CC:AnswerSetup("later")
+	check("  Not now closes it and changes nothing", not CC.setupDialog:IsShown() and not db.disabledSpells[rb])
+	CC:OnOfficerSetup(sender, "s1")
+	CC:AnswerSetup("accept")
+	check("  Accept applies it", db.disabledSpells[rb] == true)
+	check("  and Undo takes it back", CC:UndoSetup() and not db.disabledSpells[rb])
+	CC:OnOfficerSetup(sender, "s1")
+	CC:AnswerSetup("never")
+	CC:OnOfficerSetup(sender, "s1")
+	check("  Never silences that person", CC.pendingSetup == nil and db.setupNever[sender] == true)
+	db.setupNever = {}
+	STUB_IN_GUILD = false
+	check("officer setup code raises no Lua error", #ERRORS == e1, ERRORS[e1 + 1])
+end
+
+---------------------------------------------------------------- layouts
+do
+	STUB_IN_RAID = false
+	GROUP = { { unit = "party1", name = "Aaa", realm = "Realm", class = "DRUID", guid = "Player-1-0000002" } }
+	FireEvent("GROUP_ROSTER_UPDATE")
+	db.laneX, db.laneY = 10, 20
+	STUB_IN_RAID = true
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("layouts: leaving a party for a raid saves the party's places", db.layouts.party and db.layouts.party.lanes[1] == 10)
+	db.laneX, db.laneY = 300, 400
+	STUB_IN_RAID = false
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("  and going back brings them back, the raid's kept for later",
+		db.laneX == 10 and db.laneY == 20 and db.layouts.raid.lanes[1] == 300)
+	STUB_IN_RAID = true
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("  and the raid's likewise", db.laneX == 300)
+	STUB_IN_RAID = false
+	FireEvent("GROUP_ROSTER_UPDATE")
+	CC:ResetAllWindows()
+	check("Reset all windows: every window home, layouts forgotten",
+		db.laneX == CC.DEFAULTS.laneX and db.deadListX == CC.DEFAULTS.deadListX and next(db.layouts) == nil)
+end
+
+---------------------------------------------------------------- last pull, post, key start, support
+do
+	local rb = CC.SpellByName["Rebirth"]
+	GROUP = { { unit = "party1", name = "Aaa", realm = "Realm", class = "DRUID", guid = "Player-1-0000002" } }
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(1)
+	db.lastPullOffer = true
+	local p0 = #PRINTS
+	FireEvent("PLAYER_REGEN_DISABLED")
+	Advance(30)
+	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - 1, "DRUID")
+	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - 1, "DRUID")
+	FireEvent("ENCOUNTER_START", 1, "Boss", 1, 5)
+	Advance(10)
+	FireEvent("ENCOUNTER_END", 1, "Boss", 1, 5, 0)
+	FireEvent("PLAYER_REGEN_ENABLED")
+	local lines = CC:PullLines()
+	check("last pull: one tracked use logged with the time into the fight and who", #lines == 1
+		and lines[1]:find("Aaa", 1, true) and lines[1]:find("Rebirth", 1, true) and CC.lastPull.boss == "Boss"
+		and CC.lastPull.success == false, lines[1])
+	local offered = false
+	for i = p0 + 1, #PRINTS do if tostring(PRINTS[i]):find("wipe", 1, true) then offered = true end end
+	check("  offered after a wipe when the setting is on", offered)
+	local p1 = #PRINTS
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("lastpull")
+	check("  /cdc lastpull prints it", #PRINTS > p1)
+	db.lastPullOffer = false
+
+	-- post
+	local postLines = CC:PostLines()
+	local found = false
+	for _, l in ipairs(postLines) do if l:find("Rebirth", 1, true) and l:find("Aaa", 1, true) then found = true end end
+	check("post: a line per picked spell with who has it and when it is back", found, postLines[1])
+	local c0 = #CHATSENT
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("post")
+	db.postSpells = { [rb] = true }
+	check("  picked spells only", #CC:PostSpellIDs() == 1 and CC:PostSpellIDs()[1] == rb)
+	db.postSpells = {}
+
+	-- key start
+	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - 1, "DRUID")
+	check("key start: a running timer to start with", CC.state["Aaa-Realm"] and CC.state["Aaa-Realm"].spells[rb] ~= nil)
+	CC:ResetForNewRun(true)
+	check("  a new key sends it back to ready", CC.state["Aaa-Realm"] == nil or CC.state["Aaa-Realm"].spells[rb] == nil)
+	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - 1, "DRUID")
+	db.resetOnNewRun = false
+	local e1 = #ERRORS
+	pcall(FireEvent, "CHALLENGE_MODE_START")
+	check("  the setting turns it off", CC.state["Aaa-Realm"] and CC.state["Aaa-Realm"].spells[rb] ~= nil and #ERRORS == e1)
+	db.resetOnNewRun = true
+
+	-- support
+	CC.sendErrors = {}
+	CC:NoteSendError(8)
+	local text = CC:SupportText()
+	check("support: version, client, group, heard from, unticked spells and send errors",
+		text:find(CC.version, 1, true) and text:find("Client:", 1, true) and text:find("Group: party", 1, true)
+		and text:find("Heard from", 1, true) and text:find("Unticked spells", 1, true)
+		and text:find("Recent send errors (1)", 1, true), text)
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("support")
+	check("  /cdc support opens the copy box", CC.copyBox and CC.copyBox:IsShown())
+end
+
+---------------------------------------------------------------- the public feed
+do
+	local rb = CC.SpellByName["Rebirth"]
+	local starts, readies, ends = {}, {}, {}
+	local listener = {}
+	check("API: a listener registers", CC.API.RegisterCallback(listener, "start", function(...) starts[#starts + 1] = { ... } end)
+		and CC.API.RegisterCallback(listener, "ready", function(...) readies[#readies + 1] = { ... } end)
+		and CC.API.RegisterCallback(listener, "end", function(...) ends[#ends + 1] = { ... } end)
+		and not CC.API.RegisterCallback(listener, "nonsense", function() end))
+	Advance(6)
+	CC.state["Aaa-Realm"] = nil
+	local dur = CC.SpellData[rb].duration
+	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - dur + 3, "DRUID")
+	check("  a cooldown starting reaches it, once", #starts == 1 and starts[1][1] == "Aaa-Realm" and starts[1][2] == rb
+		and starts[1][3] == dur)
+	local rem = CC.API.GetCooldown("Aaa-Realm", rb)
+	local listed = false
+	for _, m in ipairs(CC.API.GetGroup()) do
+		if m.name == "Aaa-Realm" then
+			for _, sp in ipairs(m.spells) do if sp.spellID == rb and sp.remaining ~= nil and sp.ready == false then listed = true end end
+		end
+	end
+	check("  who has what and when it is back", rem ~= nil and rem <= 3.1 and rem > 0 and listed)
+	Advance(5)
+	check("  it is told when the cooldown is back", #readies == 1 and readies[1][1] == "Aaa-Realm" and readies[1][2] == rb)
+	FireEvent("PLAYER_REGEN_DISABLED")
+	FireEvent("PLAYER_REGEN_ENABLED")
+	check("  and when a fight ends", #ends >= 1)
+	CC.API.UnregisterCallback(listener, "start")
+	Advance(6)
+	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - dur + 100, "DRUID")
+	check("  unregistered, it hears nothing more", #starts == 1)
+end
+
 check("no Lua errors", #ERRORS == 0, ERRORS[1])
 OUT(string.format("RESULT settings %s %s: checks %d, fails %d, lua errors %d",
 	HARNESS_TOCFILE, FLAVOR, checks, fails, #ERRORS))

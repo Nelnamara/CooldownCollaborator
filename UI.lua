@@ -782,9 +782,31 @@ function CC:BuildUI()
     self.runsText = runs
 
     local lust = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    lust:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -22, -5)
+    lust:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -38, -5)
     lust:SetJustifyH("RIGHT")
     self.lustText = lust
+
+    -- Post (P38): what is ready for the spells picked in Settings, to the group's chat
+    local post = CreateFrame("Button", nil, frame)
+    post:SetSize(13, 13)
+    post:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -21, -4)
+    local postBg = post:CreateTexture(nil, "BACKGROUND")
+    postBg:SetAllPoints()
+    postBg:SetColorTexture(1, 1, 1, 0.07)
+    local postText = post:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    postText:SetPoint("CENTER", post, "CENTER", 0, 0)
+    postText:SetText("P")
+    postText:SetTextColor(0.7, 0.7, 0.7)
+    post:SetScript("OnEnter", function(widget)
+        postText:SetTextColor(1, 1, 1)
+        GameTooltip:SetOwner(widget, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Post to chat")
+        GameTooltip:AddLine("Says what is ready, and who has it, in group chat (the spells picked in Settings).", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    post:SetScript("OnLeave", function() postText:SetTextColor(0.7, 0.7, 0.7); GameTooltip:Hide() end)
+    post:SetScript("OnClick", function() CC:PostReady() end)
+    self.postButton = post
 
     local close = CreateFrame("Button", nil, frame)
     close:SetSize(13, 13)

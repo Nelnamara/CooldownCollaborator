@@ -185,6 +185,7 @@ function CC:DrainSendQueue()
                 elseif ok then
                     -- Not sent (throttled, lockdown, etc.): tried again, not dropped.
                     q.tries = q.tries + 1
+                    self:NoteSendError(result)
                     if q.onRefused then q.onRefused(q) end
                     if q.tries < CC.MAX_SEND_TRIES then
                         self.pendingSyncs[#self.pendingSyncs + 1] = q

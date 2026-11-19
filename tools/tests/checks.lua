@@ -1030,7 +1030,7 @@ end
 
 local allowed = { CooldownCollaborator = true, CC = true, CooldownCollaboratorDB = true, SLASH_COOLDOWNCOLLABORATOR1 = true,
 	CCEventFrame = true, CCMainFrame = true, CCEssentialsFrame = true, CCLaneFrame = true, CCMinimapButton = true,
-	CCBuffMissingFrame = true,
+	CCBuffMissingFrame = true, CCAlertOptions = true, CCCopyBox = true, CCSetupDialog = true, CooldownCollaboratorAPI = true,
 	CCOptionsFrame = true, CCDefScroll = true, CCSpellInput = true, CCDurInput = true, CCCustScroll = true,
 	SETTINGS_CATEGORY = true, INTERFACE_OPTIONS_PANEL = true }
 local leaked = {}

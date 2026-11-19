@@ -646,6 +646,105 @@ function CC:SetBuffCountShown(key, on)
     self:RefreshView("RefreshEssentials")
 end
 
+-- ── Editors: plans (P12), rotation orders (P39), teams (P43) ─────────────────
+
+local function Trim(s) return ((tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))) end
+
+-- A tracked spell's ID from a name, an ID or a link.
+function CC:ResolveTracked(text)
+    text = Trim(text)
+    if text == "" then return nil end
+    return CC.SpellByName[text] or ResolveSpell(text)
+end
+
+-- A plan row's trigger: "1:30" or "90" is a time into the fight (second value), anything else
+-- is the boss timer's text (first value).
+function CC:ParseTrigger(text)
+    text = Trim(text)
+    if text == "" then return nil, nil end
+    local m, s = text:match("^(%d+):(%d%d)$")
+    if m then return nil, tonumber(m) * 60 + tonumber(s) end
+    if text:match("^%d+$") then return nil, tonumber(text) end
+    return text, nil
+end
+
+-- inputs: { { trigger, player, spell } ... } as typed. Rows missing a part are skipped (counted).
+function CC:PlanRowsFromInput(inputs)
+    local rows, skipped = {}, 0
+    for _, r in ipairs(inputs or {}) do
+        local timer, at = self:ParseTrigger(r.trigger)
+        local sid = self:ResolveTracked(r.spell)
+        local player = Trim(r.player)
+        if (timer or at) and sid and player ~= "" then
+            rows[#rows + 1] = { timer = timer, at = at, player = self:NormalizeSender(player), spellID = sid }
+        elseif Trim(r.trigger) ~= "" or player ~= "" or Trim(r.spell) ~= "" then
+            skipped = skipped + 1
+        end
+    end
+    return rows, skipped
+end
+
+function CC:PlanInputsFromRows(rows)
+    local inputs = {}
+    for _, row in ipairs(rows or {}) do
+        local data = CC.SpellData[row.spellID]
+        inputs[#inputs + 1] = {
+            trigger = row.timer or self:LookClock(row.at or 0),
+            player = row.player,
+            spell = data and data.name or tostring(row.spellID),
+        }
+    end
+    return inputs
+end
+
+function CC:SavePlan(name, inputs)
+    name = Trim(name)
+    if name == "" then return false end
+    local rows, skipped = self:PlanRowsFromInput(inputs)
+    self.db.plans[name] = { rows = rows, at = time() }
+    return true, #rows, skipped
+end
+
+-- The order text "A, B, C" (or one a line) as a list of names.
+local function NameList(text)
+    local list = {}
+    for item in tostring(text or ""):gmatch("[^,\r\n]+") do
+        item = Trim(item)
+        if item ~= "" then list[#list + 1] = item end
+    end
+    return list
+end
+
+function CC:SaveRotationFromText(spellText, namesText)
+    local sid = self:ResolveTracked(spellText)
+    if not sid then return false end
+    local names = {}
+    for _, n in ipairs(NameList(namesText)) do names[#names + 1] = self:NormalizeSender(n) end
+    self:SetRotation(sid, names)
+    return true, sid
+end
+
+function CC:SaveTeam(name, members)
+    name = Trim(name)
+    if name == "" then return false end
+    local list = {}
+    for _, m in ipairs(members or {}) do
+        m = Trim(m)
+        if m ~= "" then list[#list + 1] = m end
+    end
+    self.db.teams = self.db.teams or {}
+    self.db.teams[name] = list
+    self:RefreshView("RefreshRows")
+    return true
+end
+
+function CC:RemoveTeam(name)
+    if not (self.db.teams and self.db.teams[name]) then return false end
+    self.db.teams[name] = nil
+    self:RefreshView("RefreshRows")
+    return true
+end
+
 function CC:OpenOptions()
     if self.optionsFrame then
         self.optionsFrame:SetShown(not self.optionsFrame:IsShown())
@@ -758,7 +857,7 @@ function CC:OpenOptions()
     -- ── Tabs and pages ────────────────────────────────────────────────────
 
     local TAB_Y = -44
-    local tabNames = { "Getting Started", "Display", "Bars & Lists", "Spells" }
+    local tabNames = { "Getting Started", "Display", "Lists", "Spells", "Plans", "Profiles" }
     local tabs, pages = {}, {}
 
     local contentArea = CreateFrame("Frame", nil, f, CC.BackdropTemplate)
@@ -785,9 +884,9 @@ function CC:OpenOptions()
     end
     for i, name in ipairs(tabNames) do
         local t = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        t:SetSize(128, TAB_H)
+        t:SetSize(i == 1 and 112 or 80, TAB_H)
         t:SetText(name)
-        t:SetPoint("TOPLEFT", f, "TOPLEFT", 16 + (i - 1) * 132, TAB_Y)
+        t:SetPoint("TOPLEFT", f, "TOPLEFT", 16 + (i == 1 and 0 or 114 + (i - 2) * 82), TAB_Y)
         t:SetScript("OnClick", function() ShowPage(i) end)
         tabs[i] = t
     end
@@ -1366,6 +1465,309 @@ function CC:OpenOptions()
     tabDefault:SetScript("OnClick", ShowDefault)
     tabCustom:SetScript("OnClick",  ShowCustom)
     redrawGroup()
+
+    -- ══ Page 5: Plans, rotations and teams ════════════════════════════════
+
+    local planScroll, pl = NewPage(true)
+    pages[5] = planScroll
+    y = -2
+
+    local function NewEdit(parent, x, yy, w, text)
+        local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        e:SetSize(w, 20)
+        e:SetPoint("TOPLEFT", parent, "TOPLEFT", x, yy)
+        e:SetAutoFocus(false)
+        e:SetMaxLetters(120)
+        e:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
+        if text then e:SetText(text) end
+        return e
+    end
+
+    NewHeader(pl, y, "Raid cooldown plan"); y = y - 24
+    local planLbl = pl:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    planLbl:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y - 3)
+    planLbl:SetText("Plan:")
+    local planName = NewEdit(pl, 44, y, 130, "")
+    local planSaved = pl:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local planStatus = pl:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local function SayPlans()
+        local names = {}
+        for n in pairs(CC.db.plans or {}) do names[#names + 1] = n end
+        table.sort(names)
+        planSaved:SetText("Saved: " .. (#names > 0 and table.concat(names, ", ") or "none")
+            .. (CC.db.activePlan and ("   Active: " .. tostring(CC.db.activePlan)) or ""))
+    end
+    local PLAN_ROWS = 14
+    local planRows = {}
+    local function PlanInputs()
+        local inputs = {}
+        for i = 1, PLAN_ROWS do
+            local r = planRows[i]
+            inputs[i] = { trigger = r.trigger:GetText(), player = r.player:GetText(), spell = r.spell:GetText() }
+        end
+        return inputs
+    end
+    local function ShowPlan(plan)
+        local inputs = plan and CC:PlanInputsFromRows(plan.rows) or {}
+        for i = 1, PLAN_ROWS do
+            local r, v = planRows[i], inputs[i] or {}
+            r.trigger:SetText(v.trigger or ""); r.player:SetText(v.player or ""); r.spell:SetText(v.spell or "")
+        end
+    end
+    NewButton(pl, 180, y + 1, 52, "Load", function()
+        local plan = CC.db.plans[Trim(planName:GetText())]
+        ShowPlan(plan)
+        planStatus:SetText(plan and "Loaded." or "|cFFFF4444No plan by that name.|r")
+    end)
+    NewButton(pl, 234, y + 1, 52, "Save", function()
+        local ok, n, skipped = CC:SavePlan(planName:GetText(), PlanInputs())
+        planStatus:SetText(ok and string.format("Saved %d rows%s.", n, skipped > 0 and (", " .. skipped .. " skipped (a part is missing)") or "")
+            or "|cFFFF4444Give the plan a name first.|r")
+        SayPlans()
+    end)
+    NewButton(pl, 288, y + 1, 56, "Delete", function()
+        CC.db.plans[Trim(planName:GetText())] = nil
+        if CC.db.activePlan == Trim(planName:GetText()) then CC.db.activePlan = false end
+        SayPlans()
+    end)
+    NewButton(pl, 346, y + 1, 56, "Share", function()
+        local name = Trim(planName:GetText())
+        if CC.db.plans[name] then CC:SharePlan(name) end
+        SayPlans()
+    end)
+    NewButton(pl, 404, y + 1, 84, "Make active", function()
+        local name = Trim(planName:GetText())
+        if CC.db.plans[name] then CC.db.activePlan = name end
+        SayPlans()
+    end)
+    y = y - 26
+    planSaved:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    planSaved:SetWidth(CAW - 40)
+    planSaved:SetJustifyH("LEFT")
+    y = y - 16
+    NewNote(pl, 4, y, CAW - 40, "A row: when (a boss timer's text, or the time into the fight like 1:30), who, and which spell. The player gets a prompt as it comes up. Share sends it to the group (leader or assist).")
+    y = y - 42
+    for _, h in ipairs({ { 4, "When" }, { 176, "Player" }, { 300, "Spell" } }) do
+        local l = pl:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        l:SetPoint("TOPLEFT", pl, "TOPLEFT", h[1] + 6, y)
+        l:SetText(h[2])
+    end
+    y = y - 16
+    for i = 1, PLAN_ROWS do
+        planRows[i] = {
+            trigger = NewEdit(pl, 4, y, 166), player = NewEdit(pl, 176, y, 118), spell = NewEdit(pl, 300, y, 150),
+        }
+        y = y - 22
+    end
+    planStatus:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    y = y - 22
+    SayPlans()
+
+    NewHeader(pl, y, "Rotation order"); y = y - 24
+    NewNote(pl, 4, y, CAW - 40, "A spell several players take in turn. The panel numbers the rows in this order; the group gets it when you lead or assist.")
+    y = y - 30
+    local rotSpell = NewEdit(pl, 4, y, 170, "")
+    local rotNames = NewEdit(pl, 180, y, 270, "")
+    rotNames:SetMaxLetters(400)
+    y = y - 22
+    NewNote(pl, 4, y, CAW - 40, "Left: the spell's name or ID. Right: the players in order, separated by commas.")
+    y = y - 20
+    local rotList = pl:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local function SayRotations()
+        local lines = {}
+        for sid, names in pairs(CC.db.rotations or {}) do
+            local data = CC.SpellData[sid]
+            local short = {}
+            for _, n in ipairs(names) do short[#short + 1] = CC:ShortName(n) end
+            lines[#lines + 1] = (data and data.name or tostring(sid)) .. ": " .. table.concat(short, " > ")
+        end
+        table.sort(lines)
+        rotList:SetText(#lines > 0 and table.concat(lines, "\n") or "No rotation orders saved.")
+    end
+    NewButton(pl, 4, y, 60, "Save", function()
+        CC:SaveRotationFromText(rotSpell:GetText(), rotNames:GetText()); SayRotations()
+    end)
+    NewButton(pl, 68, y, 60, "Clear", function()
+        CC:SaveRotationFromText(rotSpell:GetText(), ""); SayRotations()
+    end)
+    NewButton(pl, 132, y, 120, "Fill from group", function()
+        local names = {}
+        for name in pairs(CC:GetActiveGroupNames()) do names[#names + 1] = CC:ShortName(name) end
+        table.sort(names)
+        rotNames:SetText(table.concat(names, ", "))
+    end)
+    y = y - 28
+    rotList:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    rotList:SetWidth(CAW - 40)
+    rotList:SetJustifyH("LEFT")
+    SayRotations()
+    y = y - 60
+
+    NewHeader(pl, y, "Teams"); y = y - 24
+    NewNote(pl, 4, y, CAW - 40, "A team is a tab on the panel that lists only its members. Tick people in your group, or type names.")
+    y = y - 30
+    local teamName = NewEdit(pl, 4, y, 150, "")
+    local teamTyped = NewEdit(pl, 160, y, 290, "")
+    teamTyped:SetMaxLetters(400)
+    y = y - 24
+    local teamTicks = {}
+    for i = 1, 20 do
+        local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+        local cb = CreateFrame("CheckButton", nil, pl, "UICheckButtonTemplate")
+        cb:SetSize(20, 20)
+        cb:SetPoint("TOPLEFT", pl, "TOPLEFT", 4 + col * 240, y - rowN * 20)
+        cb.label = pl:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        cb.label:SetPoint("LEFT", cb, "RIGHT", 0, 0)
+        teamTicks[i] = cb
+    end
+    function CC:RefreshTeamTicks()
+        local names = {}
+        for name in pairs(self:GetActiveGroupNames()) do names[#names + 1] = name end
+        table.sort(names)
+        for i, cb in ipairs(teamTicks) do
+            local name = names[i]
+            cb.who = name
+            cb:SetShown(name ~= nil)
+            cb.label:SetShown(name ~= nil)
+            cb.label:SetText(name and self:ShortName(name) or "")
+            cb:SetChecked(false)
+        end
+    end
+    CC:RefreshTeamTicks()
+    y = y - 200
+    local teamList = pl:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local function SayTeams()
+        local lines = {}
+        for _, n in ipairs(CC:TeamNames()) do
+            lines[#lines + 1] = n .. ": " .. table.concat(CC.db.teams[n], ", ")
+        end
+        teamList:SetText(#lines > 0 and table.concat(lines, "\n") or "No teams saved.")
+    end
+    NewButton(pl, 4, y, 80, "Save team", function()
+        local members = NameList(teamTyped:GetText())
+        for _, cb in ipairs(teamTicks) do
+            if cb:IsShown() and cb:GetChecked() and cb.who then members[#members + 1] = CC:ShortName(cb.who) end
+        end
+        CC:SaveTeam(teamName:GetText(), members); SayTeams()
+    end)
+    NewButton(pl, 88, y, 80, "Load team", function()
+        local members = CC.db.teams[Trim(teamName:GetText())]
+        if members then teamTyped:SetText(table.concat(members, ", ")) end
+    end)
+    NewButton(pl, 172, y, 90, "Remove team", function()
+        CC:RemoveTeam(Trim(teamName:GetText())); SayTeams()
+    end)
+    y = y - 28
+    teamList:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    teamList:SetWidth(CAW - 40)
+    teamList:SetJustifyH("LEFT")
+    SayTeams()
+    y = y - 60
+    pl:SetHeight(-y + 10)
+
+    -- ══ Page 6: Profiles, setups and tools ════════════════════════════════
+
+    local profScroll, pr = NewPage(true)
+    pages[6] = profScroll
+    y = -2
+
+    NewHeader(pr, y, "Profiles"); y = y - 24
+    local profLbl = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    profLbl:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y - 3)
+    profLbl:SetText("Profile:")
+    local profName = NewEdit(pr, 60, y, 140, "")
+    local profStatus = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    function CC:RefreshProfileStatus()
+        local names = self:ProfileNames()
+        profStatus:SetText(string.format("This character follows: %s.   Saved: %s.%s",
+            self:CurrentProfile() or "none", #names > 0 and table.concat(names, ", ") or "none",
+            self.db.defaultProfile and ("   New characters follow: " .. tostring(self.db.defaultProfile)) or ""))
+    end
+    NewButton(pr, 206, y + 1, 74, "Save as", function()
+        if CC:SaveProfile(profName:GetText()) then
+            CC.db.charProfile[CC:FullName("player")] = Trim(profName:GetText())
+        end
+        CC:RefreshProfileStatus()
+    end)
+    NewButton(pr, 284, y + 1, 56, "Use", function()
+        CC:UseProfile(Trim(profName:GetText())); CC:RefreshProfileStatus()
+    end)
+    NewButton(pr, 344, y + 1, 64, "Delete", function()
+        CC:DeleteProfile(Trim(profName:GetText())); CC:RefreshProfileStatus()
+    end)
+    y = y - 26
+    profStatus:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y)
+    profStatus:SetWidth(CAW - 40)
+    profStatus:SetJustifyH("LEFT")
+    y = y - 32
+    NewCheck(pr, 4, y, "New characters follow the profile named above",
+        function() return CC.db.defaultProfile and CC.db.defaultProfile == Trim(profName:GetText()) or false end,
+        function(v)
+            CC.db.defaultProfile = (v and CC.db.profiles[Trim(profName:GetText())]) and Trim(profName:GetText()) or false
+            CC:RefreshProfileStatus()
+        end, "Characters that haven't picked a profile follow this one.")
+    y = y - 26
+    NewCheck(pr, 4, y, "This character keeps its own window places",
+        function() return CC:KeepsOwnPlaces() end, function(v) CC:SetKeepOwnPlaces(v) end,
+        "Whatever profile it follows, this character's windows stay where they are now.")
+    y = y - 30
+    CC:RefreshProfileStatus()
+
+    NewHeader(pr, y, "Export and import"); y = y - 24
+    NewNote(pr, 4, y, CAW - 40, "A setup is your tracked and custom spells, ready alerts and window places, as text.")
+    y = y - 30
+    NewButton(pr, 4, y, 100, "Export setup", function()
+        CC:ShowCopyBox("Your setup: copy this", CC:ExportSetup(Trim(profName:GetText())))
+    end)
+    NewButton(pr, 108, y, 100, "Import setup", function() CC:ShowImportBox() end)
+    NewButton(pr, 212, y, 150, "Undo last setup", function()
+        print(CC:UndoSetup() and "|cFF54a3ffCDC|r Back to what you had." or "|cFF54a3ffCDC|r Nothing to undo.")
+    end)
+    y = y - 28
+    NewButton(pr, 4, y, 230, "Send my setup to the guild (officers)", function() CC:SendOfficerSetup() end)
+    y = y - 22
+    NewNote(pr, 4, y, CAW - 40, "Members see a box naming you and choose Accept, Not now or Never.")
+    y = y - 34
+
+    NewHeader(pr, y, "Layouts"); y = y - 24
+    NewNote(pr, 4, y, CAW - 40, "Window places are kept apart for a party and a raid and switch when your group type changes.")
+    y = y - 30
+    NewButton(pr, 4, y, 140, "Reset all windows", function() CC:ResetAllWindows() end)
+    y = y - 34
+
+    NewHeader(pr, y, "Pulls, posting and new keys"); y = y - 24
+    NewCheck(pr, 4, y, "After a boss, say the pull's log is ready", function() return CC.db.lastPullOffer == true end,
+        function(v) CC.db.lastPullOffer = v end, "/cdc lastpull lists the tracked cooldowns used in the last pull.")
+    y = y - 26
+    NewCheck(pr, 4, y, "A new key or dungeon sets reset cooldowns back to ready", function() return CC.db.resetOnNewRun ~= false end,
+        function(v) CC.db.resetOnNewRun = v end)
+    y = y - 30
+    NewButton(pr, 4, y, 110, "Last pull", function() CC:PrintLastPull() end)
+    NewButton(pr, 118, y, 110, "Post ready", function() CC:PostReady() end)
+    NewButton(pr, 232, y, 110, "Support box", function()
+        CC:ShowCopyBox("Support: copy this into your report", CC:SupportText())
+    end)
+    y = y - 34
+    NewNote(pr, 4, y, CAW - 40, "Post ready lists these spells and who has them in raid or party chat (none ticked: rez and lust):")
+    y = y - 30
+    do
+        local list = {}
+        for id, data in pairs(CC.SpellData) do
+            if not data.consumable and (data.kind == "rez" or data.kind == "lust" or data.kind == "raid"
+                or data.kind == "external" or data.kind == "mana") then list[#list + 1] = id end
+        end
+        table.sort(list, function(a, c) return CC.SpellData[a].name < CC.SpellData[c].name end)
+        for i, id in ipairs(list) do
+            local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+            local cb, lb = NewCheck(pr, 4 + col * 240, y - rowN * 22, CC.SpellData[id].name,
+                function() return CC.db.postSpells[id] == true end,
+                function(v) CC.db.postSpells[id] = v or nil end)
+            cb:SetSize(20, 20)
+            lb:SetFontObject(GameFontHighlightSmall)
+        end
+        y = y - math.ceil(#list / 2) * 22
+    end
+    pr:SetHeight(-y + 10)
 
     -- Getting Started opens first
     ShowDefault()
