@@ -24,14 +24,6 @@ local MIN_DURATIONS = { 30, 60, 90, 120, 180 }
 
 -- ── Helpers ──────────────────────────────────────────────────────────────────
 
-local function MakeLine(parent, anchor, oy)
-    local t = parent:CreateTexture(nil, "ARTWORK")
-    t:SetSize(FRAME_W - 32, 1)
-    t:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -4)
-    t:SetColorTexture(0.3, 0.3, 0.4, 0.6)
-    return t
-end
-
 local function ResolveSpell(text)
     local linkID = text:match("|Hspell:(%d+)")
     if linkID then return tonumber(linkID) end
@@ -323,17 +315,17 @@ function CC:OpenAlertOptions(spellID, anchor)
         end)
 
         function f:Refresh()
-            local cfg = CC:GetAlert(self.spellID)
-            local on = cfg ~= nil
+            local cfg = CC:GetAlert(self.spellID) or {}
+            local on = CC:GetAlert(self.spellID) ~= nil
+            local idx = on and cfg.sound and CC:AlertSoundIndex(cfg) or nil
             self.enable:SetChecked(on)
             self.sound:SetChecked(on and cfg.sound and true or false)
-            local idx = cfg and cfg.sound and CC:AlertSoundIndex(cfg)
-            self.soundBtn:SetText(idx and CC.ALERT_SOUNDS[idx].label or (cfg and cfg.sound and "Custom sound") or "No sound")
+            self.soundBtn:SetText(idx and CC.ALERT_SOUNDS[idx].label or ((on and cfg.sound) and "Custom sound" or "No sound"))
             self.soundBtn:SetEnabled(on and cfg.sound and true or false)
             self.testBtn:SetEnabled(idx ~= nil)
             self.flash:SetChecked(on and cfg.flash ~= false)
             self.mid:SetChecked(on and cfg.midscreen == true)
-            self.warn:SetText(on and tostring(tonumber(cfg.warn) or 0) or "0")
+            self.warn:SetText(tostring(tonumber(cfg.warn) or 0))
             for _, w in ipairs({ self.sound, self.flash, self.mid, self.warn }) do w:SetEnabled(on) end
         end
         self.alertFrame = f

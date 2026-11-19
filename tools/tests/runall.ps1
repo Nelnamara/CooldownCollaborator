@@ -16,7 +16,7 @@ $tocs = @(
     @{ Toc = 'CooldownCollaborator.toc';          Interface = 16001 }
 )
 $runner = Join-Path $PSScriptRoot 'run.js'
-$harnesses = @('checks.lua', 'groups.lua', 'sync.lua', 'looks.lua', 'essentials.lua', 'panel.lua')
+$harnesses = @('checks.lua', 'groups.lua', 'sync.lua', 'looks.lua', 'essentials.lua', 'panel.lua', 'settings.lua')
 $bad = 0
 foreach ($h in $harnesses) {
     $harness = Join-Path $PSScriptRoot $h
