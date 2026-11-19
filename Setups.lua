@@ -477,7 +477,7 @@ function CC:GuildRankOf(fullName)
     local ok, rank = pcall(function()
         for i = 1, GetNumGuildMembers() do
             local name, rankName = GetGuildRosterInfo(i)
-            if name and (name == fullName or self:ShortName(name) == short) then return rankName end
+            if name and (name == fullName or self:NormalizeSender(name) == fullName or self:ShortName(self:NormalizeSender(name) or name) == short) then return rankName end
         end
     end)
     return ok and rank or nil
@@ -490,7 +490,7 @@ function CC:GuildRankIndexOf(fullName)
     local ok, index = pcall(function()
         for i = 1, GetNumGuildMembers() do
             local name, _, rankIndex = GetGuildRosterInfo(i)
-            if name and (name == fullName or self:ShortName(name) == short) then return rankIndex end
+            if name and (name == fullName or self:NormalizeSender(name) == fullName or self:ShortName(self:NormalizeSender(name) or name) == short) then return rankIndex end
         end
     end)
     return ok and index or nil

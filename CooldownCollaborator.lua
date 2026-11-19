@@ -101,13 +101,31 @@ function CC:ShortName(full)
     return full:match("^([^-]+)") or full
 end
 
--- Addon-message senders normally carry a realm; add ours if one is missing.
+-- A sender name from chat, the combat log or the guild roster, as Name-Realm the way
+-- FullName names the same player. WoW: Forever shows a surname there ("Devilin Nyx",
+-- "Devilin Nyx-Realm") while UnitName / UnitFullName give only "Devilin" (seen in game,
+-- 19 Nov 2026: every message was dropped as "not from a group member"), so only the
+-- word before the first space is the name. A group member with that name wins, so an
+-- odd realm part can't hide them.
 function CC:NormalizeSender(sender)
-    if not sender or sender == "" then return nil end
-    if sender:find("-", 1, true) then return sender end
-    local realm = GetNormalizedRealmName()
-    if realm and realm ~= "" then return sender .. "-" .. realm end
-    return sender
+    if type(sender) ~= "string" or sender == "" then return nil end
+    local first = sender:match("^(%S+)") or sender
+    local name, realm = first:match("^([^%-]+)%-(.+)$")
+    if not name then
+        name = first
+        realm = sender:match("%-([^%s%-]+)$")
+    end
+    if (not realm or realm == "") and GetNormalizedRealmName then realm = GetNormalizedRealmName() end
+    local full = (realm and realm ~= "") and (name .. "-" .. realm) or name
+    if self.GetActiveGroupNames and (IsInGroup() or IsInRaid()) then
+        local names = self:GetActiveGroupNames()
+        if not names[full] then
+            for member in pairs(names) do
+                if self:ShortName(member) == name then return member end
+            end
+        end
+    end
+    return full
 end
 
 -- Turn a bare name (old-format message body) into a group member's full name.

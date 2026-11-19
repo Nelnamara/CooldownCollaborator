@@ -411,6 +411,25 @@ do
 	check("  and the list scrolls to the last of 31 names", last ~= nil and #labels == 20, last)
 end
 
+---------------------------------------------------------------- Forever surnames: senders named "First Surname"
+do
+	local c = Fresh(function(env)
+		env.GROUP = { { unit = "party1", name = "Devilin", realm = "Realm", class = "DRUID", guid = "Player-1-0000009", level = 19 } }
+	end)
+	c.FireEvent("ADDON_LOADED", "CooldownCollaborator")
+	c.FireEvent("PLAYER_LOGIN")
+	c.FireEvent("GROUP_ROSTER_UPDATE")
+	check("surname: \"Devilin Nyx\" is the party member Devilin-Realm", c.CC:NormalizeSender("Devilin Nyx") == "Devilin-Realm",
+		c.CC:NormalizeSender("Devilin Nyx"))
+	check("  \"Devilin Nyx-Realm\" too", c.CC:NormalizeSender("Devilin Nyx-Realm") == "Devilin-Realm", c.CC:NormalizeSender("Devilin Nyx-Realm"))
+	check("  a plain \"Devilin-Realm\" is unchanged", c.CC:NormalizeSender("Devilin-Realm") == "Devilin-Realm")
+	c.FireEvent("CHAT_MSG_ADDON", "CDCOLLAB", "H:2:9.9.9:forever", "PARTY", "Devilin Nyx")
+	local peer = c.CC.peers["Devilin-Realm"]
+	check("  a hello from \"Devilin Nyx\" is heard (not dropped as a non-member)", peer ~= nil and peer.version == "9.9.9")
+	c.FireEvent("CHAT_MSG_ADDON", "CDCOLLAB", "H:2:9.9.9:forever", "PARTY", "Tester Gallagher")
+	check("  our own echo \"Tester Gallagher\" is recognised as us", c.CC.peers["Tester-Realm"] == nil)
+end
+
 ---------------------------------------------------------------- the whole run
 check("no Lua errors in any copy", Errors() == 0, FirstError())
 OUTPUT(string.format("RESULT final %s %s: checks %d, fails %d, lua errors %d",
