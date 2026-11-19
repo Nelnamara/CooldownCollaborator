@@ -15,7 +15,16 @@ draft" at the end lists each difference and why.
 - A cast is still announced as the 1.x line `spellID:secondsAgo:name:class`, and ready-now as `R:spellID`. Both
   old and new copies read them, so a mixed group keeps working. (Casts come one at a time, so batching them
   gains nothing; the batch below is for state.)
-- `CDCBUFF` `flask:N:food:N` stays as is.
+- `CDCBUFF` `flask:N:food:N` stays as is, at the start. Since 19 Nov (the look-essentials lane, P47) one field
+  pair follows per extra buff count the sender's client has, `:<key>:<0|1>`, for example
+  `flask:1:food:0:ds:1:zg:0:sf:1:wb:0:dm:1:pp:0:el:1`. Old copies match `flask:(%d):food:(%d)` and stop there,
+  so they read the start as before. Keys are lowercase letters (`CC.BuffCategories`, Consumables.lua):
+  `ds` Rallying Cry of the Dragonslayer, `zg` Spirit of Zandalar, `sf` Songflower Serenade, `wb` Warchief's
+  Blessing, `dm` any Dire Maul buff, `pp` a protection potion, `el` an elixir. Era, TBC and Forever send all
+  seven, MoP only `el`, Retail none. A receiver keeps only the keys its own client has; a key the sender leaves
+  out is unknown for that player (an older copy, or another client). On Era, TBC and MoP every member's buffs
+  are readable, so the bar counts what it reads on them itself as well; on Retail and Forever these fields are
+  the only source.
 
 ## New kinds (CDCOLLAB, a letter then `:`; old copies drop them: `tonumber("H")` is nil)
 

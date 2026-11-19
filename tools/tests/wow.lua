@@ -198,6 +198,18 @@ Methods.IsEnabled = function(s) return s.__enabled end
 Methods.GetChecked = function(s) return s.__checked end
 Methods.SetChecked = function(s, v) s.__checked = v end
 Methods.SetTexture = function(s, t) s.__tex = t; return true end
+-- colours, greying and bar values, kept so a test can read what a widget shows
+Methods.SetTextColor = function(s, r, g, b, a) s.__textColor = { r, g, b, a } end
+Methods.SetColorTexture = function(s, r, g, b, a) s.__color = { r, g, b, a } end
+Methods.SetVertexColor = function(s, r, g, b, a) s.__vertex = { r, g, b, a } end
+Methods.SetDesaturated = function(s, v) s.__desat = v and true or false end
+Methods.SetStatusBarColor = function(s, r, g, b, a) s.__barColor = { r, g, b, a } end
+Methods.SetMinMaxValues = function(s, lo, hi) s.__min, s.__max = lo, hi end
+Methods.SetValue = function(s, v) s.__value = v end
+Methods.GetValue = function(s) return s.__value end
+-- six pixels a character, one 14 px line
+Methods.GetStringWidth = function(s) return #tostring(s.__text or "") * 6 end
+Methods.GetStringHeight = function() return 14 end
 Methods.GetTexture = function(s) return s.__tex end
 Methods.GetFontString = function(s) return child(s, "__fs", "FontString") end
 Methods.GetRegions = function() end
@@ -430,7 +442,7 @@ else
 	function IsSpellKnown(id) return KNOWN[id] or false end
 	function IsSpellKnownOrOverridesKnown(id) return KNOWN[id] or false end
 	function UnitAura(u, i, f)
-		local l = AURAS[f or "HELPFUL"]
+		local l = AurasOf(u)[f or "HELPFUL"]
 		local a = l and l[i]
 		if a then return a.name, a.icon, 0, "", a.duration or 0, a.expirationTime or 0, nil, nil, nil, a.spellId end
 	end
@@ -441,7 +453,14 @@ end
 
 ---------------------------------------------------------------- auras
 AURAS = { HELPFUL = {} }      -- readable buff list (Classic): { name =, spellId =, expirationTime = }
--- id -> true (GetPlayerAuraBySpellID on Retail / Forever: hidden fields), or { expirationTime = } (readable)
+-- another group member's readable auras (Classic), by their name: UNIT_AURAS["Tania"] = { HELPFUL = { ... } }
+UNIT_AURAS = {}
+function AurasOf(u)
+	local m = u and member(u)
+	if u == nil or u == "player" or (m and m.name == PLAYER.name and m.realm == PLAYER.realm) then return AURAS end
+	return (m and UNIT_AURAS[m.name]) or {}
+end
+-- id -> true (GetPlayerAuraBySpellID on Retail / Forever: hidden fields), or { expirationTime =, duration = } (readable)
 PLAYER_AURA_IDS = {}
 C_UnitAuras = {}
 if RETAILAPI then
@@ -449,12 +468,15 @@ if RETAILAPI then
 	C_UnitAuras.GetAuraDataByIndex = function() error("aura data by index read on a client where it is secret") end
 	C_UnitAuras.GetPlayerAuraBySpellID = function(id)
 		local a = PLAYER_AURA_IDS[id]
-		if type(a) == "table" then return { spellId = SECRET, name = SECRET, expirationTime = a.expirationTime } end
-		if a then return { spellId = SECRET, name = SECRET, expirationTime = SECRET } end
+		if type(a) == "table" then
+			return { spellId = SECRET, name = SECRET, expirationTime = a.expirationTime, duration = a.duration or SECRET,
+				auraInstanceID = id }
+		end
+		if a then return { spellId = SECRET, name = SECRET, expirationTime = SECRET, duration = SECRET, auraInstanceID = id } end
 	end
 else
 	-- CDTL3 confirms GetAuraDataByIndex on the Classic clients; GetPlayerAuraBySpellID is unverified there, so absent
-	C_UnitAuras.GetAuraDataByIndex = function(u, i, f) local l = AURAS[f or "HELPFUL"]; return l and l[i] end
+	C_UnitAuras.GetAuraDataByIndex = function(u, i, f) local l = AurasOf(u)[f or "HELPFUL"]; return l and l[i] end
 end
 
 ---------------------------------------------------------------- loader

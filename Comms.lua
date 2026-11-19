@@ -306,8 +306,8 @@ function CC:SendBuffStatus(delay)
     local mine = self.myBuffStatus
     if not mine then return end
     self:QueueSend(self.BUFF_PREFIX, function()
-        local s = CC.myBuffStatus
-        return string.format("flask:%d:food:%d", s.flask and 1 or 0, s.food and 1 or 0)
+        -- "flask:N:food:N", then this client's other buff counts (Consumables.lua)
+        return CC:BuffStatusText()
     end, { kind = "buff", key = "buff", delay = delay })
 end
 

@@ -254,8 +254,8 @@ check("inspect (spec labels) on Retail only", (INSPECTS > 0) == (FLAVOR == "reta
 CC.db.essentialsEnabled = true
 CC:RefreshEssentials()
 local lustHeader = false
-for _, row in ipairs(CC.essentialsRows) do
-	if row.__shown and row.isHeader and row.headerText.__text == "Bloodlust/Heroism" then lustHeader = true end
+for _, line in ipairs(CC.essentialsShown) do
+	if line.__shown and line.lineKind == "heading" and line.label.__text == "Bloodlust/Heroism" then lustHeader = true end
 end
 check("Essentials: a lust header only where lust exists (a shaman is in the party)", lustHeader == (E.lust ~= nil))
 check("CDTL3 bridge registered its type at login", CC.bridgeRegistered and bridge.registered.cdcGroup ~= nil and CC:BridgeActive())
@@ -582,7 +582,7 @@ CC:PollConsumables()
 Settle(1)
 local br = CC.buffRoster[ME]
 check("own flask and Well Fed found (" .. (CC.ConsumableMatch == "name" and "by name" or "by ID") .. ")", br and br.flask and br.food)
-check("  status sent", lastSent("CDCBUFF").msg == "flask:1:food:1")
+check("  status sent", lastSent("CDCBUFF").msg:find("^flask:1:food:1") ~= nil, lastSent("CDCBUFF").msg)
 CC:AddConsumableBuff(424242, 3600, "Test Elixir")
 CC.SpellData[424242].category = "flask"
 if RETAILAPI then
@@ -597,7 +597,7 @@ PLAYER_AURA_IDS = {}
 AURAS.HELPFUL = {}
 CC:PollConsumables()
 Settle(1)
-check("  and nothing once the buffs drop", not CC.buffRoster[ME].flask and lastSent("CDCBUFF").msg == "flask:0:food:0")
+check("  and nothing once the buffs drop", not CC.buffRoster[ME].flask and lastSent("CDCBUFF").msg:find("^flask:0:food:0") ~= nil)
 check("CDCBUFF from a party member", (function()
 	FireEvent("CHAT_MSG_ADDON", "CDCBUFF", "flask:1:food:0", "PARTY", "Tania")
 	local s = CC.buffRoster["Tania-Realm"]
@@ -989,6 +989,7 @@ end
 
 local allowed = { CooldownCollaborator = true, CC = true, CooldownCollaboratorDB = true, SLASH_COOLDOWNCOLLABORATOR1 = true,
 	CCEventFrame = true, CCMainFrame = true, CCEssentialsFrame = true, CCLaneFrame = true, CCMinimapButton = true,
+	CCBuffMissingFrame = true,
 	CCOptionsFrame = true, CCDefScroll = true, CCSpellInput = true, CCDurInput = true, CCCustScroll = true,
 	SETTINGS_CATEGORY = true, INTERFACE_OPTIONS_PANEL = true }
 local leaked = {}

@@ -148,6 +148,11 @@ local DEFAULTS = {
     essentialsScale   = 1.0,
     essentialsLocked  = false,
 
+    -- Essentials bar picks (look-essentials lane, 19 Nov 2026)
+    essentialsBuffCounts = { "flask", "food" },  -- buff counts the bar shows, in order (keys: CC.BuffCounts in Consumables.lua)
+    essentialsBuffAim    = 0,    -- a buff count shows green from this many players (0: the whole group)
+    essentialsDefensives = {},   -- spell IDs the Defensives line counts; empty: every spell of kind "external" or "raid"
+
     laneEnabled = false,
     laneX       = 0,
     laneY       = -200,

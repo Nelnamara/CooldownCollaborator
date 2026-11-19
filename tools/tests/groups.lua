@@ -1,6 +1,6 @@
 -- CooldownCollaborator group checks for one TOC: a /reload inside a big raid
--- (the raid is there before the addon loads), the Essentials bar in raids too
--- big for its lines ("+N more", the flask/food strip kept), one window's error
+-- (the raid is there before the addon loads), the Essentials bar in raids of
+-- every size (three providers a heading, "+N more", the flask/food strip), one window's error
 -- not stopping the others, and leaving the group closing the windows.
 -- Prints ok / FAIL per check and one RESULT line.
 -- node tools/tests/run.js <addon folder> <interface> tools/tests/groups.lua <toc file>
@@ -66,62 +66,64 @@ local function solo()
 	STUB_IN_RAID = false
 end
 
--- The bar's shown lines, top down: header / provider / more / strip.
--- "Battle Rez: 7 +2 | strip" = the Battle Rez header, seven providers by name,
--- "+2 more", then the flask/food strip. nil and a reason when it's malformed.
+-- The bar's shown lines, top down (CC.essentialsShown): headings, providers,
+-- "+N more" and the flask/food strip, plus the other lines it may carry.
+-- "Battle Rez: 3 +2 | strip" = the Battle Rez heading, three providers by name,
+-- "+2 more", then the flask/food strip last. nil and a reason when it's malformed:
+-- a line out of place, or lines not stacked one under the other.
 local function readBar()
-	local lines, gap = {}, nil
-	for i, row in ipairs(CC.essentialsRows) do
-		if row.__shown then
-			if gap then return nil, "row " .. i .. " shown below hidden row " .. gap end
-			local kind, text
-			if row.isHeader and row.headerText.__shown then
-				text = row.headerText.__text or ""
-				kind = text:find("Flask", 1, true) and "strip" or "header"
-			elseif row.icon.__shown and row.nameText.__shown then
-				kind, text = "provider", row.nameText.__text
-			elseif row.nameText.__shown then
-				kind, text = "more", row.nameText.__text or ""
-			else
-				return nil, "row " .. i .. " shows nothing"
-			end
-			lines[#lines + 1] = { kind = kind, text = text }
-		elseif not gap then
-			gap = i
+	local lines, y = {}, 16
+	for i, line in ipairs(CC.essentialsShown or {}) do
+		if not line.__shown then return nil, "line " .. i .. " hidden" end
+		local p = line.__points[1]
+		if not p or p[5] ~= -y then return nil, "line " .. i .. " not right under the one above" end
+		y = y + line:GetHeight()
+		local m = line.model
+		local kind, text = m.kind, nil
+		if kind == "heading" then
+			text = line.label.__text
+		elseif kind == "provider" then
+			text = line.nameText.__text
+		elseif kind == "text" and m.key == "more" then
+			kind, text = "more", line.text.__text
+		elseif kind == "strip" then
+			text = line.parts[1].text.__text
 		end
+		lines[#lines + 1] = { kind = kind, text = text }
 	end
 	local sections, parts, cur = {}, {}, nil
 	for i, l in ipairs(lines) do
-		if l.kind == "header" then
+		if l.kind == "heading" then
 			cur = { label = l.text, named = 0 }
 			sections[#sections + 1] = cur
 		elseif l.kind == "provider" and cur and not cur.more then
 			cur.named = cur.named + 1
 		elseif l.kind == "more" and cur and not cur.more then
-			cur.more = tonumber(l.text:match("^%+(%d+) more$"))
+			cur.more = tonumber(l.text:match("^%+(%d+) more"))
 			if not cur.more then return nil, "bad more line '" .. l.text .. "'" end
-		elseif not (l.kind == "strip" and i == #lines) then
+		elseif l.kind == "strip" and i ~= #lines then
+			return nil, "the strip is not last"
+		elseif l.kind == "provider" or l.kind == "more" then
 			return nil, "line " .. i .. " (" .. l.kind .. ") out of place"
 		end
 	end
-	for _, s in ipairs(sections) do
-		parts[#parts + 1] = s.label .. ": " .. s.named .. (s.more and (" +" .. s.more) or "")
+	for _, sec in ipairs(sections) do
+		parts[#parts + 1] = sec.label .. ": " .. sec.named .. (sec.more and (" +" .. sec.more) or "")
 	end
 	if lines[#lines] and lines[#lines].kind == "strip" then parts[#parts + 1] = "strip" end
-	return { lines = #lines, sections = sections, text = table.concat(parts, " | ") }
+	return { lines = #lines, height = y + 2, sections = sections, text = table.concat(parts, " | ") }
 end
 
--- Every capability with providers has its header, and its named providers plus
--- "+N more" add up to all of them: nobody silently left off.
+-- Every capability the client has shows its heading (with no providers too),
+-- and its named providers plus "+N more" add up to all of them: nobody
+-- silently left off.
 local function barAddsUp(bar)
 	local k = 0
 	for _, capKey in ipairs(CC.CAPABILITY_ORDER) do
 		local n = #CC:GetCapabilityStatus(capKey)
-		if n > 0 then
-			k = k + 1
-			local s = bar.sections[k]
-			if not s or s.label ~= CC.CAPABILITIES[capKey].label or s.named + (s.more or 0) ~= n then return false end
-		end
+		k = k + 1
+		local sec = bar.sections[k]
+		if not sec or sec.label ~= CC.CAPABILITIES[capKey].label or sec.named + (sec.more or 0) ~= n then return false end
 	end
 	return k == #bar.sections
 end
@@ -162,10 +164,11 @@ CC.state["D1-Realm"] = nil
 check("  the Essentials bar shows", CC.essentialsFrame:IsShown())
 check("  the Lane view (on) shows too", CC.laneFrame:IsShown())
 local bar, why = readBar()
-local expectReload = LUST and "Bloodlust/Heroism: 3 +4 | Battle Rez: 2 +3 | strip" or "Battle Rez: 7 +2 | strip"
-check("  bar: 10 lines, '+N more' for the providers left off, flask/food strip last",
-	bar and bar.lines == 10 and bar.text == expectReload and barAddsUp(bar), bar and bar.text or why)
-check("  Request Rez still sits on the Battle Rez header (raid leader)", CC.essentialsRezBtn:IsShown())
+local expectReload = LUST and "Bloodlust/Heroism: 3 +4 | Battle Rez: 3 +2 | strip" or "Battle Rez: 3 +6 | strip"
+check("  bar: three providers a heading, '+N more' for the rest, flask/food strip last",
+	bar and bar.text == expectReload and barAddsUp(bar), bar and bar.text or why)
+check("  Request Rez sits after the Battle Rez icons (raid leader)", CC.essentialsRezBtn:IsShown()
+	and CC.essentialsRezBtn.__points[1][2].lineKind == "icons")
 local p0 = #PRINTS
 SlashCmdList["COOLDOWNCOLLABORATOR"]("roster")
 local members = 0
@@ -175,19 +178,19 @@ check("  /cdc roster prints every member", members == reloadLust + reloadRez + 3
 check("no Lua errors so far", #ERRORS == 0, ERRORS[1])
 
 ---------------------------------------------------------------- raids of every size
--- lust and Battle Rez providers -> the bar; 10 lines at most, the strip last
+-- lust and Battle Rez providers -> the bar; three a heading, the strip last
 local sizes = LUST and {
-	{ 4, 3,   "Bloodlust/Heroism: 4 | Battle Rez: 3 | strip" },
-	{ 4, 4,   "Bloodlust/Heroism: 4 | Battle Rez: 2 +2 | strip" },
-	{ 6, 6,   "Bloodlust/Heroism: 3 +3 | Battle Rez: 2 +4 | strip" },
-	{ 1, 10,  "Bloodlust/Heroism: 1 | Battle Rez: 5 +5 | strip" },
-	{ 0, 12,  "Battle Rez: 7 +5 | strip" },
-	{ 25, 12, "Bloodlust/Heroism: 3 +22 | Battle Rez: 2 +10 | strip" },
+	{ 4, 3,   "Bloodlust/Heroism: 3 +1 | Battle Rez: 3 | strip" },
+	{ 4, 4,   "Bloodlust/Heroism: 3 +1 | Battle Rez: 3 +1 | strip" },
+	{ 6, 6,   "Bloodlust/Heroism: 3 +3 | Battle Rez: 3 +3 | strip" },
+	{ 1, 10,  "Bloodlust/Heroism: 1 | Battle Rez: 3 +7 | strip" },
+	{ 0, 12,  "Bloodlust/Heroism: 0 | Battle Rez: 3 +9 | strip" },
+	{ 25, 12, "Bloodlust/Heroism: 3 +22 | Battle Rez: 3 +9 | strip" },
 } or {
-	{ 0, 8,  "Battle Rez: 8 | strip" },
-	{ 0, 9,  "Battle Rez: 7 +2 | strip" },
-	{ 0, 12, "Battle Rez: 7 +5 | strip" },
-	{ 0, 37, "Battle Rez: 7 +30 | strip" },
+	{ 0, 3,  "Battle Rez: 3 | strip" },
+	{ 0, 8,  "Battle Rez: 3 +5 | strip" },
+	{ 0, 12, "Battle Rez: 3 +9 | strip" },
+	{ 0, 37, "Battle Rez: 3 +34 | strip" },
 }
 for _, s in ipairs(sizes) do
 	raid(s[1], s[2])
@@ -197,7 +200,7 @@ for _, s in ipairs(sizes) do
 	Advance(1)   -- the bar's own ticker refreshes it again
 	bar, why = readBar()
 	local ok = #ERRORS == e0 and CC.essentialsFrame:IsShown() and bar and bar.text == s[3] and barAddsUp(bar)
-		and CC.essentialsFrame:GetHeight() == 16 + 22 * bar.lines
+		and CC.essentialsFrame:GetHeight() == bar.height
 	check(string.format("raid, %d lust + %d Battle Rez providers: no Lua error, bar shown, %s", s[1], s[2], s[3]),
 		ok, not ok and (bar and bar.text or why) or nil)
 end
