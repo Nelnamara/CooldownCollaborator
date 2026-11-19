@@ -581,7 +581,7 @@ CC:PollConsumables()
 Settle(1)
 local br = CC.buffRoster[ME]
 check("own flask and Well Fed found (" .. (CC.ConsumableMatch == "name" and "by name" or "by ID") .. ")", br and br.flask and br.food)
-check("  status sent", lastSent("CDCBUFF").msg == "flask:1:food:1")
+check("  status sent", lastSent("CDCBUFF").msg:find("^flask:1:food:1") ~= nil, lastSent("CDCBUFF").msg)
 CC:AddConsumableBuff(424242, 3600, "Test Elixir")
 CC.SpellData[424242].category = "flask"
 if RETAILAPI then
@@ -596,7 +596,7 @@ PLAYER_AURA_IDS = {}
 AURAS.HELPFUL = {}
 CC:PollConsumables()
 Settle(1)
-check("  and nothing once the buffs drop", not CC.buffRoster[ME].flask and lastSent("CDCBUFF").msg == "flask:0:food:0")
+check("  and nothing once the buffs drop", not CC.buffRoster[ME].flask and lastSent("CDCBUFF").msg:find("^flask:0:food:0") ~= nil)
 check("CDCBUFF from a party member", (function()
 	FireEvent("CHAT_MSG_ADDON", "CDCBUFF", "flask:1:food:0", "PARTY", "Tania")
 	local s = CC.buffRoster["Tania-Realm"]

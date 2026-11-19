@@ -11,11 +11,16 @@
 --          (English and the client's own); /cdc consumable entries match the
 --          aura's spell ID.
 --
--- Group status: flask/food presence goes out on CDCBUFF as "flask:1:food:0"
--- (through the send queue, so a refused send is tried again), when it changes,
--- on joining a group and in answer to a state request (Comms.lua).
--- Receivers track CC.buffRoster[playerName] = { flask=bool, food=bool }.
--- The Essentials Bar displays "Flask N/N | Food N/N" with click-to-expand.
+-- Group status: flask/food presence goes out on CDCBUFF as "flask:1:food:0",
+-- then one ":<key>:<0|1>" per buff count this client has (CC.BuffCategories:
+-- world buffs, protection potions, elixirs; docs/MESSAGE_FORMAT_2.md), through
+-- the send queue, when it changes, on joining a group and in answer to a state
+-- request (Comms.lua). Receivers track CC.buffRoster[playerName] = { flask=bool,
+-- food=bool, cats = { [key] = bool } }. On Era, TBC and MoP every group
+-- member's buffs are readable, so CC.auraRoster holds what we read on them
+-- ourselves (players without the addon count too), and a Soulstone seen on
+-- someone is a placed stone (CC.stones). The Essentials bar shows the counts
+-- (CC.db.essentialsBuffCounts) and, on a click, who lacks one.
 --
 -- Timing: a flask or food timer runs from when the buff really began: the
 -- aura's own expiration where the client lets us read it (Era, TBC, MoP; on
@@ -28,7 +33,74 @@
 --   nil/""   = tracked but not counted in either group total
 
 CC.consumableActive = CC.consumableActive or {}   -- [spellID] = present at the last poll (nil: not polled yet)
-CC.buffRoster       = CC.buffRoster or {}        -- [playerName] = { flask=bool, food=bool }
+CC.buffRoster       = CC.buffRoster or {}        -- [playerName] = { flask=bool, food=bool, cats={[key]=bool} } (CDCBUFF)
+CC.auraRoster       = CC.auraRoster or {}        -- [playerName] = { flask, food, cats } read from their auras (Era, TBC, MoP)
+
+-------------------------------------------------------------------------------
+-- Buff counts beyond flask and food (P47), per client where the game has them.
+-- Every ID checked against SpellName of the builds in cdtl3-dev/tools/
+-- spell-list-check/builds.json (19 Nov 2026): the world buffs are in all five
+-- builds' data but only Era, TBC and Forever count them; Era names some
+-- protection potions with a trailing space, so these match by ID (readable on
+-- Era, TBC and MoP; GetPlayerAuraBySpellID for our own on Forever).
+-- key: the word on the wire (CDCBUFF), label: the bar's word, name: the full name.
+-------------------------------------------------------------------------------
+
+local WORLD_BUFFS = {
+    { key = "ds", label = "Dragonslayer",        name = "Rallying Cry of the Dragonslayer", ids = { 22888, 355363 } },
+    { key = "zg", label = "Zandalar",            name = "Spirit of Zandalar",               ids = { 24425 } },
+    { key = "sf", label = "Songflower",          name = "Songflower Serenade",              ids = { 15366 } },
+    { key = "wb", label = "Warchief's Blessing", name = "Warchief's Blessing",              ids = { 16609 } },
+    -- Fengus' Ferocity, Mol'dar's Moxie, Slip'kik's Savvy: any one counts
+    { key = "dm", label = "Dire Maul",           name = "Dire Maul buffs",                  ids = { 22817, 22818, 22820 } },
+}
+-- Fire, Frost, Holy, Nature, Shadow, Arcane: the Greater potions (1.x), then the plain ones
+local PROTECTION_ERA = { 17543, 17544, 17545, 17546, 17548, 17549, 7233, 7239, 7248, 7254, 7242 }
+-- the Major ones (TBC)
+local PROTECTION_TBC = { 28511, 28512, 28538, 28513, 28537, 28536 }
+-- Mongoose, Giants, Greater Arcane, Greater Firepower, Shadow Power, Frost Power,
+-- Greater Agility, Superior Defense (its buff is Greater Armor)
+local ELIXIRS_ERA = { 17538, 11405, 17539, 26276, 11474, 21920, 11334, 11348 }
+-- TBC battle (Major Agility .. Fel Strength) and guardian (Major Defense .. Major Fortitude) elixirs
+local ELIXIRS_TBC = { 28497, 28490, 28491, 28501, 28503, 28493, 33721, 33720, 33726, 38954,
+    28502, 28509, 39627, 39628, 39626, 39625 }
+-- Mantid, Mad Hozen, Weaponry, the Rapids, Peace, Perfection, Mirrors, Monk's
+local ELIXIRS_MOP = { 105681, 105682, 105683, 105684, 105685, 105686, 105687, 105688 }
+
+local function Join(...)
+    local out = {}
+    for _, list in ipairs({ ... }) do
+        for _, id in ipairs(list) do out[#out + 1] = id end
+    end
+    return out
+end
+
+local function BuildCategories(client)
+    local cats = {}
+    if client == "era" or client == "forever" or client == "tbc" then
+        for _, c in ipairs(WORLD_BUFFS) do cats[#cats + 1] = c end
+        local tbc = client == "tbc"
+        cats[#cats + 1] = { key = "pp", label = "Protection potion", name = "Protection potion",
+            ids = tbc and Join(PROTECTION_ERA, PROTECTION_TBC) or PROTECTION_ERA }
+        cats[#cats + 1] = { key = "el", label = "Elixir", name = "Elixir",
+            ids = tbc and Join(ELIXIRS_ERA, ELIXIRS_TBC) or ELIXIRS_ERA }
+    elseif client == "mists" then
+        cats[#cats + 1] = { key = "el", label = "Elixir", name = "Elixir", ids = ELIXIRS_MOP }
+    end
+    return cats
+end
+
+-- This client's extra counts, in order, and every count (flask and food first) by key.
+CC.BuffCategories = BuildCategories(CC:ClientTag())
+CC.BuffCounts = {
+    flask = { key = "flask", label = "Flask", name = "Flask" },
+    food  = { key = "food",  label = "Food",  name = "Food" },
+}
+local categoryByID = {}   -- spell ID -> category key
+for _, c in ipairs(CC.BuffCategories) do
+    CC.BuffCounts[c.key] = c
+    for _, id in ipairs(c.ids) do categoryByID[id] = c.key end
+end
 
 -- "name" matching: aura name -> built-in consumable ID (filled at load)
 local builtinByName = {}
@@ -222,6 +294,24 @@ function CC:NoteOwnConsumable(id, wasActive, expires)
     end
 end
 
+-- Our own extra buff counts: is any of each category's buffs on us?
+local function OwnCategories(byName, auraIDs)
+    local cats = {}
+    for _, c in ipairs(CC.BuffCategories) do
+        local present = false
+        for _, id in ipairs(c.ids) do
+            if byName then
+                present = auraIDs[id] ~= nil
+            else
+                present = PlayerAuraByID(id)
+            end
+            if present then break end
+        end
+        cats[c.key] = present
+    end
+    return cats
+end
+
 function CC:PollConsumables()
     local myName   = CC:FullName("player")
     local changed  = false
@@ -286,14 +376,115 @@ function CC:PollConsumables()
         end
     end
 
+    -- World buffs, protection potions, elixirs (P47)
+    local cats = OwnCategories(byName, auraIDs)
+    local lastCats = self.myBuffStatus and self.myBuffStatus.cats
+    for key, present in pairs(cats) do
+        if not lastCats or lastCats[key] ~= present then changed = true end
+    end
+
     -- Broadcast status to group if anything changed, or the first time we are in a group
     if changed or not self.buffBroadcastDone then
-        if self:BroadcastBuffStatus(myName, hasFlask, hasFood) then self.buffBroadcastDone = true end
+        if self:BroadcastBuffStatus(myName, hasFlask, hasFood, cats) then self.buffBroadcastDone = true end
     end
 
     -- Update own entry in buffRoster for local display
     if myName then
-        self.buffRoster[myName] = { flask = hasFlask, food = hasFood }
+        self.buffRoster[myName] = { flask = hasFlask, food = hasFood, cats = cats }
+    end
+
+    self:ScanGroupAuras()
+end
+
+-------------------------------------------------------------------------------
+-- Era, TBC and MoP: every group member's buffs are readable, so their flask,
+-- food and other counts are read directly (players without the addon count
+-- too), and a Soulstone seen on someone is a placed stone. A member out of
+-- sight keeps what we last read on them.
+-------------------------------------------------------------------------------
+
+local function ReadUnitAura(unit, i)
+    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+        local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        if not aura then return nil end
+        return aura.name, aura.spellId, aura.expirationTime, aura.duration, aura.sourceUnit
+    -- UnitAura: a fallback only, as in ScanPlayerBuffs above.
+    ---@diagnostic disable-next-line: undefined-global
+    elseif UnitAura then
+        ---@diagnostic disable-next-line: undefined-global
+        local n, _, _, _, dur, exp, source, _, _, id = UnitAura(unit, i, "HELPFUL")
+        if not n then return nil end
+        return n, id, exp, dur, source
+    end
+end
+
+-- A Soulstone on a member: placed when its buff began (its end less its length).
+-- Marked as seen on them, so its buff going away ends it (used, dispelled).
+local function NoteStoneAura(target, expires, duration, source)
+    local now = GetTime()
+    local placedAt = now
+    if type(expires) == "number" and type(duration) == "number" and expires > 0 and duration > 0 then
+        placedAt = math.min(expires - duration, now)
+    end
+    local from = source and CC:FullName(source)
+    if from then
+        CC:PlaceStone(from, target, placedAt)
+    elseif not CC.stones[target] then
+        -- the warlock is out of the group or unreadable: still a stone on them
+        CC.stones[target] = { from = "", placedAt = placedAt, duration = CC:StoneDuration() }
+    end
+    if CC.stones[target] then CC.stones[target].seenOn = true end
+end
+
+function CC:ScanUnitAuras(unit)
+    local name = self:FullName(unit)
+    if not name then return end
+    local okVisible, visible = pcall(function() return not UnitIsVisible or UnitIsVisible(unit) and true or false end)
+    if okVisible and not visible then return end
+    local seen = { flask = false, food = false, cats = {}, at = GetTime() }
+    for _, c in ipairs(self.BuffCategories) do seen.cats[c.key] = false end
+    local stone
+    for i = 1, 40 do
+        local auraName, spellID, expires, duration, source = ReadUnitAura(unit, i)
+        if not auraName then break end
+        local id = builtinByName[auraName]
+        local custom = spellID and self.db.consumableBuffs and self.db.consumableBuffs[tostring(spellID)]
+        local cat = (id and CC.BuiltinConsumables[id].category) or (custom and custom.category)
+        if cat == "flask" then seen.flask = true end
+        if cat == "food" then seen.food = true end
+        local key = spellID and categoryByID[spellID]
+        if key then seen.cats[key] = true end
+        if spellID and CC.SpellData[CC.SOULSTONE_ID] and self:BaseSpellID(spellID) == CC.SOULSTONE_ID then
+            stone = { expires = expires, duration = duration, source = source }
+        end
+    end
+    self.auraRoster[name] = seen
+    if stone then
+        NoteStoneAura(name, stone.expires, stone.duration, stone.source)
+    elseif self.stones[name] and self.stones[name].seenOn then
+        -- the buff we read on them is gone: used, dispelled or run out
+        self.stones[name] = nil
+    end
+end
+
+function CC:ScanGroupAuras()
+    if self.retailAPI or not IsInGroup() then
+        if next(self.auraRoster) then wipe(self.auraRoster) end
+        return
+    end
+    local function scan(unit)
+        local ok, err = pcall(self.ScanUnitAuras, self, unit)
+        if not ok and CC.verbose then print("|cFF54a3ffCDC|r aura read: " .. tostring(err)) end
+    end
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do scan("raid" .. i) end
+    else
+        scan("player")
+        for i = 1, GetNumGroupMembers() - 1 do scan("party" .. i) end
+    end
+    local active = self:GetActiveGroupNames()
+    for name in pairs(self.auraRoster) do
+        if not active[name] then self.auraRoster[name] = nil end
     end
 end
 
@@ -301,34 +492,67 @@ end
 -- Group buff status sync
 -------------------------------------------------------------------------------
 
--- Our status ("flask:1:food:1") to the group; true once it is queued (false solo,
--- so the first poll in a group sends it). Comms.lua SendBuffStatus sends it again.
-function CC:BroadcastBuffStatus(_, hasFlask, hasFood)
-    self.myBuffStatus = { flask = hasFlask and true or false, food = hasFood and true or false }
+-- Our status to the group; true once it is queued (false solo, so the first
+-- poll in a group sends it). Comms.lua SendBuffStatus sends it again.
+function CC:BroadcastBuffStatus(_, hasFlask, hasFood, cats)
+    self.myBuffStatus = { flask = hasFlask and true or false, food = hasFood and true or false, cats = cats or {} }
     if not self:GroupChannel() then return false end
     self:SendBuffStatus()
     return true
 end
 
+-- The CDCBUFF text: "flask:N:food:N" (what every copy reads), then ":<key>:<0|1>"
+-- for each extra count this client has, e.g. "flask:1:food:0:ds:1:zg:0".
+function CC:BuffStatusText()
+    local s = self.myBuffStatus or {}
+    local parts = { string.format("flask:%d:food:%d", s.flask and 1 or 0, s.food and 1 or 0) }
+    for _, c in ipairs(self.BuffCategories) do
+        parts[#parts + 1] = c.key .. ":" .. ((s.cats and s.cats[c.key]) and 1 or 0)
+    end
+    return table.concat(parts, ":")
+end
+
 -- Called from Comms.lua or directly from the event handler
 function CC:OnBuffStatusMessage(sender, msg)
-    local flask, food = msg:match("flask:(%d):food:(%d)")
+    local flask, food, rest = msg:match("flask:(%d):food:(%d)(.*)")
     if not flask then return end
-    self.buffRoster[self:NormalizeSender(sender) or sender] = { flask = flask == "1", food = food == "1" }
+    local cats = {}
+    for key, v in rest:gmatch(":(%l+):(%d)") do
+        -- only counts this client has; another client's (or a later copy's) are left out
+        if self.BuffCounts[key] and key ~= "flask" and key ~= "food" then cats[key] = v == "1" end
+    end
+    self.buffRoster[self:NormalizeSender(sender) or sender] = { flask = flask == "1", food = food == "1", cats = cats }
     if CC.RefreshEssentials then CC:RefreshEssentials() end
 end
 
--- Returns { total=N, flask=N, food=N, missingFlask={names}, missingFood={names} }
--- for the current group.
-function CC:GetGroupBuffStatus()
-    local total        = 0
-    local seen         = {}
-    local hasFlask     = 0
-    local hasFood      = 0
-    local missingFlask = {}
-    local missingFood  = {}
+-- Does this member have the count's buff? true / false, or nil when we can't
+-- know (Retail and Forever: they don't run the addon, or their copy doesn't
+-- send that count). Either source saying yes is a yes: their copy knows its own
+-- /cdc consumable entries, our read knows the buffs their copy doesn't send.
+local function HasBuff(report, aura, key)
+    local function from(entry)
+        if not entry then return nil end
+        if key == "flask" or key == "food" then return entry[key] and true or false end
+        if entry.cats and entry.cats[key] ~= nil then return entry.cats[key] and true or false end
+        return nil
+    end
+    local seen, said = from(aura), from(report)
+    if seen or said then return true end
+    if seen == false or said == false then return false end
+    return nil
+end
 
+-- For the current group:
+-- { total, flask, food, missingFlask = {short names}, missingFood = {short names},
+--   counts = { [key] = { key, label, name, have, missing = {full names}, unknown = {full names} } } }
+-- (missingFlask / missingFood also hold the unknown ones, as before).
+function CC:GetGroupBuffStatus()
     if not IsInGroup() then return nil end
+    local total, seen = 0, {}
+    local counts = {}
+    for key, c in pairs(self.BuffCounts) do
+        counts[key] = { key = key, label = c.label, name = c.name, have = 0, missing = {}, unknown = {} }
+    end
 
     local function check(unit)
         local name = CC:FullName(unit)
@@ -337,16 +561,16 @@ function CC:GetGroupBuffStatus()
         if seen[name] then return end
         seen[name] = true
         total = total + 1
-        local entry = self.buffRoster[name]
-        if entry and entry.flask then
-            hasFlask = hasFlask + 1
-        else
-            missingFlask[#missingFlask + 1] = CC:ShortName(name)
-        end
-        if entry and entry.food then
-            hasFood = hasFood + 1
-        else
-            missingFood[#missingFood + 1] = CC:ShortName(name)
+        local report, aura = self.buffRoster[name], self.auraRoster[name]
+        for key, count in pairs(counts) do
+            local has = HasBuff(report, aura, key)
+            if has then
+                count.have = count.have + 1
+            elseif has == false then
+                count.missing[#count.missing + 1] = name
+            else
+                count.unknown[#count.unknown + 1] = name
+            end
         end
     end
 
@@ -357,8 +581,15 @@ function CC:GetGroupBuffStatus()
         for i = 1, GetNumGroupMembers() - 1 do check("party" .. i) end
     end
 
-    return { total=total, flask=hasFlask, food=hasFood,
-             missingFlask=missingFlask, missingFood=missingFood }
+    local function short(count)
+        local out = {}
+        for _, list in ipairs({ count.missing, count.unknown }) do
+            for _, name in ipairs(list) do out[#out + 1] = CC:ShortName(name) end
+        end
+        return out
+    end
+    return { total = total, flask = counts.flask.have, food = counts.food.have,
+             missingFlask = short(counts.flask), missingFood = short(counts.food), counts = counts }
 end
 
 C_Timer.NewTicker(2, function() CC:PollConsumables() end)
