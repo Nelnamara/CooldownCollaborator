@@ -28,6 +28,7 @@ and `;` between entries. One message is at most 255 bytes; longer content is spl
 | `Q` state request | `Q:2` | right after your own hello on join, login or /reload | each member who runs format 2 answers with `H`, `S` and `CDCBUFF`, after a random 0 to 3 s wait. One answer per member per 10 s: a request inside the 10 s is answered when they are up, and an `S` still waiting in the queue answers any request that arrives meanwhile |
 | `S` state | `S:2:<class>:<id>,<secondsAgo>;<id>,<secondsAgo>;...` (a list too long for one message: every part but the last ends `;+`) | in answer to `Q`; right after your own `Q` on join, login or /reload (so the group hears what you have running); and at every boss end (with the per-spell 1.x lines as well while a 1.x copy is in the group) | none |
 | `C` battle rez charges | `C:2:<charges>:<max>:<secondsToNext>` (whole seconds; `C:2:0:0:0` = the pool is gone) | by a player who can read the raid's charge pool (their own rez spell), when it changes, after a random 0 to 1.5 s; skipped when another reader has just said the same | none |
+| `T` Soulstone placed | `T:2:<Name-Realm>:<secondsAgo>` (the target; one decimal) | Retail and Forever only: by the warlock when its own Soulstone lands on a living group member (also in the answer to `Q`, on joining and at a boss end while the stone lasts). Era, TBC and MoP see it in the combat log, so nothing is sent there | none |
 | `P` plan / order | `P:2:<planId>:<part>/<parts>:<data>` | when a leader shares a raid cooldown plan or a rotation order | none |
 | `O` officer setup | `O:2:<setupId>:<part>/<parts>:<data>` | guild channel only, when an officer sends a setup | the member's own Accept / Not now / Never |
 
@@ -37,6 +38,24 @@ holds for that sender (the sender's own word). A built-in spell of the sender's 
 running but the whole list leaves out is set ready; two kinds are left to run out instead: a timer from the
 combat log (the sender's copy may be older and not track that spell) and a custom spell (the sender may not have
 it). The receiver's `CC.rezCharges = { charges, max, nextAt, from }` comes from `C`.
+
+## The combat rez pool and Soulstones (19 Nov additions)
+
+- In raids and Mythic+ every combat rez (Rebirth, Intercession, Raise Ally and, on Retail and MoP, Soulstone)
+  uses one charge pool. Readers are a player's own Battle Rez spell and, on Retail and MoP, a warlock's
+  Soulstone. `CC:RezPool()` gives the pool counted on to now (a recharge that has come due adds its charge).
+  When it is known and empty, nobody can be brought back, a placed Soulstone included: every Battle Rez entry
+  of `GetCapabilityStatus` carries `noCharges = true` (data only; the bar's look comes later), and Request Rez
+  prints "No Battle Rez charges; next in M:SS" instead of naming a rezzer.
+- `T` belongs to its sender, the warlock: the body names the stone's target, which must be a current group
+  member; `secondsAgo` must lie in 0 .. the buff's length. Every copy keeps `CC.stones[target] = { from,
+  placedAt, duration }`; `duration` is the buff's length in the game data (SpellDuration: 900 s on Retail and
+  MoP, 1800 s on Era, TBC and Forever; a `buff` field on the Soulstone data row wins). One stone per warlock: a
+  new one replaces their last. The warlock's own copy takes the target as the cast starts
+  (`UNIT_SPELLCAST_SENT`: the cast's target name, else a friendly player targeted, else the warlock itself, all
+  in a pcall) and records it when the cast lands on someone living; a Soulstone on the dead is a rez, not a
+  placement. Era, TBC and MoP record other warlocks' stones from the combat log's `SPELL_CAST_SUCCESS` target.
+  Stones are saved with the timers and pruned when their target leaves the group or the buff runs out.
 
 ## Who a cooldown belongs to
 
@@ -80,7 +99,8 @@ uses the content only when all parts of one id have arrived: `CC.payloads[kind][
 ## Saved timers (R4, P16)
 
 At logout or /reload every running timer is saved as a real clock time: `db.timers = { wall = time(), clock =
-GetTime(), players = { [Name-Realm] = { class, spells = { [id] = time() it was used } } } }`. At login ours come
+GetTime(), players = { [Name-Realm] = { class, spells = { [id] = time() it was used } } }, stones = { [target] =
+{ from, at = time() placed, duration } } }`. At login ours come
 back at once and a groupmate's once they are in the group (for a minute after login); after a /reload, where
 `GetTime()` has gone on, the saved clock pair gives the exact time, otherwise `time()` gives it to the second. A
 restored time never beats a live message: any cast line or `S` entry that differs from it by more than 0.25 s

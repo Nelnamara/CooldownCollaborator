@@ -373,6 +373,97 @@ function CC:RecordCooldownFromComm(playerName, spellID, usedAt, classTag, how)
 end
 
 -------------------------------------------------------------------------------
+-- Soulstones placed on living group members: CC.stones[target] = { from,
+-- placedAt (local GetTime()), duration (the buff's length) }. Retail hides other
+-- players' buffs in combat and Forever has no combat log, so there the
+-- warlock's own client says who it stoned (T, Comms.lua); Era, TBC and MoP see
+-- it in the combat log (Events.lua). One stone per warlock: a new one replaces
+-- their last. A Soulstone cast on the dead is a rez, not a placement.
+-------------------------------------------------------------------------------
+
+CC.SOULSTONE_ID = 20707
+CC.stones = CC.stones or {}
+
+-- The buff's length in the game data: SpellMisc DurationIndex 347 (900 s) on
+-- 12.1.5 and 5.5.4, 30 (1800 s) on Era, TBC and Forever. A `buff` on the data row wins.
+function CC:StoneDuration()
+    local data = CC.SpellData[CC.SOULSTONE_ID]
+    if data and data.buff then return data.buff end
+    return (self.tocversion or 0) >= 50000 and 900 or 1800
+end
+
+-- Record a stone; true when it is new or moved.
+function CC:PlaceStone(from, target, placedAt)
+    if not from or not target then return false end
+    for name, stone in pairs(self.stones) do
+        if stone.from == from and name ~= target then self.stones[name] = nil end
+    end
+    local cur = self.stones[target]
+    if cur and cur.from == from and math.abs(cur.placedAt - placedAt) < 2 then return false end
+    self.stones[target] = { from = from, placedAt = placedAt, duration = self:StoneDuration() }
+    return true
+end
+
+-- The stone still on a player, or nil (a run-out one is forgotten).
+function CC:GetStone(target)
+    local stone = self.stones[target]
+    if stone and stone.placedAt + stone.duration <= GetTime() then
+        self.stones[target] = nil
+        return nil
+    end
+    return stone
+end
+
+local function IsStone(spellID)
+    local ok, yes = pcall(function() return CC:BaseSpellID(spellID) == CC.SOULSTONE_ID end)
+    return ok and yes == true and CC.SpellData[CC.SOULSTONE_ID] ~= nil
+end
+
+-- Who our Soulstone is going on, as the cast starts: the name the cast carries
+-- (UNIT_SPELLCAST_SENT), else our target when it is a friendly player, else
+-- ourselves (with no friendly target it goes on us). nil: someone outside the
+-- group, or nothing readable. Every read in a pcall: on Retail a name can be hidden.
+local function StoneTargetAtCast(sentTarget)
+    local ok, named = pcall(CC.MemberByName, CC, sentTarget)
+    if ok and named then return named end
+    local okEmpty, empty = pcall(function() return sentTarget == nil or sentTarget == "" end)
+    if ok and okEmpty and not empty then return nil end
+    local okT, who = pcall(function()
+        if UnitExists("target") and UnitIsPlayer("target") and UnitIsFriend("player", "target") then
+            return CC:MemberByName(CC:FullName("target")) or false
+        end
+        return CC:FullName("player")
+    end)
+    if okT and who then return who end
+    return nil
+end
+
+local stoneCasts = {}  -- castGUID -> the target our Soulstone cast started on (false: none to record)
+
+function CC:OnSpellcastSent(unit, target, castGUID, spellID)
+    if unit ~= "player" or not IsStone(spellID) then return end
+    local who = StoneTargetAtCast(target) or false
+    pcall(function() stoneCasts[castGUID] = who end)
+end
+
+-- Our Soulstone landed: on a living group member it is a placement, which the
+-- group hears from us on Retail and Forever.
+function CC:OnStoneCastDone(castGUID, spellID)
+    if not IsStone(spellID) then return end
+    local target
+    pcall(function()
+        target = stoneCasts[castGUID]
+        stoneCasts[castGUID] = nil
+    end)
+    if not target then return end
+    local unit = self:UnitTokenFor(target)
+    if not unit then return end
+    local okDead, dead = pcall(function() return UnitIsDeadOrGhost(unit) and true or false end)
+    if not okDead or dead then return end
+    if self:PlaceStone(self:FullName("player"), target, GetTime()) then self:SendStone(target) end
+end
+
+-------------------------------------------------------------------------------
 -- Timers kept across a /reload or relog (R4, P16): saved at logout as real
 -- clock times (time(): GetTime() restarts with the game), restored at login
 -- when still running. Ours at once; a groupmate's once they are in our group
@@ -401,7 +492,13 @@ function CC:SaveTimers()
         end
         if spells then saved[name] = { class = entry.class, spells = spells } end
     end
-    self.db.timers = { wall = wall, clock = now, players = saved }
+    local stones = {}
+    for target, stone in pairs(self.stones) do
+        if stone.placedAt + stone.duration > now then
+            stones[target] = { from = stone.from, at = wall - (now - stone.placedAt), duration = stone.duration }
+        end
+    end
+    self.db.timers = { wall = wall, clock = now, players = saved, stones = stones }
 end
 
 function CC:RestoreTimers()
@@ -443,6 +540,14 @@ function CC:RestoreTimers()
                     end
                 end
             end
+        end
+    end
+    for target, stone in pairs(type(saved.stones) == "table" and saved.stones or {}) do
+        local at, duration = stone.at, stone.duration
+        if type(target) == "string" and type(stone.from) == "string" and type(at) == "number"
+            and type(duration) == "number" and wall - at >= 0 and wall - at < duration then
+            local placedAt = sameClock and (clock0 - (wall0 - at)) or (now - (wall - at))
+            self.stones[target] = self.stones[target] or { from = stone.from, placedAt = placedAt, duration = duration }
         end
     end
     self.restorePending = next(pending) and pending or nil
@@ -522,6 +627,15 @@ function CC:RequestRez()
     local targetName = TargetName()
     if not targetName then
         print("|cFF54a3ffCDC|r Can't read that target's name. Target a dead friendly player first.")
+        return
+    end
+    -- In raids and Mythic+ every combat rez (Soulstone too on Retail and MoP) uses one
+    -- charge pool: with none left nobody can be brought back.
+    local charges, _, nextAt = self:RezPool()
+    if charges == 0 then
+        local wait = nextAt and math.max(0, nextAt - GetTime())
+        print("|cFF54a3ffCDC|r No Battle Rez charges" .. (wait and string.format("; next in %d:%02d",
+            math.floor(wait / 60), math.floor(wait % 60)) or "."))
         return
     end
     local status = CC:GetCapabilityStatus("BATTLEREZ")
@@ -747,8 +861,12 @@ end
 local function ReadRezPool()
     local cap = CC.CAPABILITIES and CC.CAPABILITIES.BATTLEREZ
     local _, classTag = UnitClass("player")
-    local ids = cap and classTag and cap.classes[classTag]
-    if not ids then return nil, false end
+    local ids = {}
+    for _, id in ipairs(cap and classTag and cap.classes[classTag] or {}) do ids[#ids + 1] = id end
+    -- Retail and MoP: a warlock's Soulstone draws on the same pool
+    if classTag == "WARLOCK" and (CC.tocversion or 0) >= 50000 and CC.SpellData[CC.SOULSTONE_ID] then
+        ids[#ids + 1] = CC.SOULSTONE_ID
+    end
     for _, spellID in ipairs(ids) do
         local id = CC:KnownRank(spellID)
         if id then
@@ -767,6 +885,19 @@ local function ReadRezPool()
         end
     end
     return nil, false
+end
+
+-- The pool as last read or heard, counted on to now: a recharge that has come
+-- due adds its charge (the one after it is then unknown). Returns charges, max,
+-- nextAt (nil: unknown), or nothing when no pool is known.
+function CC:RezPool()
+    local pool = self.rezCharges
+    if not pool then return nil end
+    local charges, nextAt = pool.charges, pool.nextAt
+    if nextAt and GetTime() >= nextAt and charges < pool.max then
+        charges, nextAt = charges + 1, nil
+    end
+    return charges, pool.max, nextAt
 end
 
 function CC:PollRezCharges()
@@ -851,10 +982,14 @@ ef:SetScript("OnEvent", function(self, event, ...)
         -- gives a safe, indexable spellID. Other players' cooldowns must
         -- arrive exclusively via the addon-message sync (OnAddonMessage),
         -- never by reading this event for their unit token directly.
-        local unitToken, _, spellID = ...
+        local unitToken, castGUID, spellID = ...
         if unitToken == "player" then
             CC:RecordCooldown(unitToken, spellID)
+            CC:OnStoneCastDone(castGUID, spellID)
         end
+    elseif event == "UNIT_SPELLCAST_SENT" then
+        -- our own Soulstone's target, as the cast starts
+        CC:OnSpellcastSent(...)
     elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
         -- Era, TBC and MoP only (Events.lua): other players' casts
         local ok, err = pcall(CC.OnCombatLog, CC)

@@ -20,6 +20,8 @@ CC.combatLogRegistered = false
 -- Use a plain RegisterEvent instead and filter unitToken ourselves.
 function CC:RegisterGroupEvents()
     self.eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    -- our own Soulstone's target, as the cast starts (CooldownCollaborator.lua)
+    self.eventFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
     -- Retail still has CombatLogGetCurrentEventInfo as a stub, so the function
     -- alone proves nothing: only where retailAPI is false, and a refusal never
     -- aborts Init.
@@ -75,6 +77,13 @@ function CC:OnCombatLog()
     if not baseID then return end
     local owner = self:NormalizeSender(srcName)
     if not owner then return end
+    -- a Soulstone on a living group member (no target named: the caster's own)
+    if baseID == CC.SOULSTONE_ID then
+        local destName = select(9, GetCombatLogInfo())
+        local target = (type(destName) == "string" and destName ~= "") and self:MemberByName(destName) or owner
+        local unit = target and self:UnitTokenFor(target)
+        if unit and not UnitIsDeadOrGhost(unit) then self:PlaceStone(owner, target, GetTime()) end
+    end
     if CC.verbose then
         print(string.format("|cFF54a3ffCDC|r combat log cast: %s %s (%s)",
             tostring(owner), tostring(spellName), tostring(spellID)))
@@ -119,11 +128,15 @@ function CC:PruneState()
     for name in pairs(self.buffRoster) do
         if not active[name] then self.buffRoster[name] = nil end
     end
+    for target in pairs(self.stones) do
+        if not active[target] or not self:GetStone(target) then self.stones[target] = nil end
+    end
 end
 
 -- A boss ended: what the fight held back goes out. Our own running cooldowns as
 -- one S (format 2 copies), and as the per-spell 1.x lines only while an old copy
--- is in the group; ready-nows the game refused during the fight, once (R9).
+-- is in the group; ready-nows the game refused during the fight, once (R9); our
+-- Soulstones (Retail and Forever).
 -- Identity travels with the sender, so only our own entries are ever sent.
 function CC:BroadcastState()
     if not self:GroupChannel() then return end
@@ -140,6 +153,7 @@ function CC:BroadcastState()
         end
     end
     self:ResendHeldReady()
+    self:SendOwnStones()
 end
 
 -- Ready-nows refused during the fight: sent again once, for spells still ready.

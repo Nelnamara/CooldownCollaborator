@@ -52,6 +52,30 @@ function CC:UnitTokenFor(name, hint)
     return nil
 end
 
+-- A group member's full name from a name as the game gives it (bare, or
+-- Name-Realm), or nil when nobody in the group has it.
+function CC:MemberByName(given)
+    if type(given) ~= "string" or given == "" then return nil end
+    local function match(unit)
+        local full = self:FullName(unit)
+        if full and (full == given or self:ShortName(full) == given) then return full end
+    end
+    local found = match("player")
+    if found then return found end
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            found = match("raid" .. i)
+            if found then return found end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumGroupMembers() - 1 do
+            found = match("party" .. i)
+            if found then return found end
+        end
+    end
+    return nil
+end
+
 -------------------------------------------------------------------------------
 -- Class-level scan (instant)
 -------------------------------------------------------------------------------
@@ -327,9 +351,13 @@ end
 --   online / alive = the owner is connected / not dead (Request Rez skips both)
 --   guessed = "ready as far as we know" (P44): not us, the owner runs no format 2
 --             copy (no hello), and no cast of theirs was seen (message or combat log)
+--   noCharges = Battle Rez only: the raid's charge pool is known and empty, so
+--             nobody can be brought back (a placed Soulstone included) until it refills
 function CC:GetCapabilityStatus(capKey)
     local results = {}
     if not self.roster then return results end
+    local noCharges = false
+    if capKey == "BATTLEREZ" then noCharges = self:RezPool() == 0 end
 
     local playerName = self:FullName("player")
 
@@ -381,6 +409,7 @@ function CC:GetCapabilityStatus(capKey)
                     online    = online,
                     alive     = alive,
                     guessed   = not seen and not (peer and (peer.proto or 0) >= 2),
+                    noCharges = noCharges,
                 }
             end
         end

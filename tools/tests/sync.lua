@@ -243,6 +243,24 @@ local function RosterLine(c, who)
 	return ""
 end
 
+-- run fn with a dead friendly player "Fallen" (outside the group) as c's target; returns
+-- the chat lines sent and the last line printed
+local function WithDeadTarget(c, fn)
+	local keep = { UnitExists = c.UnitExists, UnitIsPlayer = c.UnitIsPlayer, UnitIsFriend = c.UnitIsFriend,
+		UnitIsDeadOrGhost = c.UnitIsDeadOrGhost, UnitFullName = c.UnitFullName }
+	c.UnitExists = function(u) if u == "target" then return true end return keep.UnitExists(u) end
+	c.UnitIsPlayer = function(u) if u == "target" then return true end return keep.UnitIsPlayer(u) end
+	c.UnitIsFriend = function(a, b) if b == "target" then return true end return keep.UnitIsFriend(a, b) end
+	c.UnitIsDeadOrGhost = function(u) if u == "target" then return true end return keep.UnitIsDeadOrGhost(u) end
+	c.UnitFullName = function(u) if u == "target" then return "Fallen", REALM end return keep.UnitFullName(u) end
+	local c0, p0 = #c.CHATSENT, #c.PRINTS
+	fn()
+	for k, v in pairs(keep) do c[k] = v end
+	local said = {}
+	for i = c0 + 1, #c.CHATSENT do said[#said + 1] = c.CHATSENT[i] end
+	return said, (#c.PRINTS > p0) and c.PRINTS[#c.PRINTS] or nil
+end
+
 ---------------------------------------------------------------- the players
 Member("Ayla", "DRUID")
 Member("Bram", "DRUID", { spec = 105 })
@@ -538,6 +556,21 @@ check("  sent by the copy that can read it, once", #WireSince(mark, "Bram", "^C:
 B.SPELLCHARGES[bRez].currentCharges = 0
 Run(4)
 check("  a charge used: the new count goes out", C.CC.rezCharges ~= nil and C.CC.rezCharges.charges == 0)
+local rs = Status(C, "BATTLEREZ", "Ayla")
+check("  the pool known empty: the Battle Rez entries carry noCharges", rs ~= nil and rs.noCharges == true)
+local nextIn = B.CC.rezCharges.nextAt - B.NOW
+local said, printed = WithDeadTarget(C, function() C.CC:RequestRez() end)
+local m, sec = (printed or ""):match("No Battle Rez charges; next in (%d+):(%d%d)$")
+check("  Request Rez says no charges and when the next comes (M:SS), and names nobody",
+	#said == 0 and m ~= nil and near(tonumber(m) * 60 + tonumber(sec), nextIn, 2),
+	tostring(printed) .. " (next in " .. string.format("%.1f", nextIn) .. " s)")
+local keepNext = C.CC.rezCharges.nextAt
+C.CC.rezCharges.nextAt = C.NOW - 1
+check("  a recharge that has come due counts as a charge", Status(C, "BATTLEREZ", "Ayla").noCharges == false)
+C.CC.rezCharges.nextAt = keepNext
+B.SPELLCHARGES[bRez].currentCharges = 1
+Run(4)
+check("  a charge back: noCharges clears", Status(C, "BATTLEREZ", "Ayla").noCharges == false)
 B.SPELLCHARGES[bRez] = nil
 Run(4)
 check("  the pool ending clears it everywhere", C.CC.rezCharges == nil and A.CC.rezCharges == nil and B.CC.rezCharges == nil)
@@ -560,6 +593,91 @@ Run(32)
 Inject("P:2:p3:2/2:bb", "PARTY", "Bram", A)
 check("  a part older than 30 s is let go", A.CC.payloads.P[full("Bram")].p3 == nil)
 
+---------------------------------------------------------------- Soulstone placements: T on Retail and Forever, the combat log elsewhere
+Member("Wren", "WARLOCK")
+local W = NewClient("Wren", 7000)
+-- review-build's Retail row (the data lane adds it), until it lands in this tree
+local stoneRow = { name = "Soulstone", duration = 600, icon = 136210, class = "WARLOCK" }
+for _, c in ipairs(live) do
+	if not c.CC.SpellData[20707] then c.CC.SpellData[20707] = stoneRow end
+end
+SetGroup({ "Ayla", "Bram", "Cyr", "Wren" })
+Run(8)
+local STONE_LEN = (FLAVOR == "retail" or FLAVOR == "mop") and 900 or 1800
+local sendsT = RETAILAPI
+local nStone = 0
+local function StoneOn(targetName)
+	nStone = nStone + 1
+	local id = CastID(W, 20707)
+	W.KNOWN[id] = true
+	W.SPELLCD[id] = { startTime = W.NOW, duration = W.CC.SpellData[20707].duration, isEnabled = true, isActive = true }
+	local guid = "Cast-SS" .. nStone
+	W.FireEvent("UNIT_SPELLCAST_SENT", "player", targetName, guid, id)
+	W.FireEvent("UNIT_SPELLCAST_SUCCEEDED", "player", guid, id)
+	Deliver()
+	return id
+end
+-- what the combat log shows another copy on Era, TBC and MoP
+local function StoneLog(c, id, targetName)
+	if RETAILAPI then return end
+	local t = world[targetName]
+	c.CLEU_ARGS = { c.NOW, "SPELL_CAST_SUCCESS", false, world.Wren.guid, "Wren", 0x0512, 0, t.guid, targetName, 0x0512, 0,
+		id, W.CC.SpellData[20707].name, 1 }
+	c.FireEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	c.CLEU_ARGS = nil
+end
+mark = #WIRE
+local ssID = StoneOn("Cyr")
+StoneLog(A, ssID, "Cyr")
+Run(1)
+local ws, as = W.CC.stones[full("Cyr")], A.CC.stones[full("Cyr")]
+check("Soulstone on a living groupmate: the warlock's copy keeps it, with the buff's length (" .. STONE_LEN .. " s)",
+	ws ~= nil and ws.from == full("Wren") and ws.duration == STONE_LEN, ws and ws.duration)
+check(sendsT and "  and tells the group (T:2), which keeps it too" or "  the others see it in the combat log; nothing is sent",
+	as ~= nil and as.from == full("Wren") and near(A.NOW - as.placedAt, 1, 0.5)
+	and #WireSince(mark, "Wren", "^T:2:") == (sendsT and 1 or 0), #WireSince(mark, "Wren", "^T:2:"))
+ssID = StoneOn("Bram")
+StoneLog(A, ssID, "Bram")
+Run(1)
+check("  a new stone by the same warlock moves it (one per warlock)",
+	W.CC.stones[full("Cyr")] == nil and A.CC.stones[full("Cyr")] == nil and A.CC.stones[full("Bram")] ~= nil)
+world.Ayla.dead = true
+StoneOn("Ayla")
+Run(1)
+world.Ayla.dead = nil
+check("  a Soulstone on the dead is a rez, not a placement", W.CC.stones[full("Ayla")] == nil and W.CC.stones[full("Bram")] ~= nil)
+StoneOn("Stranger")
+Run(1)
+check("  nor is one on someone outside the group", W.CC.stones[full("Stranger")] == nil and W.CC.stones[full("Bram")] ~= nil)
+StoneOn("")
+Run(1)
+check("  with no target named it goes on the warlock", W.CC.stones[full("Wren")] ~= nil and W.CC.stones[full("Bram")] == nil)
+ssID = StoneOn("Bram")
+StoneLog(A, ssID, "Bram")
+Run(1)
+if sendsT then
+	Inject("T:2:Cyr-Realm:5.0", "WHISPER", "Wren", A)
+	Inject("T:2:Stranger-Realm:5.0", "PARTY", "Wren", A)
+	Inject("T:2:Cyr-Realm:-5.0", "PARTY", "Wren", A)
+	Inject("T:2:Cyr-Realm:99999", "PARTY", "Wren", A)
+	check("  a whispered T, one naming an outsider, or an impossible time is dropped",
+		A.CC.stones[full("Cyr")] == nil and A.CC.stones[full("Stranger")] == nil and A.CC.stones[full("Bram")] ~= nil)
+	for k in pairs(A.CC.stones) do A.CC.stones[k] = nil end
+	Inject("Q:2", "PARTY", "Ayla", W)
+	Run(4.5)
+	check("  a state request gets the warlock's stones again",
+		A.CC.stones[full("Bram")] ~= nil and A.CC.stones[full("Bram")].from == full("Wren"))
+end
+if FLAVOR == "retail" or FLAVOR == "mop" then
+	W.SPELLCHARGES[ssID] = { currentCharges = 1, maxCharges = 2, cooldownStartTime = W.NOW - 50, cooldownDuration = 600 }
+	mark = #WIRE
+	Run(4)
+	check("Retail and MoP: a warlock reads the shared rez pool through Soulstone",
+		A.CC.rezCharges ~= nil and A.CC.rezCharges.from == full("Wren") and #WireSince(mark, "Wren", "^C:2:1:2:") == 1)
+	W.SPELLCHARGES[ssID] = nil
+	Run(4)
+end
+
 ---------------------------------------------------------------- R4, P16, R8: /reload and relog keep timers
 Cast(B, 20484)
 Cast(B, 29166)
@@ -578,6 +696,7 @@ check("/reload: our own and the group's running timers are back at once",
 	near(Rem(A2, "Ayla", 20484), before.ownRebirth, 1) and near(Rem(A2, "Bram", 20484), before.bramRebirth, 1)
 	and before.bramInnervate > 0 and near(Rem(A2, "Bram", 29166), before.bramInnervate, 1),
 	string.format("%s %s %s", tostring(Rem(A2, "Ayla", 20484)), tostring(Rem(A2, "Bram", 20484)), tostring(Rem(A2, "Bram", 29166))))
+check("  and the Soulstone it knew of", A2.CC.stones[full("Bram")] ~= nil and A2.CC.stones[full("Bram")].from == full("Wren"))
 Run(8)
 check("  and still agree with their owners after the group's answers",
 	near(Rem(A2, "Bram", 20484), Rem(B, "Bram", 20484), 1) and near(Rem(A2, "Ayla", 20484), Rem(B, "Ayla", 20484), 1),

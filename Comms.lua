@@ -12,6 +12,8 @@
 --   S:2:<class>:<id>,<ago>;...[;+]    the sender's running cooldowns (absent = ready);
 --                                     a trailing ";+" says more of the list follows
 --   C:2:<charges>:<max>:<secondsToNext>  the raid's battle rez charges (0:0:0: no pool)
+--   T:2:<Name-Realm>:<secondsAgo>     a Soulstone the sender placed on a living group
+--                                     member (Retail and Forever, where only its client knows)
 --   P:2:<id>:<part>/<parts>:<data>    plan or order, kept once every part is in
 --   O:2:<id>:<part>/<parts>:<data>    officer setup, GUILD only, kept the same way
 --
@@ -327,6 +329,28 @@ function CC:SendRezCharges(delay)
     end, { kind = "charges", key = "charges", delay = delay })
 end
 
+-- T: a Soulstone we placed on a living group member. Retail hides other players'
+-- buffs in combat and Forever has no combat log, so only our client knows; Era,
+-- TBC and MoP see it in the combat log, so nothing is sent there.
+function CC:SendStone(target, delay)
+    if not self.retailAPI then return end
+    self:QueueSend(self.PREFIX, function()
+        local stone = CC.stones[target]
+        if not stone or stone.from ~= CC:FullName("player") then return nil end
+        local ago = GetTime() - stone.placedAt
+        if ago < 0 or ago >= stone.duration then return nil end
+        return string.format("T:2:%s:%.1f", target, ago)
+    end, { kind = "stone", key = "stone:" .. target, delay = delay })
+end
+
+-- Our stones still running, again (a state request, a join, a boss end).
+function CC:SendOwnStones(delay)
+    local me = self:FullName("player")
+    for target, stone in pairs(self.stones) do
+        if stone.from == me then self:SendStone(target, delay) end
+    end
+end
+
 -------------------------------------------------------------------------------
 -- Joining, hellos and answers
 -------------------------------------------------------------------------------
@@ -362,6 +386,7 @@ function CC:ScheduleJoinSync()
         CC:SendStateRequest()
         CC:SendState()
         CC:SendBuffStatus()
+        CC:SendOwnStones()
     end)
 end
 
@@ -377,6 +402,7 @@ function CC:AnswerStateRequest()
             local wait = math.max(0, q.at - now)
             self:SendHello(wait)
             self:SendBuffStatus(wait)
+            self:SendOwnStones(wait)
             return
         end
     end
@@ -385,6 +411,7 @@ function CC:AnswerStateRequest()
     self:SendHello(delay)
     self:SendState(delay)
     self:SendBuffStatus(delay)
+    self:SendOwnStones(delay)
 end
 
 -------------------------------------------------------------------------------
@@ -516,6 +543,18 @@ local function OnCharges(self, owner, body)
         from = owner, heardAt = now }
 end
 
+-- T: the sender's Soulstone on a group member (the body names its target; the
+-- stone is the sender's). A target outside the group, or a time outside the
+-- buff's length, is dropped.
+local function OnStone(self, owner, body)
+    local targetField, agoField = strsplit(":", body, 2)
+    local ago = tonumber(agoField)
+    local target = self:NormalizeSender(targetField)
+    if not target or not ago or not self:IsGroupMember(target) then return end
+    if not ValidAgo(ago, self:StoneDuration()) then return end
+    self:PlaceStone(owner, target, GetTime() - ago)
+end
+
 -- P and O: parts of one id are kept 30 s; the whole text is stored once every part is in
 -- (CC.payloads[kind][sender][id]). The features that read them come later.
 local chunks = {}  -- kind \t sender \t id -> { total, got, list, at }
@@ -610,6 +649,8 @@ function CC:OnAddonMessage(prefix, message, channel, sender)
         OnState(self, owner, body)
     elseif kind == "C" then
         OnCharges(self, owner, body)
+    elseif kind == "T" then
+        OnStone(self, owner, body)
     elseif kind == "P" then
         OnChunk(self, "P", owner, body)
     end
