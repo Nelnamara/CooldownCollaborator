@@ -4,15 +4,14 @@
 --   1. Class scan (instant, O(n)) — flags everyone whose CLASS can provide a
 --      capability. Happens on every GROUP_ROSTER_UPDATE.
 --
---   2. Spec refinement (throttled, ~2s/unit, Retail only) — uses
---      NotifyInspect/INSPECT_READY to narrow down to exact spec. Matters mainly
---      for Evoker (Augmentation is the spec that typically brings Fury of the
---      Aspects) and for future talent-level checks if Blizzard re-gates
---      abilities behind talent rows. Results stored in
---      CC.rosterSpecs[name] = specIndex. The spec is only a label: Era, TBC and
---      Forever have no specs, and MoP doesn't show one yet.
+--   2. Spec refinement (throttled, one groupmate at a time, ~2.5 s apart,
+--      Retail only) — NotifyInspect / INSPECT_READY read each groupmate's spec
+--      once: CC.rosterSpecs[name] = the specialization ID GetInspectSpecialization
+--      gives (254 = Marksmanship), which a spec-only provider spell needs
+--      (Harrier's Cry, SpecAllows below). Era, TBC and Forever have no specs,
+--      and MoP doesn't show one yet.
 --
--- CC.roster[name] = { class="SHAMAN", capabilities={ BLOODLUST={2825,32182} } }
+-- CC.roster[name] = { class="SHAMAN", unit="party2", spec=262, capabilities={ BLOODLUST={2825,32182} } }
 
 -- capability key -> { label, classes = { CLASSTAG = {spellID,...} } }, built
 -- from the client's providers (CC.Providers, Data_<client>.lua). A capability
@@ -34,22 +33,24 @@ for _, key in ipairs({ "BLOODLUST", "BATTLEREZ" }) do
     end
 end
 
--- Spec names for /cdc roster printout
-local SPEC_NAMES = {
-    DRUID       = { "Balance", "Feral", "Guardian", "Restoration" },
-    SHAMAN      = { "Elemental", "Enhancement", "Restoration" },
-    MAGE        = { "Arcane", "Fire", "Frost" },
-    EVOKER      = { "Devastation", "Preservation", "Augmentation" },
-    DEATHKNIGHT = { "Blood", "Frost", "Unholy" },
-    WARRIOR     = { "Arms", "Fury", "Protection" },
-    PALADIN     = { "Holy", "Protection", "Retribution" },
-    PRIEST      = { "Discipline", "Holy", "Shadow" },
-    ROGUE       = { "Assassination", "Outlaw", "Subtlety" },
-    HUNTER      = { "Beast Mastery", "Marksmanship", "Survival" },
-    WARLOCK     = { "Affliction", "Demonology", "Destruction" },
-    MONK        = { "Brewmaster", "Mistweaver", "Windwalker" },
-    DEMONHUNTER = { "Havoc", "Vengeance" },
-}
+-- The unit token a group member has now (tokens shift as the group changes);
+-- `hint` is tried first. nil when they aren't in the group.
+function CC:UnitTokenFor(name, hint)
+    if hint and self:FullName(hint) == name then return hint end
+    if self:FullName("player") == name then return "player" end
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local token = "raid" .. i
+            if self:FullName(token) == name then return token end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumGroupMembers() - 1 do
+            local token = "party" .. i
+            if self:FullName(token) == name then return token end
+        end
+    end
+    return nil
+end
 
 -------------------------------------------------------------------------------
 -- Class-level scan (instant)
@@ -129,7 +130,7 @@ function CC:ScanRoster()
 
         -- Preserve spec info from a previous inspect if we have it
         local prevSpec = self.rosterSpecs and self.rosterSpecs[name]
-        roster[name] = { class = classTag, capabilities = capabilities, spec = prevSpec }
+        roster[name] = { class = classTag, unit = unit, capabilities = capabilities, spec = prevSpec }
     end
 
     addUnit("player")
@@ -158,104 +159,174 @@ function CC:ScanRoster()
 end
 
 -------------------------------------------------------------------------------
--- Spec refinement via NotifyInspect — throttled queue, 2.5s between calls
+-- Spec refinement via NotifyInspect: our own group members only, one at a
+-- time, 2.5 s apart, each once (until they change spec). Only a result we
+-- asked for moves the queue on: the Inspect window's or another addon's is
+-- left alone. INSPECT_READY carries the inspected player's GUID (R15).
 -------------------------------------------------------------------------------
 
-CC.inspectQueue  = {}
-CC.inspectActive = false
-CC.rosterSpecs   = {}  -- [playerName] = specIndex
+CC.inspectQueue   = {}   -- names waiting for an inspect
+CC.inspectPending = nil  -- { guid, name, unit }: our own request in flight
+CC.rosterSpecs    = {}   -- [playerName] = specialization ID (GetInspectSpecialization)
 
 local INSPECT_THROTTLE = 2.5  -- seconds between NotifyInspect calls
 
--- Build or rebuild the inspect queue from current group members.
-function CC:QueueInspectAll()
-    self.inspectQueue = {}
-    local function enqueue(unit)
-        local name = UnitName(unit)
-        if name and name ~= "" and UnitIsConnected(unit) then
-            self.inspectQueue[#self.inspectQueue + 1] = unit
+-- Our own spec's ID, read directly (no inspect needed); nil when unreadable.
+local function OwnSpecID()
+    local ok, id = pcall(function()
+        local info = C_SpecializationInfo
+        local index
+        if info and info.GetSpecialization then
+            index = info.GetSpecialization()
+        elseif GetSpecialization then
+            index = GetSpecialization()
         end
-    end
-    -- Self-inspect is instant and doesn't use the throttled API
-    local getSpec = GetSpecialization or (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization)
-    local selfSpec = getSpec and getSpec()
+        if not index or index <= 0 then return nil end
+        if info and info.GetSpecializationInfo then return (info.GetSpecializationInfo(index)) end
+        if GetSpecializationInfo then return (GetSpecializationInfo(index)) end
+    end)
+    if ok and type(id) == "number" and id > 0 then return id end
+    return nil
+end
+
+-- Our spec now, and every groupmate whose spec we don't know yet onto the queue.
+function CC:QueueInspectAll()
     local selfName = CC:FullName("player")
+    local selfSpec = OwnSpecID()
     if selfName and selfSpec then
         self.rosterSpecs[selfName] = selfSpec
         if self.roster and self.roster[selfName] then
             self.roster[selfName].spec = selfSpec
         end
     end
-    if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do enqueue("raid" .. i) end
-    elseif IsInGroup() then
-        for i = 1, GetNumGroupMembers() - 1 do enqueue("party" .. i) end
+    local queued, keep = {}, {}
+    for _, name in ipairs(self.inspectQueue) do
+        if self.roster and self.roster[name] and not queued[name] then
+            queued[name] = true
+            keep[#keep + 1] = name
+        end
     end
+    local pending = self.inspectPending and self.inspectPending.name
+    for name in pairs(self.roster or {}) do
+        if name ~= selfName and not self.rosterSpecs[name] and not queued[name] and name ~= pending then
+            queued[name] = true
+            keep[#keep + 1] = name
+        end
+    end
+    self.inspectQueue = keep
     self:ProcessInspectQueue()
 end
 
--- Drain one entry from the inspect queue.
-function CC:ProcessInspectQueue()
-    if self.inspectActive then return end
-    if #self.inspectQueue == 0 then return end
-
-    local unit = table.remove(self.inspectQueue, 1)
-    -- Skip units that are out of range (NotifyInspect silently fails for them)
-    if not UnitExists(unit) or not CheckInteractDistance(unit, 1) then
-        -- Not in range — skip and try next after a short delay
-        C_Timer.After(0.1, function() CC:ProcessInspectQueue() end)
-        return
-    end
-
-    self.inspectActive = true
-    NotifyInspect(unit)
-    -- Failsafe: if INSPECT_READY never fires (unit out of range, etc.), advance
-    C_Timer.After(INSPECT_THROTTLE + 1, function()
-        if CC.inspectActive then
-            CC.inspectActive = false
-            CC:ProcessInspectQueue()
-        end
+local function CanInspectNow(unit)
+    if InCombatLockdown() then return false end
+    local ok, can = pcall(function()
+        if not UnitIsConnected(unit) then return false end
+        if CanInspect and not CanInspect(unit) then return false end
+        -- NotifyInspect silently fails out of range
+        return CheckInteractDistance(unit, 1) and true or false
     end)
+    return ok and can == true
 end
 
--- Called from the event handler when INSPECT_READY fires.
-function CC:OnInspectReady(unitID)
-    self.inspectActive = false
+-- Ask for the next groupmate's spec, unless one of ours is still on its way.
+function CC:ProcessInspectQueue()
+    if self.inspectPending then return end
+    while #self.inspectQueue > 0 do
+        local name = table.remove(self.inspectQueue, 1)
+        local info = self.roster and self.roster[name]
+        local unit = info and self:UnitTokenFor(name, info.unit)
+        local guid
+        if unit and unit ~= "player" and not self.rosterSpecs[name] and CanInspectNow(unit) then
+            guid = UnitGUID(unit)
+        end
+        if unit and guid then
+            local pending = { guid = guid, name = name, unit = unit }
+            self.inspectPending = pending
+            NotifyInspect(unit)
+            -- No answer (out of range, or the server let it go): move on; they are
+            -- queued again at the next roster change.
+            C_Timer.After(INSPECT_THROTTLE + 1, function()
+                if CC.inspectPending == pending then
+                    CC.inspectPending = nil
+                    CC:ProcessInspectQueue()
+                end
+            end)
+            return
+        end
+    end
+end
 
-    local name = CC:FullName(unitID)
-    if not name or name == "" then
-        C_Timer.After(0.1, function() CC:ProcessInspectQueue() end)
+-- INSPECT_READY(inspecteeGUID): ours sets that member's spec and redoes their
+-- capabilities (a spec-only provider spell may now count); anyone else's is ignored.
+function CC:OnInspectReady(guid)
+    local pending = self.inspectPending
+    if not pending or guid ~= pending.guid then return end
+    self.inspectPending = nil
+
+    local unit = self:UnitTokenFor(pending.name, pending.unit)
+    if unit and UnitGUID(unit) == guid then
+        -- 0 or nil while the spec can't be read
+        local ok, specID = pcall(function()
+            local id = GetInspectSpecialization(unit)
+            if type(id) == "number" and id > 0 then return id end
+        end)
+        if ok and specID then
+            self.rosterSpecs[pending.name] = specID
+            local info = self.roster and self.roster[pending.name]
+            if info then
+                info.spec = specID
+                info.capabilities = self:CapabilitiesFor(unit, info.class)
+            end
+            if CC.verbose then
+                print(string.format("|cFF54a3ffCDC|r inspect: %s is %s", pending.name,
+                    tostring(self:GetSpecName(pending.name) or specID)))
+            end
+            self:RefreshView("RefreshEssentials")
+            self:RefreshView("RefreshLanes")
+        end
+    end
+
+    -- our own request is done with, unless the Inspect window is showing someone
+    local inspectFrame = InspectFrame
+    if not (inspectFrame and inspectFrame:IsShown()) then ClearInspectPlayer() end
+    C_Timer.After(INSPECT_THROTTLE, function() CC:ProcessInspectQueue() end)
+end
+
+-- PLAYER_SPECIALIZATION_CHANGED(unit): a groupmate changed spec; read it again.
+function CC:OnSpecChanged(unit)
+    if type(unit) ~= "string" or unit == "player" then
+        self:QueueInspectAll()
         return
     end
-
-    -- GetInspectSpecialization returns the spec index (1/2/3/4) for the unit.
-    -- Returns 0 or nil if the unit's spec is hidden (high-privacy mode).
-    local specIndex = GetInspectSpecialization and GetInspectSpecialization(unitID) or 0
-
-    if specIndex and specIndex > 0 then
-        self.rosterSpecs[name] = specIndex
-        if self.roster and self.roster[name] then
-            self.roster[name].spec = specIndex
-        end
-        if CC.verbose then
-            local classTag  = self.roster and self.roster[name] and self.roster[name].class or "?"
-            local specNames = SPEC_NAMES[classTag]
-            local specName  = (specNames and specNames[specIndex]) or ("Spec " .. specIndex)
-            print(string.format("|cFF54a3ffCDC|r inspect: %s → %s %s", name, specName, classTag))
-        end
-    end
-
-    ClearInspectPlayer()
-    -- Continue the queue after the mandatory throttle window
-    C_Timer.After(INSPECT_THROTTLE, function() CC:ProcessInspectQueue() end)
+    if not unit:match("^party%d+$") and not unit:match("^raid%d+$") then return end
+    local name = CC:FullName(unit)
+    local info = name and self.roster and self.roster[name]
+    if not name or not info then return end
+    self.rosterSpecs[name] = nil
+    info.spec = nil
+    info.capabilities = self:CapabilitiesFor(unit, info.class)
+    self:QueueInspectAll()
+    self:RefreshView("RefreshEssentials")
 end
 
 -------------------------------------------------------------------------------
 -- Capability status query
 -------------------------------------------------------------------------------
 
--- Returns { {name, class, spec, spellID, remaining, ready}, ... } for a
--- capability, one entry per roster member who can provide it.
+-- Online and alive, as far as the game says (an unreadable answer counts as yes).
+local function UnitState(unit)
+    if not unit then return true, true end
+    local okC, connected = pcall(function() return UnitIsConnected(unit) and true or false end)
+    local okD, dead = pcall(function() return UnitIsDeadOrGhost(unit) and true or false end)
+    return (not okC) or connected, (not okD) or not dead
+end
+
+-- Returns { {name, class, spec, spellID, remaining, ready, online, alive,
+-- guessed}, ... } for a capability, one entry per roster member who can provide it.
+--   ready   = off cooldown and online (an offline owner is never ready, R6)
+--   online / alive = the owner is connected / not dead (Request Rez skips both)
+--   guessed = "ready as far as we know" (P44): not us, the owner runs no format 2
+--             copy (no hello), and no cast of theirs was seen (message or combat log)
 function CC:GetCapabilityStatus(capKey)
     local results = {}
     if not self.roster then return results end
@@ -291,13 +362,25 @@ function CC:GetCapabilityStatus(capKey)
             end
 
             if provides then
+                local online, alive = UnitState(self:UnitTokenFor(name, info.unit))
+                local seen = isLocal
+                local entry = self.state[name]
+                if entry and not seen then
+                    for _, spellID in ipairs(spellIDs) do
+                        if entry.spells[spellID] then seen = true break end
+                    end
+                end
+                local peer = self.peers and self.peers[name]
                 results[#results + 1] = {
                     name      = name,
                     class     = info.class,
                     spec      = info.spec,
                     spellID   = usedSpellID or spellIDs[1],
                     remaining = bestRemaining or 0,
-                    ready     = (bestRemaining or 0) <= 0,
+                    ready     = online and (bestRemaining or 0) <= 0,
+                    online    = online,
+                    alive     = alive,
+                    guessed   = not seen and not (peer and (peer.proto or 0) >= 2),
                 }
             end
         end
@@ -315,7 +398,9 @@ end
 -- Returns a display name for the spec of a roster entry, or nil if unknown.
 function CC:GetSpecName(name)
     local entry = self.roster and self.roster[name]
-    if not entry or not entry.spec then return nil end
-    local specNames = SPEC_NAMES[entry.class]
-    return specNames and specNames[entry.spec] or nil
+    local id = entry and entry.spec
+    if not id or not GetSpecializationInfoByID then return nil end
+    local ok, _, specName = pcall(GetSpecializationInfoByID, id)
+    if ok and type(specName) == "string" and specName ~= "" then return specName end
+    return nil
 end

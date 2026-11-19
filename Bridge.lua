@@ -42,10 +42,26 @@ function CC:BridgeRegister()
     end
 end
 
+-- What CDTL3 gets follows this addon's own list (UI.lua BuildRowData): a spell
+-- unticked under Default Spells, or shorter than the minimum length, isn't
+-- passed on for anyone (R12). The group still hears our own casts of it (R5).
+function CC:SpellShown(spellID)
+    local data = CC.SpellData[spellID]
+    if not data then return false end
+    local db = self.db
+    if not db then return true end
+    if data.duration < (db.minDuration or 60) then return false end
+    return not (db.disabledSpells and db.disabledSpells[spellID])
+end
+
 function CC:BridgeStart(owner, spellID, usedAt, classTag)
     if not self:BridgeActive() then return end
     local data = CC.SpellData[spellID]
     if not data or not owner then return end
+    if not self:SpellShown(spellID) then
+        self:BridgeStop(owner, spellID)
+        return
+    end
     -- Already over (e.g. an old sync of an expired cooldown): nothing to show.
     if (usedAt + data.duration) <= GetTime() then
         self:BridgeStop(owner, spellID)
@@ -68,6 +84,24 @@ function CC:BridgeStop(owner, spellID)
     local api = Api()
     if not api or type(api.StopTimer) ~= "function" then return end
     pcall(api.StopTimer, api, TIMER_TYPE, owner .. ":" .. spellID)
+end
+
+-- The untick and minimum settings changed (Settings writes them directly): the
+-- timers on CDTL3 follow. Checked every second (CooldownCollaborator.lua ticker).
+local filterKey
+function CC:BridgeCheckFilter()
+    local db = self.db
+    if not db then return end
+    local ids = {}
+    for id, off in pairs(db.disabledSpells or {}) do
+        if off then ids[#ids + 1] = tostring(id) end
+    end
+    table.sort(ids)
+    local key = tostring(db.minDuration) .. ":" .. table.concat(ids, ",")
+    if key == filterKey then return end
+    local first = filterKey == nil
+    filterKey = key
+    if not first then self:BridgeResync() end
 end
 
 -- Push every running timer (after the option is switched on / at register).
