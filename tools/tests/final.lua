@@ -239,6 +239,38 @@ do
 	check("  plan rows keep the typed name too", planRows[1] and planRows[1].player == "Bob")
 end
 
+---------------------------------------------------------------- F10: /cdc post and the API use the roster's rules
+do
+	local c = Fresh(function(env)
+		env.PLAYER.class = "PRIEST"
+		env.UnitFactionGroup = function(u) if u == "party1" then return "Horde" end return "Alliance" end
+		env.GROUP = { { unit = "party1", name = "Sha", realm = "Realm", class = "SHAMAN", guid = "Player-1-61", level = 90 },
+			{ unit = "party2", name = "Low", realm = "Realm", class = "SHAMAN", guid = "Player-1-62", level = 5 } }
+	end)
+	c.Login()
+	c.FireEvent("GROUP_ROSTER_UPDATE")
+	c.Advance(5)
+	if not c.CC.SpellData[2825] then
+		check("F10: (no Bloodlust on this client)", true)
+	else
+		local lines = c.CC:PostLines()
+		local lustLines = ""
+		for _, l in ipairs(lines) do if l:match("^Bloodlust") or l:match("^Heroism") then lustLines = lustLines .. l .. " | " end end
+		local hasSha = c.CC:MemberHasSpell("Sha-Realm", 2825) and not c.CC:MemberHasSpell("Sha-Realm", 32182)
+		local lowNone = not c.CC:MemberHasSpell("Low-Realm", 2825) and not c.CC:MemberHasSpell("Low-Realm", 32182)
+		check("F10: a shaman has the lust of their side only, and a level 5 has neither (the roster's rules)", hasSha and lowNone)
+		check("  /cdc post lists the lust once, and not the level 5", lustLines:find("Sha", 1, true) and not lustLines:find("Low", 1, true)
+			and not (lustLines:match("^Bloodlust") and lustLines:find("Heroism", 1, true)), lustLines)
+		local n = 0
+		for _, m in ipairs(c.CooldownCollaboratorAPI.GetGroup()) do
+			if m.name == "Sha-Realm" then
+				for _, sp in ipairs(m.spells) do if sp.spellID == 2825 or sp.spellID == 32182 then n = n + 1 end end
+			end
+		end
+		check("  and the public group feed names one lust for the shaman", n == 1, n)
+	end
+end
+
 ---------------------------------------------------------------- the whole run
 check("no Lua errors in any copy", Errors() == 0, FirstError())
 OUTPUT(string.format("RESULT final %s %s: checks %d, fails %d, lua errors %d",

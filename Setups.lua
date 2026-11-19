@@ -638,16 +638,12 @@ end
 -- One line per spell somebody in the group has: "Name ready" or "Name 2:10".
 function CC:PostLines()
     local lines = {}
-    local me = self:FullName("player")
     for _, id in ipairs(self:PostSpellIDs()) do
         local data = CC.SpellData[id]
         local who = {}
         local empty = data.kind == "rez" and self:RezPool() == 0   -- no Battle Rez charges left
         for name in pairs(self:GetActiveGroupNames()) do
-            local info = self.roster and self.roster[name]
-            local has = info and info.class == data.class
-            if has and name == me then has = self:KnownRank(id) ~= nil and self:KnownRank(id) ~= false end
-            if has then
+            if self:MemberHasSpell(name, id) then
                 local rem = self:GetRemaining(name, id)
                 who[#who + 1] = self:ShortName(name) .. " " .. ((rem and rem > 0) and self:LookClock(math.ceil(rem)) or (empty and L["no charge"] or L["ready"]))
             end
@@ -769,7 +765,7 @@ function API.GetGroup()
         if info then
             local member = { name = name, class = info.class, spells = {} }
             for id, data in pairs(CC.SpellData) do
-                if data.class == info.class and not data.consumable and not (name == me and not CC:KnownRank(id)) then
+                if not data.consumable and CC:MemberHasSpell(name, id) then
                     local rem = API.GetCooldown(name, id)
                     member.spells[#member.spells + 1] = { spellID = id, name = data.name, ready = rem == nil, remaining = rem }
                 end

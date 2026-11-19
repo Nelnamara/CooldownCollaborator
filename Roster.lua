@@ -131,6 +131,36 @@ function CC:CapabilitiesFor(unit, classTag)
     return capabilities
 end
 
+-- Bloodlust is the Horde's and Heroism the Alliance's where the client says which side a player is on
+local FACTION_LUST = { Horde = 2825, Alliance = 32182 }
+
+-- Does this group member have this tracked spell? A provider spell goes by the roster's own
+-- rules (class, level, spec), and a shaman has the lust of their faction only; we ask our
+-- spellbook for ourselves; any other tracked spell is the class's.
+function CC:MemberHasSpell(name, spellID)
+    local info = self.roster and self.roster[name]
+    local data = CC.SpellData[spellID]
+    if not info or not data or info.class ~= data.class then return false end
+    for key, cap in pairs(CC.CAPABILITIES) do
+        for _, id in ipairs(cap.classes[info.class] or {}) do
+            if id == spellID then
+                local learned = false
+                for _, got in ipairs(info.capabilities[key] or {}) do
+                    if got == spellID then learned = true end
+                end
+                if not learned then return false end
+                if key == "BLOODLUST" and (spellID == 2825 or spellID == 32182) and name ~= self:FullName("player") and UnitFactionGroup then
+                    local ok, side = pcall(UnitFactionGroup, self:UnitTokenFor(name, info.unit))
+                    local want = ok and FACTION_LUST[side]
+                    if want and want ~= spellID then return false end
+                end
+            end
+        end
+    end
+    if name == self:FullName("player") then return self:KnownRank(spellID) ~= nil and self:KnownRank(spellID) ~= false end
+    return true
+end
+
 -- UNIT_LEVEL: someone in the group (or we) levelled up; redo just their
 -- capabilities. No rescan, so Retail's inspect queue isn't restarted.
 function CC:OnUnitLevel(unit)
