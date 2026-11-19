@@ -137,10 +137,27 @@ if FLAVOR == "retail" then
 	check("Fury of the Aspects is 390386 (391215 is Initiative)",
 		CC.SpellData[390386] and CC.SpellData[390386].name == "Fury of the Aspects" and CC.SpellData[391215] == nil)
 	check("Anti-Magic Zone 240 s", CC.SpellData[51052].duration == 240)
+	-- older rows set to the 12.1.5 data (one-charge spells: the charge's recharge)
+	local RETAIL_FIXED = {
+		[33206]  = { 180, 135936 },    -- Pain Suppression, one charge (was 90 s)
+		[45438]  = { 240, 135841 },    -- Ice Block, one charge (was 300 s)
+		[108280] = { 180, 538569 },    -- Healing Tide Totem (was 120 s)
+		[196718] = { 300, 1305154 },   -- Darkness (was 180 s)
+		[357170] = { 60, 4622478 },    -- Time Dilation, one charge (was 90 s)
+		[32182]  = { 300, 132313 },    -- Heroism's icon
+	}
+	local fixedBad = {}
+	for id, want in pairs(RETAIL_FIXED) do
+		local d = CC.SpellData[id]
+		if not d or d.duration ~= want[1] or d.icon ~= want[2] then fixedBad[#fixedBad + 1] = id end
+	end
+	check("Retail: corrected rows have the 12.1.5 cooldown and icon", #fixedBad == 0, table.concat(fixedBad, ","))
+	check("Retail: no Demonic Gateway row (10 s in 12.1.5, not a group cooldown)", CC.SpellData[111771] == nil)
 end
 if CC.SpellData[20707] then
 	local ss = CC.SpellData[20707]
-	check("Soulstone tracked; no ready-now poll where its cooldown is the item's", (ss.itemCooldown == true) == (FLAVOR ~= "mop"))
+	check("Soulstone tracked; no ready-now poll where its cooldown is the item's (Era, TBC, Forever)",
+		(ss.itemCooldown == true) == (FLAVOR ~= "mop" and FLAVOR ~= "retail"))
 end
 
 -- rows from the 18 Nov review (R3, R13, P18, P28, P32): base ID -> its base cooldown on each client
@@ -165,6 +182,7 @@ local NEW_ROWS = {
 	[2062]   = { "Earth Elemental Totem", tbc = 1200 },
 	[6346]   = { "Fear Ward", tbc = 180, forever = 180 },         -- Era's is 30 s
 	[20608]  = { "Reincarnation", tbc = 3600, era = 3600, forever = 3600 },
+	[20707]  = { "Soulstone", retail = 600, mop = 600, tbc = 1800, era = 1800, forever = 1800 },
 	[19801]  = { "Tranquilizing Shot (20 s on Era, TBC and Forever)" },
 	[605]    = { "Mind Control (no cooldown)" },
 }
@@ -300,6 +318,10 @@ if FLAVOR == "retail" then
 	GROUP[4].level = 18
 	FireEvent("UNIT_LEVEL", "party4")
 	check("  one below 19 is not", listed("BATTLEREZ", "Aldren-Realm") == nil)
+	GROUP[4] = { unit = "party4", name = "Morwen", realm = "Realm", class = "WARLOCK", guid = "Player-1-0000007" }
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("a warlock groupmate is not a Battle Rez provider (Soulstone is tracked only)",
+		CC.roster["Morwen-Realm"] ~= nil and CC.roster["Morwen-Realm"].capabilities.BATTLEREZ == nil and listed("BATTLEREZ", "Morwen-Realm") == nil)
 	GROUP[4] = { unit = "party4", name = "Vessa", realm = "Realm", class = "HUNTER", guid = "Player-1-0000006" }
 	FireEvent("GROUP_ROSTER_UPDATE")
 	check("a hunter groupmate whose spec we don't know is not a lust provider",

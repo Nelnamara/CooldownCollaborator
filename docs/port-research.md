@@ -245,11 +245,51 @@ Retail's list predates section B; these are the rows the review added, checked t
 | Death Knight | Vampiric Blood | 55233 | 90 | RecoveryTime 90000 | TraitDefinition |
 | Druid | Survival Instincts | 61336 | 180 | charge (category 1469) | TraitDefinition (two talent entries) |
 | Monk | Fortifying Brew | 115203 | 360 | RecoveryTime 360000 | TraitDefinition 388917 shows it as 115203 |
+| Warlock | Soulstone (19 Nov; tracked, not a Battle Rez provider) | 20707 | 600 | CategoryRecoveryTime 600000, category 831 "Soulstone" (Rebirth and Intercession are category 26 "Resurrection (Full)", Raise Ally its own 1555; none of the four has a charge category); icon 136210 | SkillLineAbility Warlock; BaseLevel 14 |
 | Demon Hunter | Metamorphosis (Vengeance) | 187827 | 120 | charge (category 2469 "Metamorphosis (Vengeance)") | SpecializationSpells 581 Vengeance |
 
 Not on Retail: Challenging Roar, Mocking Banner. Not added: other IDs with the same names and charge categories (Guardian of Ancient Kings 212641, Survival Instincts 236156) have no class, talent or spec tie, so nothing shows a player casts them.
 
 Hunter pet lust (not tracked): Primal Rage 264667 has the lust SpellCategories row and RecoveryTime 360000, BaseLevel 48, and is tied only to the Ferocity pet specializations (74, 535), so it is the pet's spell. A second "Primal Rage", 272678 (RecoveryTime 360000, a different SpellCategories row, no class tie), looks like the hunter-side button of Command Pet 272651 (Hunter skill line) with a Ferocity pet; nothing in these tables links the two, so that is unverified. A third 360 s "Primal Rage", 357650, has the lust row and no tie. Seeing it (untested): the hunter's own client should get `UNIT_SPELLCAST_SUCCEEDED` for "pet" with 264667, and for "player" with 272678 if that is the button (CC listens to "player" only, and whether a pet's spell ID is hidden on Midnight is unknown); other clients see nothing (no combat log on Retail, remote IDs hidden), so only the hunter's own addon could send it. A hunter counts only if their pet is a Ferocity one, which other players can't read either.
+
+### B8. Retail's original rows, checked 18 Nov 2026 (build 12.1.5.70783)
+
+The 29 rows Retail had before the port, checked the same way as the Classic lists for the first time. Cooldown sources as in the method note above: "one charge" means the spell holds a single charge and the length a player waits is that charge's `SpellCategory.ChargeRecoveryTime` (its own `RecoveryTime` is only the gap between uses); otherwise max(`RecoveryTime`, `CategoryRecoveryTime`) of `SpellCooldowns` difficulty 0. Icons are `SpellMisc.SpellIconFileDataID` (one row per spell). Base cooldowns only, as every row: talents are not modelled. Ancestral Protection Totem keeps its shortened name (the client's own name is indexed too).
+
+| Class | Spell | ID | CD s | Where the cooldown comes from | Icon | Changed |
+|---|---|---|---|---|---|---|
+| Warrior | Rallying Cry | 97462 | 180 | RecoveryTime 180000 | 132351 | - |
+| Paladin | Aura Mastery | 31821 | 180 | RecoveryTime 180000 | 135872 | - |
+| Paladin | Lay on Hands | 633 | 600 | RecoveryTime 600000 | 135928 | - |
+| Paladin | Blessing of Protection | 1022 | 300 | one charge: ChargeRecoveryTime 300000 (category 1392); RecoveryTime 1500 | 135964 | - |
+| Priest | Guardian Spirit | 47788 | 180 | RecoveryTime 180000 | 237542 | - |
+| Priest | Pain Suppression | 33206 | 180 | one charge: ChargeRecoveryTime 180000 (category 2105); RecoveryTime 1500 | 135936 | cooldown 90 -> 180 |
+| Priest | Power Word: Barrier | 62618 | 180 | RecoveryTime 180000 | 253400 | icon 135940 -> 253400 |
+| Priest | Leap of Faith | 73325 | 90 | one charge: ChargeRecoveryTime 90000 (category 2308); RecoveryTime 1000 | 463835 | - |
+| Death Knight | Anti-Magic Zone | 51052 | 240 | RecoveryTime 240000 | 237510 | icon 135826 -> 237510 |
+| Death Knight | Raise Ally | 61999 | 600 | RecoveryTime 600000 | 136143 | icon 136144 -> 136143 |
+| Shaman | Heroism | 32182 | 300 | RecoveryTime 300000 | 132313 | icon 135978 -> 132313 |
+| Shaman | Bloodlust | 2825 | 300 | RecoveryTime 300000 | 136012 | - |
+| Shaman | Spirit Link Totem | 98008 | 180 | one charge: ChargeRecoveryTime 180000 (category 1540); RecoveryTime 0 | 237586 | - |
+| Shaman | Ancestral Prot. Totem | 207399 | 300 | RecoveryTime 300000 | 136080 | icon 1038468 -> 136080 |
+| Shaman | Healing Tide Totem | 108280 | 180 | RecoveryTime 180000 | 538569 | cooldown 120 -> 180 |
+| Mage | Time Warp | 80353 | 300 | RecoveryTime 300000 | 458224 | icon 458223 -> 458224 |
+| Mage | Ice Block | 45438 | 240 | one charge: ChargeRecoveryTime 240000 (category 1560); RecoveryTime 0 | 135841 | cooldown 300 -> 240 |
+| Warlock | Demonic Gateway | 111771 | – | RecoveryTime 10000 | – | **removed** (was 90 s, icon 463286) |
+| Monk | Revival | 115310 | 180 | one charge: ChargeRecoveryTime 180000 (category 1933); RecoveryTime 1000 | 1020466 | icon 627485 -> 1020466 |
+| Monk | Life Cocoon | 116849 | 120 | one charge: ChargeRecoveryTime 120000 (category 2198); RecoveryTime 750 | 627485 | icon 627487 -> 627485 |
+| Druid | Tranquility | 740 | 180 | CategoryRecoveryTime 180000 (category 46) | 136107 | - |
+| Druid | Rebirth | 20484 | 600 | CategoryRecoveryTime 600000 (category 26) | 136080 | - |
+| Druid | Innervate | 29166 | 180 | RecoveryTime 180000 | 136048 | - |
+| Demon Hunter | Darkness | 196718 | 300 | RecoveryTime 300000 | 1305154 | cooldown 180 -> 300; icon 1305149 -> 1305154 |
+| Evoker | Rewind | 363534 | 240 | one charge: ChargeRecoveryTime 240000 (category 2035); RecoveryTime 0 | 4622474 | icon 4622462 -> 4622474 |
+| Evoker | Rescue | 370665 | 60 | RecoveryTime 60000 | 4622460 | icon 4638349 -> 4622460 |
+| Evoker | Zephyr | 374227 | 120 | RecoveryTime 120000 | 4630449 | icon 4643463 -> 4630449 |
+| Evoker | Time Dilation | 357170 | 60 | one charge: ChargeRecoveryTime 60000 (category 2411); RecoveryTime 1000 | 4622478 | cooldown 90 -> 60; icon 4622460 -> 4622478 |
+| Evoker | Fury of the Aspects | 390386 | 300 | RecoveryTime 300000 | 4723908 | - |
+
+Removed: Demonic Gateway 111771. The 12.1.5 data gives it `RecoveryTime` 10000 (10 s) with no category or charge cooldown, and no Demonic Gateway ID in the data has a cooldown over 30 s (the longest, 362227 and 1214675, are 30 s). A 10 s gateway is not a group cooldown worth a row, and the old 90 s was wrong, so Retail no longer tracks it. (Warlock keeps Soulstone, B7.)
+
 
 ---------------------------------------------------------------------------------------------------
 
