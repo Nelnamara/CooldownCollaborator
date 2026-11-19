@@ -22,6 +22,7 @@ Lanes.lua
 DeadList.lua
 Strips.lua
 Burst.lua
+Plan.lua
 Consumables.lua
 Minimap.lua
 Options.lua
