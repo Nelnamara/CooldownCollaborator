@@ -212,6 +212,47 @@ for v, base in pairs(VARIANTS) do
 end
 check("variant IDs record under their base", variantBad == nil, variantBad)
 
+-- kind on every tracked row; effect (seconds) only on externals and raid defensives
+local KINDS = { rez = true, lust = true, external = true, raid = true, personal = true, mana = true, utility = true }
+local kindBad, effects = {}, {}
+for id, d in pairs(CC.SpellData) do
+	if not d.consumable and not d.custom then
+		if not KINDS[d.kind] then kindBad[#kindBad + 1] = id .. ":kind" end
+		if d.effect ~= nil then
+			if (d.kind ~= "external" and d.kind ~= "raid") or type(d.effect) ~= "number" or d.effect <= 0
+				or d.effect >= d.duration then
+				kindBad[#kindBad + 1] = id .. ":effect"
+			end
+			effects[#effects + 1] = id .. "=" .. d.effect
+		end
+	end
+end
+table.sort(effects)
+check("every tracked spell has a kind; effects only on externals and raid defensives, shorter than the cooldown",
+	#kindBad == 0, table.concat(kindBad, ","))
+-- the Providers' spells are their own kind (Rebirth "rez", Bloodlust "lust")
+local provBad
+for capKey, kind in pairs({ BLOODLUST = "lust", BATTLEREZ = "rez" }) do
+	for _, ids in pairs(CC.Providers[capKey] or {}) do
+		for _, id in ipairs(ids) do
+			if CC.SpellData[id].kind ~= kind then provBad = id end
+		end
+	end
+end
+check("lust and Battle Rez providers carry kind lust and rez", provBad == nil, provBad)
+local EFFECTS = ({
+	retail = "1022=10,108280=10,116849=12,196718=8,207399=30,33206=8,357170=8,363534=4,374227=8,47788=10,51052=6,6940=12,62618=10,740=6,97462=10,98008=6,31821=8",
+	mop = "102342=12,1022=10,108280=11,114203=15,115213=6,116849=12,15286=15,31821=6,33206=8,47788=10,51052=3,62618=10,64843=8,6940=12,740=8,97462=10,98008=6",
+	tbc = "1022=10,33206=8,724=180,740=8",
+	era = "1022=10,724=180,740=10",
+	forever = "1022=10,724=180,740=10",
+})[FLAVOR]
+local expected = {}
+for item in EFFECTS:gmatch("[^,]+") do expected[#expected + 1] = item end
+table.sort(expected)
+check("effect lengths as the game data has them (SpellDuration)", table.concat(effects, ",") == table.concat(expected, ","),
+	table.concat(effects, ","))
+
 ---------------------------------------------------------------- capabilities
 local lust, rez = CC.CAPABILITIES.BLOODLUST, CC.CAPABILITIES.BATTLEREZ
 check("lust providers", (lust and keys(lust.classes) or nil) == E.lust, lust and keys(lust.classes) or "none")
