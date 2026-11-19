@@ -11,20 +11,24 @@
 --          (English and the client's own); /cdc consumable entries match the
 --          aura's spell ID.
 --
--- Group status: flask/food presence is broadcast as "CDC:BUFF:flask:1" etc.
+-- Group status: flask/food presence goes out on CDCBUFF as "flask:1:food:0"
+-- (through the send queue, so a refused send is tried again), when it changes,
+-- on joining a group and in answer to a state request (Comms.lua).
 -- Receivers track CC.buffRoster[playerName] = { flask=bool, food=bool }.
 -- The Essentials Bar displays "Flask N/N | Food N/N" with click-to-expand.
+--
+-- Timing: a flask or food timer runs from when the buff really began: the
+-- aura's own expiration where the client lets us read it (Era, TBC, MoP; on
+-- Retail and Forever only if that value isn't hidden), else the timer saved at
+-- the last logout or /reload, else when we first saw the buff (R8).
 --
 -- Category field on consumable entries:
 --   "flask"  = counts toward group flask counter
 --   "food"   = counts toward group food counter
 --   nil/""   = tracked but not counted in either group total
 
-CC.consumableActive = CC.consumableActive or {}
+CC.consumableActive = CC.consumableActive or {}   -- [spellID] = present at the last poll (nil: not polled yet)
 CC.buffRoster       = CC.buffRoster or {}        -- [playerName] = { flask=bool, food=bool }
-
--- Wire format for group buff sync
-local BUFF_PREFIX = "CDCBUFF"
 
 -- "name" matching: aura name -> built-in consumable ID (filled at load)
 local builtinByName = {}
@@ -148,37 +152,74 @@ end
 -- Self-detection poll (rising-edge only)
 -------------------------------------------------------------------------------
 
--- Retail and Forever: is this aura on the player? (by ID; secret-safe)
-local function HasPlayerAuraID(spellID)
+-- Retail and Forever: is this aura on the player? (by ID; secret-safe) Also its
+-- expiration time, as the client gives it (it may be a hidden value).
+local function PlayerAuraByID(spellID)
     if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return false end
     local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
-    return ok and aura ~= nil
+    if not ok or aura == nil then return false end
+    return true, aura.expirationTime
 end
 
--- Era, TBC and MoP: the player's buffs by name and by spell ID (readable there).
+-- Era, TBC and MoP: the player's buffs by name and by spell ID (readable there),
+-- each with its expiration time (0 for a buff that doesn't run out).
 local function ScanPlayerBuffs()
     local names, ids = {}, {}
     for i = 1, 40 do
-        local name, spellID
+        local name, spellID, expires
         if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
             local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
             if not aura then break end
-            name, spellID = aura.name, aura.spellId
+            name, spellID, expires = aura.name, aura.spellId, aura.expirationTime
         -- UnitAura: a fallback only. Every current client has the call above; on Era, TBC and MoP
         -- UnitAura is Blizzard's deprecation copy of it.
         ---@diagnostic disable-next-line: undefined-global
         elseif UnitAura then
             ---@diagnostic disable-next-line: undefined-global
-            local n, _, _, _, _, _, _, _, _, id = UnitAura("player", i, "HELPFUL")
+            local n, _, _, _, _, exp, _, _, _, id = UnitAura("player", i, "HELPFUL")
             if not n then break end
-            name, spellID = n, id
+            name, spellID, expires = n, id, exp
         else
             break
         end
-        if name then names[name] = true end
-        if spellID then ids[spellID] = true end
+        if name then names[name] = expires or 0 end
+        if spellID then ids[spellID] = expires or 0 end
     end
     return names, ids
+end
+
+-- When the buff began, as its timer counts (the end it really has, less our
+-- length for it), or nil when the client hides or lacks the expiration.
+local function StartFromExpiry(expires, duration)
+    local ok, at = pcall(function()
+        if expires and expires > 0 then return math.min(expires - duration, GetTime()) end
+    end)
+    if ok then return at end
+    return nil
+end
+
+-- Our own flask or food is on: time it from when it really began (R8). A buff
+-- already running when we first look this session (a /reload, a relog) keeps
+-- the timer saved at the last logout when its expiration can't be read; a
+-- flask drunk again before it ran out restarts where its expiration shows it.
+function CC:NoteOwnConsumable(id, wasActive, expires)
+    local data = CC.SpellData[id]
+    if not data then return end
+    local me = self:FullName("player")
+    local entry = me and self.state[me]
+    local cur = entry and entry.spells[id]
+    local startAt = StartFromExpiry(expires, data.duration)
+    if not wasActive then
+        if startAt then
+            if not cur or math.abs(cur - startAt) > 2 then self:RecordCooldown("player", id, startAt) end
+        elseif wasActive == nil and cur and cur + data.duration > GetTime() then
+            return   -- the same buff as before the /reload: its saved timer stands
+        else
+            self:RecordCooldown("player", id)
+        end
+    elseif startAt and cur and startAt - cur > 5 then
+        self:RecordCooldown("player", id, startAt)
+    end
 end
 
 function CC:PollConsumables()
@@ -192,26 +233,25 @@ function CC:PollConsumables()
     if byName then
         auraNames, auraIDs = ScanPlayerBuffs()
         foundByName = {}
-        for name in pairs(auraNames) do
+        for name, expires in pairs(auraNames) do
             local id = builtinByName[name]
-            if id then foundByName[id] = true end
+            if id then foundByName[id] = expires end
         end
     end
 
     -- Check built-ins
     for id, data in pairs(CC.BuiltinConsumables or {}) do
         local cat       = data.category
-        local present
+        local present, expires
         if byName then
-            present = foundByName[id] == true
+            expires = foundByName[id]
+            present = expires ~= nil
         else
-            present = HasPlayerAuraID(id)
+            present, expires = PlayerAuraByID(id)
         end
         local wasActive = self.consumableActive[id]
 
-        if present and not wasActive then
-            CC:RecordCooldown("player", id)
-        end
+        if present then self:NoteOwnConsumable(id, wasActive, expires) end
         self.consumableActive[id] = present
 
         if present then
@@ -225,17 +265,16 @@ function CC:PollConsumables()
     for idStr in pairs(self.db.consumableBuffs or {}) do
         local spellID = tonumber(idStr)
         if spellID then
-            local present
+            local present, expires
             if byName then
-                present = auraIDs[spellID] == true
+                expires = auraIDs[spellID]
+                present = expires ~= nil
             else
-                present = HasPlayerAuraID(spellID)
+                present, expires = PlayerAuraByID(spellID)
             end
             local wasActive = self.consumableActive[spellID]
 
-            if present and not wasActive then
-                CC:RecordCooldown("player", spellID)
-            end
+            if present then self:NoteOwnConsumable(spellID, wasActive, expires) end
             self.consumableActive[spellID] = present
 
             local cat = CC.SpellData[spellID] and CC.SpellData[spellID].category
@@ -247,10 +286,9 @@ function CC:PollConsumables()
         end
     end
 
-    -- Broadcast status to group if anything changed, or do an initial broadcast
+    -- Broadcast status to group if anything changed, or the first time we are in a group
     if changed or not self.buffBroadcastDone then
-        self.buffBroadcastDone = true
-        self:BroadcastBuffStatus(myName, hasFlask, hasFood)
+        if self:BroadcastBuffStatus(myName, hasFlask, hasFood) then self.buffBroadcastDone = true end
     end
 
     -- Update own entry in buffRoster for local display
@@ -263,14 +301,13 @@ end
 -- Group buff status sync
 -------------------------------------------------------------------------------
 
-function CC:BroadcastBuffStatus(playerName, hasFlask, hasFood)
-    if not IsInGroup() then return end
-    -- Message format: "flask:1:food:1"
-    local msg = string.format("flask:%d:food:%d",
-        hasFlask and 1 or 0, hasFood and 1 or 0)
-    local chatType = self:GroupChannel()
-    if not chatType then return end
-    C_ChatInfo.SendAddonMessage(BUFF_PREFIX, msg, chatType)
+-- Our status ("flask:1:food:1") to the group; true once it is queued (false solo,
+-- so the first poll in a group sends it). Comms.lua SendBuffStatus sends it again.
+function CC:BroadcastBuffStatus(_, hasFlask, hasFood)
+    self.myBuffStatus = { flask = hasFlask and true or false, food = hasFood and true or false }
+    if not self:GroupChannel() then return false end
+    self:SendBuffStatus()
+    return true
 end
 
 -- Called from Comms.lua or directly from the event handler
