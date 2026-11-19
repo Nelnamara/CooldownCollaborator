@@ -71,20 +71,21 @@ CooldownCollaborator works together with the addon **CooldownTimeline3** (CDTL3)
 ### Slash Commands
 
 - **`/cdc`** — Toggle main panel visibility
-- **`/cdc lock`** / **`/cdc unlock`** — Lock or unlock frame position
+- **`/cdc lock`** / **`/cdc unlock`** — Lock or unlock the position of the main panel, the Essentials bar and the Lane view
 - **`/cdc reset`** — Reset to default position
 - **`/cdc settings`** — Open the settings window
 - **`/cdc essentials`** — Toggle the Essentials Bar
 - **`/cdc lanes`** — Toggle the Lane View
 - **`/cdc roster`** — Print the current roster capability scan
 - **`/cdc rez`** — Request Rez on your current (dead) target — leader/assist only
-- **`/cdc consumable <spellID> <seconds> <name>`** — Register a Cauldron/Feast-style shared buff for tracking
+- **`/cdc consumable <spellID> <seconds> <flask|food|other> <name>`** — Register a flask, food or Cauldron/Feast-style buff for tracking. `flask` and `food` count in the Flask / Food line; `other` is tracked but not counted. Leave the category out and it is guessed from the name (the word flask or food anywhere in it)
+- **`/cdc consumable remove <spellID>`** — Stop tracking a consumable you added (they are also listed, with Remove buttons, on the Custom Spells tab in settings)
 - **`/cdc verbose`** — Toggle detailed cast/sync logging, for diagnosing tracking issues
 - **`/cdc debug`** — Print all tracked cooldowns, remaining times, and group/encounter state
 
 ### Settings
 
-Open with `/cdc settings`, or right-click the minimap button. You can show or hide ready cooldowns, lock the panel, hide the minimap button, set the smallest cooldown to track (30s to 180s), and set panel opacity and scale. Default Spells lets you untick any tracked spell. Custom Spells lets you add your own by name or ID and set its cooldown length.
+Open with `/cdc settings`, or right-click the minimap button. You can show or hide ready cooldowns, lock the windows, hide the minimap button, set the smallest cooldown to track (30s to 180s), and set panel opacity and scale. Default Spells lets you untick any tracked spell. Custom Spells lets you add your own by name or ID and set its cooldown length.
 
 Any other text after `/cdc` toggles the panel.
 

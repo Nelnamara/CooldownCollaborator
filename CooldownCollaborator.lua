@@ -185,17 +185,38 @@ function CC:Init()
     self:ScanRoster()
 end
 
+-- A custom entry for a built-in's ID overrides the cooldown length only: the built-in keeps its
+-- class, name, icon and listing, and its untouched row is kept here so Remove can restore it.
+CC.builtinOriginal = CC.builtinOriginal or {}
+
+local function ApplyCustomSpell(spellID, name, duration, icon)
+    local cur = CC.SpellData[spellID]
+    local orig = CC.builtinOriginal[spellID]
+    if not orig and cur and not cur.custom then
+        orig = cur
+        CC.builtinOriginal[spellID] = cur
+    end
+    if orig then
+        local row = {}
+        for k, v in pairs(orig) do row[k] = v end
+        row.duration = duration
+        CC.SpellData[spellID] = row
+    else
+        CC.SpellData[spellID] = {
+            name     = name,
+            duration = duration,
+            icon     = icon or 134400,
+            class    = "UNKNOWN",
+            custom   = true,
+        }
+    end
+end
+
 function CC:LoadCustomSpells()
     for idStr, data in pairs(self.db.customSpells) do
         local spellID = tonumber(idStr)
         if spellID and data.duration and data.duration > 0 then
-            CC.SpellData[spellID] = {
-                name     = data.name or ("Spell " .. spellID),
-                duration = data.duration,
-                icon     = data.icon or 134400,
-                class    = "UNKNOWN",
-                custom   = true,
-            }
+            ApplyCustomSpell(spellID, data.name or ("Spell " .. spellID), data.duration, data.icon)
         end
     end
 end
@@ -216,13 +237,7 @@ function CC:AddCustomSpell(spellID, duration)
         duration = duration,
         icon     = icon or 134400,
     }
-    CC.SpellData[spellID] = {
-        name     = name,
-        duration = duration,
-        icon     = icon or 134400,
-        class    = "UNKNOWN",
-        custom   = true,
-    }
+    ApplyCustomSpell(spellID, name, duration, icon)
     print(string.format("|cFF54a3ffCooldownCollaborator|r Added: %s (%ds)", name, duration))
     return true
 end
@@ -231,7 +246,10 @@ function CC:RemoveCustomSpell(spellID)
     spellID = tonumber(spellID)
     if not spellID then return end
     self.db.customSpells[tostring(spellID)] = nil
-    if CC.SpellData[spellID] and CC.SpellData[spellID].custom then
+    if CC.builtinOriginal[spellID] then
+        CC.SpellData[spellID] = CC.builtinOriginal[spellID]
+        CC.builtinOriginal[spellID] = nil
+    elseif CC.SpellData[spellID] and CC.SpellData[spellID].custom then
         CC.SpellData[spellID] = nil
     end
     self:RefreshRows()
@@ -349,17 +367,32 @@ function CC:CanRequestRez()
     return false
 end
 
+-- The target's full name, or nil when it can't be read: on Retail and Forever a hidden name must
+-- not raise an error, so the read and its comparisons run in a pcall.
+local function TargetName()
+    local ok, name = pcall(CC.FullName, CC, "target")
+    if ok then return name end
+    return nil
+end
+
 function CC:RequestRez()
     if not self:CanRequestRez() then
         print("|cFF54a3ffCDC|r Only the raid leader/assist (or party leader) can request a rez.")
         return
     end
-    if not UnitExists("target") or not UnitIsDeadOrGhost("target") then
-        print("|cFF54a3ffCDC|r Target a dead player first.")
+    -- Only a dead, friendly player may be named; a friendly player outside the group is fine
+    -- (a Battle Rez works on them). A dead monster or enemy is refused.
+    if not UnitExists("target") or not UnitIsPlayer("target")
+        or not UnitIsFriend("player", "target") or not UnitIsDeadOrGhost("target") then
+        print("|cFF54a3ffCDC|r Target a dead friendly player first.")
         return
     end
 
-    local targetName = self:FullName("target")
+    local targetName = TargetName()
+    if not targetName then
+        print("|cFF54a3ffCDC|r Can't read that target's name. Target a dead friendly player first.")
+        return
+    end
     local status = CC:GetCapabilityStatus("BATTLEREZ")
     local provider = nil
     for _, entry in ipairs(status) do
@@ -383,11 +416,14 @@ function CC:RequestRez()
     local spellName = data and data.name or "Battle Rez"
     local msg = string.format("%s, please %s %s!", self:ShortName(provider.name), spellName, self:ShortName(targetName))
 
-    if IsInRaid() then
-        SendChat(msg, "RAID")
+    -- The channel that reaches the whole group (instance chat in Dungeon Finder, Raid Finder and
+    -- battlegrounds, where /party and /raid are the home group's). A raid warning only goes out
+    -- in a normal raid, where the game lets a leader or assistant post one.
+    local channel = self:GroupChannel()
+    if not channel then return end
+    SendChat(msg, channel)
+    if channel == "RAID" and (UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")) then
         SendChat(msg, "RAID_WARNING")
-    else
-        SendChat(msg, "PARTY")
     end
 end
 
@@ -646,13 +682,11 @@ SLASH_COOLDOWNCOLLABORATOR1 = "/cdc"
 SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     local cmd = (msg or ""):match("^%s*(%S*)"):lower()
     if cmd == "lock" then
-        CC.db.locked = true
-        CC:UpdateLock()
-        print("|cFF54a3ffCooldownCollaborator|r locked.")
+        CC:SetWindowsLocked(true)
+        print("|cFF54a3ffCooldownCollaborator|r windows locked.")
     elseif cmd == "unlock" then
-        CC.db.locked = false
-        CC:UpdateLock()
-        print("|cFF54a3ffCooldownCollaborator|r unlocked.")
+        CC:SetWindowsLocked(false)
+        print("|cFF54a3ffCooldownCollaborator|r windows unlocked.")
     elseif cmd == "reset" then
         CC.db.x, CC.db.y = 0, 200
         CC.frame:ClearAllPoints()
@@ -675,15 +709,26 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
     elseif cmd == "rez" then
         CC:RequestRez()
     elseif cmd == "consumable" then
-        -- /cdc consumable <spellID> <duration> <name...>
+        -- /cdc consumable <spellID> <seconds> [flask|food|other] <name...>
+        -- /cdc consumable remove <spellID>
         local rest = msg:match("^%S+%s+(.*)$") or ""
-        local spellIDStr, durStr, name = rest:match("^(%S+)%s+(%S+)%s*(.*)$")
-        local spellID = tonumber(spellIDStr)
-        local dur = tonumber(durStr)
-        if not spellID or not dur then
-            print("|cFF54a3ffCooldownCollaborator|r usage: /cdc consumable <spellID> <durationSeconds> <name>")
+        local removeID = rest:match("^[Rr][Ee][Mm][Oo][Vv][Ee]%s+(%d+)%s*$")
+        if removeID then
+            CC:RemoveConsumableBuff(tonumber(removeID), true)
         else
-            CC:AddConsumableBuff(spellID, dur, name ~= "" and name or nil)
+            local spellIDStr, durStr, tail = rest:match("^(%S+)%s+(%S+)%s*(.*)$")
+            local spellID = tonumber(spellIDStr)
+            local dur = tonumber(durStr)
+            if not spellID or not dur then
+                print("|cFF54a3ffCooldownCollaborator|r usage: /cdc consumable <spellID> <seconds> <flask|food|other> <name>  |  /cdc consumable remove <spellID>")
+            else
+                -- a lowercase flask / food / other right after the seconds is the category
+                local category, name = tail:match("^(%l+)%s+(.+)$")
+                if category ~= "flask" and category ~= "food" and category ~= "other" then
+                    category, name = nil, tail
+                end
+                CC:AddConsumableBuff(spellID, dur, name ~= "" and name or nil, category)
+            end
         end
     elseif cmd == "roster" then
         CC:ScanRoster()

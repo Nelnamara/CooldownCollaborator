@@ -19,6 +19,7 @@ loadstring = function(s, name) return load(s, name) end
 unpack = table.unpack
 getfenv = function() return _G end
 math.mod = math.fmod
+math.atan2 = math.atan2 or function(y, x) return math.atan(y, x) end   -- Lua 5.1 has atan2; fengari is newer
 strlen, strsub, strlower, strupper = string.len, string.sub, string.lower, string.upper
 strfind, strmatch, gsub, strrep = string.find, string.match, string.gsub, string.rep
 format = string.format
@@ -65,7 +66,18 @@ print = function(...)
 	PRINTS[#PRINTS + 1] = table.concat(t, " ")
 end
 function InCombatLockdown() return false end
-function hooksecurefunc() end
+-- hooksecurefunc([table,] name, hook): runs the original, then the hook with the same arguments
+function hooksecurefunc(a, b, c)
+	local t, name, hook = _G, a, b
+	if type(a) == "table" then t, name, hook = a, b, c end
+	local orig = t[name]
+	if type(orig) ~= "function" then error("hooksecurefunc: " .. tostring(name) .. " is not a function") end
+	t[name] = function(...)
+		local r = table.pack(orig(...))
+		hook(...)
+		return table.unpack(r, 1, r.n)
+	end
+end
 
 NOW = 1000
 function GetTime() return NOW end
@@ -268,6 +280,8 @@ function UnitLevel(u) local m = member(u); if m then return m.level or LEVEL_CAP
 function UnitExists(u) return member(u) ~= nil end
 function UnitIsConnected(u) return member(u) ~= nil end
 function UnitIsDeadOrGhost() return false end
+function UnitIsPlayer(u) return member(u) ~= nil end
+function UnitIsFriend(a, b) return member(a) ~= nil and member(b) ~= nil end
 -- STUB_IN_RAID: the group is a raid; STUB_IS_LEADER / STUB_IS_ASSIST: the player leads it / is a raid assistant.
 -- IsRaidLeader and IsRaidOfficer are gone on every client (Blizzard's function lists), so no stub.
 STUB_IN_RAID, STUB_IS_LEADER, STUB_IS_ASSIST = false, true, false

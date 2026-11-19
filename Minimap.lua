@@ -69,9 +69,11 @@ function CC:BuildMinimapButton()
     -- Drag to reposition around minimap edge
     btn:SetScript("OnDragStart", function(widget)
         widget:SetScript("OnUpdate", function(dragged)
+            -- the cursor is in screen pixels and the centre in the minimap's own scale:
+            -- divide by the minimap's effective scale, as LibDBIcon does
             local mx, my = Minimap:GetCenter()
             local px, py = GetCursorPosition()
-            local s = UIParent:GetEffectiveScale()
+            local s = Minimap:GetEffectiveScale()
             local angle = math.deg(math.atan2(py / s - my, px / s - mx))
             CC.db.minimapAngle = angle
             Place(dragged)

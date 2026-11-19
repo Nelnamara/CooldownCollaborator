@@ -448,11 +448,16 @@ CC:SetShowOnCDTL3(true)
 check("bridge on again: timers resent", #bridge.started > starts0 and CC:BridgeActive())
 
 local e0 = #ERRORS
+-- Blizzard's link-insert calls (newer and older name), there when the options window is built
+ChatFrameUtil = { InsertLink = function() return false end }
+ChatEdit_InsertLink = function() return false end
 CC.db.laneEnabled = true
 CC:RefreshLanes()
 CC:RefreshEssentials()
 CC:RefreshRows()
 CC:OpenOptions()
+local insertNew, insertOld = ChatFrameUtil.InsertLink, ChatEdit_InsertLink
+ChatFrameUtil, ChatEdit_InsertLink = nil, nil
 local headers = 0
 rawset(CC.defaultSpellContent, "CreateFontString", function(self)
 	local fs = CreateFrame("FontString")
@@ -535,7 +540,9 @@ do
 	CC.db.essentialsEnabled = essWas
 
 	local saved = { UnitExists = UnitExists, UnitIsDeadOrGhost = UnitIsDeadOrGhost, UnitFullName = UnitFullName,
-		GetCapabilityStatus = CC.GetCapabilityStatus }
+		GetCapabilityStatus = CC.GetCapabilityStatus, UnitIsPlayer = UnitIsPlayer, UnitIsFriend = UnitIsFriend }
+	UnitIsPlayer = function(u) return u == "target" or saved.UnitIsPlayer(u) end
+	UnitIsFriend = function() return true end
 	UnitExists = function(u) if u == "target" then return true end return saved.UnitExists(u) end
 	UnitIsDeadOrGhost = function(u) return u == "target" end
 	UnitFullName = function(u) if u == "target" then return "Odrin", "Other" end return saved.UnitFullName(u) end
@@ -544,6 +551,7 @@ do
 	local okReq, errReq = pcall(CC.RequestRez, CC)
 	UnitExists, UnitIsDeadOrGhost, UnitFullName, CC.GetCapabilityStatus =
 		saved.UnitExists, saved.UnitIsDeadOrGhost, saved.UnitFullName, saved.GetCapabilityStatus
+	UnitIsPlayer, UnitIsFriend = saved.UnitIsPlayer, saved.UnitIsFriend
 	local a, b = CHATSENT[c0 + 1], CHATSENT[c0 + 2]
 	check("  Request Rez in a raid: RAID and RAID_WARNING through C_ChatInfo.SendChatMessage",
 		okReq and #CHATSENT == c0 + 2 and a.chan == "RAID" and b.chan == "RAID_WARNING"
@@ -552,6 +560,212 @@ do
 		okReq and (a and (a.chan .. " " .. a.via .. " " .. a.msg) or "nothing sent") or tostring(errReq))
 	STUB_IN_RAID, STUB_IS_LEADER, STUB_IS_ASSIST = false, true, false
 	pcall(CC.RefreshEssentials, CC)
+end
+
+---------------------------------------------------------------- review fixes: rez, custom spells, locks, consumables, options, minimap
+do
+	local function sentSince(n) local out = {}; for i = n + 1, #CHATSENT do out[#out + 1] = CHATSENT[i] end return out end
+	local function chans(list) local o = {}; for _, m in ipairs(list) do o[#o + 1] = m.chan end return table.concat(o, ",") end
+	local saved = { UnitExists = UnitExists, UnitIsDeadOrGhost = UnitIsDeadOrGhost, UnitFullName = UnitFullName,
+		UnitIsPlayer = UnitIsPlayer, UnitIsFriend = UnitIsFriend, GetCapabilityStatus = CC.GetCapabilityStatus }
+	local target = { exists = true, dead = true, player = true, friend = true, hidden = false }
+	UnitExists = function(u) if u == "target" then return target.exists end return saved.UnitExists(u) end
+	UnitIsDeadOrGhost = function(u) if u == "target" then return target.dead end return false end
+	UnitIsPlayer = function(u) if u == "target" then return target.player end return saved.UnitIsPlayer(u) end
+	UnitIsFriend = function(a, b) if b == "target" then return target.friend end return saved.UnitIsFriend(a, b) end
+	UnitFullName = function(u)
+		if u == "target" then
+			if target.hidden then return SECRET, "x" end
+			return "Odrin", "Other"
+		end
+		return saved.UnitFullName(u)
+	end
+	CC.GetCapabilityStatus = function() return { { ready = true, name = "Tania-Realm" } } end
+	local function ask()
+		local n = #CHATSENT
+		local ok, err = pcall(CC.RequestRez, CC)
+		return ok, err, sentSince(n)
+	end
+
+	-- R16: the channel that reaches the whole group
+	STUB_IN_RAID, STUB_IS_LEADER, STUB_IS_ASSIST = false, true, false
+	local ok, err, sent = ask()
+	check("rez request in a party: /party only", ok and chans(sent) == "PARTY", chans(sent) .. " " .. tostring(err))
+	INSTANCE_GROUP = true
+	ok, err, sent = ask()
+	check("  in an instance group (Dungeon Finder, battleground): INSTANCE_CHAT",
+		ok and chans(sent) == "INSTANCE_CHAT", chans(sent) .. " " .. tostring(err))
+	STUB_IN_RAID = true
+	ok, err, sent = ask()
+	check("  in an instance raid (Raid Finder): INSTANCE_CHAT and no raid warning",
+		ok and chans(sent) == "INSTANCE_CHAT", chans(sent) .. " " .. tostring(err))
+	INSTANCE_GROUP = false
+	STUB_IS_LEADER, STUB_IS_ASSIST = false, true
+	ok, err, sent = ask()
+	check("  in a normal raid as an assistant: RAID and RAID_WARNING", ok and chans(sent) == "RAID,RAID_WARNING", chans(sent))
+	STUB_IN_RAID, STUB_IS_LEADER, STUB_IS_ASSIST = false, true, false
+
+	-- R17: only a dead friendly player
+	target.player = false
+	ok, err, sent = ask()
+	check("rez request: a dead monster is refused", ok and #sent == 0, chans(sent) .. " " .. tostring(err))
+	target.player, target.friend = true, false
+	ok, err, sent = ask()
+	check("  a dead enemy player is refused", ok and #sent == 0, chans(sent))
+	target.friend, target.dead = true, false
+	ok, err, sent = ask()
+	check("  a living friendly player is refused", ok and #sent == 0, chans(sent))
+	target.dead = true
+	ok, err, sent = ask()
+	check("  a dead friendly player outside the group is named", ok and #sent == 1 and sent[1].msg:find("Odrin", 1, true) ~= nil,
+		chans(sent) .. " " .. tostring(err))
+	target.hidden = true
+	ok, err, sent = ask()
+	check("  a hidden target name raises no error and sends nothing", ok and #sent == 0, tostring(err))
+	UnitExists, UnitIsDeadOrGhost, UnitFullName = saved.UnitExists, saved.UnitIsDeadOrGhost, saved.UnitFullName
+	UnitIsPlayer, UnitIsFriend, CC.GetCapabilityStatus = saved.UnitIsPlayer, saved.UnitIsFriend, saved.GetCapabilityStatus
+end
+
+do
+	-- R23: a custom spell with a built-in's ID overrides the cooldown length only
+	local bid, b
+	for id, d in pairs(CC.SpellData) do
+		if not d.custom and not d.consumable and d.class ~= "UNKNOWN" and (not bid or id < bid) then bid, b = id, d end
+	end
+	local origDur, origClass, origName = b.duration, b.class, b.name
+	check("custom spell with a built-in's ID: added", CC:AddCustomSpell(bid, origDur + 100))
+	local d = CC.SpellData[bid]
+	check("  keeps the built-in's class, name and listing, with the new length",
+		d and d.duration == origDur + 100 and d.class == origClass and d.name == origName and not d.custom,
+		d and (d.class .. " " .. tostring(d.custom)))
+	CC:RemoveCustomSpell(bid)
+	d = CC.SpellData[bid]
+	check("  Remove brings the built-in back as it was", d == b and d.duration == origDur and CC.db.customSpells[tostring(bid)] == nil)
+	-- saved across a reload: LoadCustomSpells applies it the same way
+	CC.db.customSpells[tostring(bid)] = { name = origName, duration = origDur + 7, icon = 1 }
+	CC:LoadCustomSpells()
+	d = CC.SpellData[bid]
+	check("  a saved override is applied at load, built-in kept", d and d.duration == origDur + 7 and d.class == origClass)
+	CC:RemoveCustomSpell(bid)
+	check("  and removed again", CC.SpellData[bid] == b)
+	-- an ordinary custom spell still comes and goes
+	SPELLINFO[777001] = { "Odd Spell", 5 }
+	CC:AddCustomSpell(777001, 90)
+	check("an ordinary custom spell is added", CC.SpellData[777001] and CC.SpellData[777001].custom == true)
+	local fsNote = CC.noCustomFS
+	CC:RefreshSpellList()
+	check("  custom list: 'No custom spells added yet.' hidden while a spell is listed", fsNote == nil or CC.noCustomFS:IsShown() == false,
+		tostring(CC.noCustomFS and CC.noCustomFS:IsShown()))
+	CC:RemoveCustomSpell(777001)
+	check("  removed: nothing left behind", CC.SpellData[777001] == nil)
+	local anyCustom = next(CC.db.customSpells) ~= nil
+	check("  and the note is shown again once the list is empty", anyCustom or CC.noCustomFS:IsShown() == true)
+end
+
+do
+	-- R24: you in a raid are counted once
+	local groupWas = GROUP
+	GROUP = {
+		{ unit = "raid1", name = PLAYER.name, realm = PLAYER.realm, class = "DRUID", guid = PLAYER.guid },
+		{ unit = "raid2", name = "Brannoc", realm = PLAYER.realm, class = "WARRIOR", guid = "Player-1-0000009" },
+	}
+	STUB_IN_RAID = true
+	local st = CC:GetGroupBuffStatus()
+	check("group buff line in a raid counts you once", st and st.total == 2, st and st.total)
+	STUB_IN_RAID = false
+	GROUP = groupWas
+end
+
+do
+	-- R26, R29: one lock for all three windows; the Settings tick follows it
+	CC:SetWindowsLocked(false)
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("lock")
+	check("/cdc lock locks the panel, the Essentials bar and the Lane view",
+		CC.db.locked and CC.db.essentialsLocked and CC.db.laneLocked and CC:AreWindowsLocked())
+	local box = CC.lockCheck
+	local f = CC.optionsFrame
+	check("Settings: the box says Lock windows", f ~= nil and _G["CCOptionsFrame"] == f and box ~= nil)
+	f.__scripts.OnShow(f)
+	check("  its tick follows /cdc lock when the window is shown", box:GetChecked() == true)
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("unlock")
+	check("/cdc unlock frees all three",
+		not CC.db.locked and not CC.db.essentialsLocked and not CC.db.laneLocked)
+	f.__scripts.OnShow(f)
+	check("  and the tick clears on the next show", box:GetChecked() == false)
+	box.__scripts.OnClick(setmetatable({}, { __index = function(_, k) if k == "GetChecked" then return function() return true end end end }))
+	check("  the box locks all three", CC.db.locked and CC.db.essentialsLocked and CC.db.laneLocked)
+	CC:SetWindowsLocked(false)
+end
+
+do
+	-- R27, R28: consumables get an explicit category, can be listed and removed
+	local function slash(m) SlashCmdList["COOLDOWNCOLLABORATOR"](m) end
+	slash("consumable 555001 3600 flask Haste Brew")
+	check("/cdc consumable <id> <sec> flask <name>: category flask, name kept",
+		CC.SpellData[555001] and CC.SpellData[555001].category == "flask" and CC.SpellData[555001].name == "Haste Brew")
+	slash("consumable 555002 3600 food Roast Thing")
+	check("  food", CC.SpellData[555002] and CC.SpellData[555002].category == "food" and CC.SpellData[555002].name == "Roast Thing")
+	slash("consumable 555003 3600 other Mystery Feast")
+	check("  other: tracked, in neither count", CC.SpellData[555003] and CC.SpellData[555003].category == nil
+		and CC.SpellData[555003].name == "Mystery Feast")
+	slash("consumable 555004 3600 Flask of Odd Power")
+	check("old form guesses a flask from the name, case-insensitive, as a word anywhere",
+		CC.SpellData[555004] and CC.SpellData[555004].category == "flask" and CC.SpellData[555004].name == "Flask of Odd Power")
+	slash("consumable 555005 3600 Hearty Meal FOOD Bowl")
+	check("  and food", CC.SpellData[555005] and CC.SpellData[555005].category == "food")
+	slash("consumable 555006 3600 Haste Flask flask")
+	check("  the old trailing flag still works", CC.SpellData[555006] and CC.SpellData[555006].category == "flask"
+		and CC.SpellData[555006].name == "Haste Flask")
+	slash("consumable 555007 3600 Cauldron")
+	check("  a name with neither word is tracked, uncounted", CC.SpellData[555007] and CC.SpellData[555007].category == nil)
+	local p0 = #PRINTS
+	slash("consumable 12")
+	check("  the usage line names the category", PRINTS[p0 + 1] and PRINTS[p0 + 1]:find("flask|food|other", 1, true) ~= nil, PRINTS[p0 + 1])
+
+	CC:RefreshSpellList()
+	check("Settings lists the registered consumables under their own heading", CC.consumableHdrFS and CC.consumableHdrFS:IsShown() == true)
+	slash("consumable remove 555001")
+	check("/cdc consumable remove <id> forgets it", CC.SpellData[555001] == nil and CC.db.consumableBuffs["555001"] == nil
+		and CC.consumableActive[555001] == nil)
+	local p1 = #PRINTS
+	slash("consumable remove 555001")
+	check("  removing one that isn't there says so", #PRINTS == p1 + 1)
+	for id = 555002, 555007 do slash("consumable remove " .. id) end
+	slash("consumable remove 424242")
+	CC:RefreshSpellList()
+	check("  with none left the heading is hidden", next(CC.db.consumableBuffs) ~= nil or CC.consumableHdrFS:IsShown() == false)
+end
+
+do
+	-- R31: a shift-clicked spell link goes into the Custom Spells box while it has focus
+	local box = _G["CCSpellInput"]
+	local link = "|cff71d5ff|Hspell:29166:0|h[Innervate]|h|r"
+	local focused = false
+	rawset(box, "HasFocus", function() return focused end)
+	insertNew(link); insertOld(link)
+	check("shift-click a spell link with the box unfocused: box untouched", box:GetText() == nil or box:GetText() == "")
+	focused = true
+	local e = #ERRORS
+	insertNew(link); insertOld(link)
+	check("  with the box focused: it takes the spell (both link-insert calls, once over)", box:GetText() == "29166", box:GetText())
+	check("  no Lua error, and the original calls still return as before", #ERRORS == e and insertNew("x") == false)
+end
+
+do
+	-- R33: the minimap drag compares the cursor and the centre in the minimap's own scale
+	local btn = _G["CCMinimapButton"]
+	local saveCenter, saveScale, saveCursor = Minimap.GetCenter, Minimap.GetEffectiveScale, GetCursorPosition
+	rawset(Minimap, "GetCenter", function() return 50, 50 end)
+	rawset(Minimap, "GetEffectiveScale", function() return 2 end)
+	GetCursorPosition = function() return 150, 50 end
+	btn.__scripts.OnDragStart(btn)
+	local ok, err = pcall(btn.__scripts.OnUpdate, btn)
+	btn.__scripts.OnDragStop(btn)
+	-- cursor 150,50 at scale 2 is 75,25; from the centre 50,50 that is down and right: -45 degrees
+	check("minimap drag at scale 2: angle from the cursor in the minimap's scale", ok and near(CC.db.minimapAngle, -45, 0.01),
+		tostring(CC.db.minimapAngle) .. " " .. tostring(err))
+	rawset(Minimap, "GetCenter", saveCenter); rawset(Minimap, "GetEffectiveScale", saveScale)
+	GetCursorPosition = saveCursor
 end
 
 local allowed = { CooldownCollaborator = true, CC = true, CooldownCollaboratorDB = true, SLASH_COOLDOWNCOLLABORATOR1 = true,
