@@ -219,8 +219,9 @@ check("Battle Rez providers", rez and keys(rez.classes) == E.rez, rez and keys(r
 check("capability order", table.concat(CC.CAPABILITY_ORDER, ",") == (E.lust and "BLOODLUST,BATTLEREZ" or "BATTLEREZ"),
 	table.concat(CC.CAPABILITY_ORDER, ","))
 check("lanes: one per capability, no lust lane without lust", (CC.lanes.BLOODLUST ~= nil) == (E.lust ~= nil) and CC.lanes.BATTLEREZ ~= nil)
-check("lane frame sized for its lanes", CC.laneFrame:GetHeight() == 28 * #CC.CAPABILITY_ORDER + 6 * (#CC.CAPABILITY_ORDER - 1) + 30,
-	CC.laneFrame:GetHeight())
+-- title 20, each lane 28 with its 1 + 20 ready row under it, 15 for the next lane's name, 5 below
+check("lane frame sized for its lanes and their ready rows",
+	CC.laneFrame:GetHeight() == 20 + 49 * #CC.CAPABILITY_ORDER + 15 * (#CC.CAPABILITY_ORDER - 1) + 5, CC.laneFrame:GetHeight())
 local providerBad
 for _, cap in pairs(CC.CAPABILITIES) do
 	for _, ids in pairs(cap.classes) do

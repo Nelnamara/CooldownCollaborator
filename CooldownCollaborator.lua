@@ -1047,6 +1047,9 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         print("|cFF54a3ffCooldownCollaborator|r Lane view: " .. (CC.db.laneEnabled and "ON" or "OFF") .. soloHint)
     elseif cmd == "rez" then
         CC:RequestRez()
+    elseif cmd == "nexthit" then
+        -- /cdc nexthit <seconds or M:SS> | off: the Lane view's look-ahead (Lanes.lua)
+        CC:NextHitCommand(msg:match("^%s*%S+%s*(.-)%s*$") or "")
     elseif cmd == "consumable" then
         -- /cdc consumable <spellID> <seconds> [flask|food|other] <name...>
         -- /cdc consumable remove <spellID>
