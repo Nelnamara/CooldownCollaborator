@@ -133,9 +133,10 @@ function CC:ScanRoster()
         self:QueueInspectAll()
     end
 
-    if CC.RefreshEssentials then CC:RefreshEssentials() end
+    -- each on its own, so an error in one can't keep the other closed;
     -- the Lane view only opens in a group: joining one with it on shows it
-    if CC.RefreshLanes then CC:RefreshLanes() end
+    self:RefreshView("RefreshEssentials")
+    self:RefreshView("RefreshLanes")
 end
 
 -------------------------------------------------------------------------------

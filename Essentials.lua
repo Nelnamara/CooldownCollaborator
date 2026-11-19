@@ -127,6 +127,71 @@ function CC:BuildEssentialsBar()
     end)
 end
 
+-- One bar line in each of its looks. Rows are reused from one look to another,
+-- so each sets every part it uses.
+local function ShowHeaderLine(row, text, r, g, b)
+    row.isHeader = true
+    row.headerText:SetText(text)
+    row.headerText:SetTextColor(r, g, b)
+    row.headerText:Show()
+    row.icon:Hide(); row.nameText:Hide(); row.timeText:Hide(); row.classBar:Hide()
+    row:Show()
+end
+
+local function ShowProviderLine(row, entry)
+    row.isHeader = false
+    local c = CC.ClassColors[entry.class] or CC.ClassColors.UNKNOWN
+    local data = CC.SpellData[entry.spellID]
+
+    row.headerText:Hide()
+    row.icon:Show(); row.nameText:Show(); row.timeText:Show(); row.classBar:Show()
+
+    row.classBar:SetColorTexture(c[1], c[2], c[3], 1)
+    if data then row.icon:SetTexture(data.icon) end
+    row.nameText:SetText(CC:ShortName(entry.name))
+    row.nameText:SetTextColor(c[1], c[2], c[3])
+
+    if entry.ready then
+        row.timeText:SetText("READY")
+        row.timeText:SetTextColor(0.3, 1.0, 0.3)
+    else
+        row.timeText:SetText(FormatTime(entry.remaining))
+        row.timeText:SetTextColor(1.0, entry.remaining < 30 and 0.8 or 0.3, 0.3)
+    end
+    row:Show()
+end
+
+-- "+N more": the providers the bar has no line for, where the names would be
+local function ShowMoreLine(row, count)
+    row.isHeader = false
+    row.headerText:Hide()
+    row.icon:Hide(); row.timeText:Hide(); row.classBar:Hide()
+    row.nameText:SetText(string.format("+%d more", count))
+    row.nameText:SetTextColor(0.7, 0.7, 0.7)
+    row.nameText:Show()
+    row:Show()
+end
+
+-- How many lines each capability's providers get out of `budget` lines: one
+-- per header first, then one provider line per capability in turn, so a short
+-- list (Battle Rez) keeps its lines next to a long one (lust in a big raid).
+local function FitProviders(sections, budget)
+    local lines, left = {}, budget - #sections
+    for i = 1, #sections do lines[i] = 0 end
+    local placed = true
+    while left > 0 and placed do
+        placed = false
+        for i, section in ipairs(sections) do
+            if left > 0 and lines[i] < #section.status then
+                lines[i] = lines[i] + 1
+                left = left - 1
+                placed = true
+            end
+        end
+    end
+    return lines
+end
+
 function CC:RefreshEssentials()
     if not self.essentialsFrame then return end
     if not self.db.essentialsEnabled then
@@ -134,64 +199,44 @@ function CC:RefreshEssentials()
         return
     end
 
-    local rows = self.essentialsRows
-    local idx = 0
-    local any = false
-    local rezHeaderRow = nil
-
+    local sections = {}
     for _, capKey in ipairs(CC.CAPABILITY_ORDER) do
-        local cap = CC.CAPABILITIES[capKey]
         local status = self:GetCapabilityStatus(capKey)
-
         if #status > 0 then
-            any = true
-            idx = idx + 1
-            if idx > MAX_ROWS then break end
-            local hdrRow = rows[idx]
-            hdrRow.isHeader = true
-            hdrRow.headerText:SetText(cap.label)
-            hdrRow.headerText:Show()
-            hdrRow.icon:Hide()
-            hdrRow.nameText:Hide()
-            hdrRow.timeText:Hide()
-            hdrRow.classBar:Hide()
-            hdrRow:Show()
-
-            if capKey == "BATTLEREZ" then rezHeaderRow = hdrRow end
-
-            for _, entry in ipairs(status) do
-                idx = idx + 1
-                if idx > MAX_ROWS then break end
-                local row = rows[idx]
-                row.isHeader = false
-                local c = CC.ClassColors[entry.class] or CC.ClassColors.UNKNOWN
-                local data = CC.SpellData[entry.spellID]
-
-                row.headerText:Hide()
-                row.icon:Show(); row.nameText:Show(); row.timeText:Show(); row.classBar:Show()
-
-                row.classBar:SetColorTexture(c[1], c[2], c[3], 1)
-                if data then row.icon:SetTexture(data.icon) end
-                row.nameText:SetText(CC:ShortName(entry.name))
-                row.nameText:SetTextColor(c[1], c[2], c[3])
-
-                if entry.ready then
-                    row.timeText:SetText("READY")
-                    row.timeText:SetTextColor(0.3, 1.0, 0.3)
-                else
-                    row.timeText:SetText(FormatTime(entry.remaining))
-                    row.timeText:SetTextColor(1.0, entry.remaining < 30 and 0.8 or 0.3, 0.3)
-                end
-                row:Show()
-            end
+            sections[#sections + 1] = { key = capKey, label = CC.CAPABILITIES[capKey].label, status = status }
         end
     end
 
-    for i = idx + 1, MAX_ROWS do
-        rows[i]:Hide()
+    -- Group buff status strip (Flask N/N  Food N/N), always the bar's last line
+    local buffStatus = IsInGroup() and CC:GetGroupBuffStatus()
+    if buffStatus and buffStatus.total <= 0 then buffStatus = nil end
+
+    -- MAX_ROWS lines at most: every header, then the providers that fit. A
+    -- capability with more providers than lines says "+N more" on its last one.
+    -- (Two capabilities at most, so the headers and the strip always fit.)
+    local fits = FitProviders(sections, MAX_ROWS - (buffStatus and 1 or 0))
+    local rows = self.essentialsRows
+    local idx = 0
+    local rezHeaderRow = nil
+
+    for i, section in ipairs(sections) do
+        idx = idx + 1
+        ShowHeaderLine(rows[idx], section.label, 0.6, 0.8, 1)
+        if section.key == "BATTLEREZ" then rezHeaderRow = rows[idx] end
+
+        local count, room = #section.status, fits[i]
+        local named = (count > room and room > 0) and room - 1 or room
+        for j = 1, named do
+            idx = idx + 1
+            ShowProviderLine(rows[idx], section.status[j])
+        end
+        if named < room then
+            idx = idx + 1
+            ShowMoreLine(rows[idx], count - named)
+        end
     end
 
-    self.essentialsEmptyLabel:SetShown(not any)
+    self.essentialsEmptyLabel:SetShown(#sections == 0)
 
     if rezHeaderRow and CC:CanRequestRez() then
         self.essentialsRezBtn:ClearAllPoints()
@@ -201,27 +246,21 @@ function CC:RefreshEssentials()
         self.essentialsRezBtn:Hide()
     end
 
-    -- Group buff status strip — Flask N/N  Food N/N at the bottom of the bar
-    local buffStatus = IsInGroup() and CC:GetGroupBuffStatus()
-    if buffStatus and buffStatus.total > 0 then
+    if buffStatus then
+        local flaskColor = buffStatus.flask < buffStatus.total and "|cFFFF6666" or "|cFF66FF66"
+        local foodColor  = buffStatus.food  < buffStatus.total and "|cFFFF6666" or "|cFF66FF66"
         idx = idx + 1
-        if idx <= MAX_ROWS then
-            local flaskColor = buffStatus.flask < buffStatus.total and "|cFFFF6666" or "|cFF66FF66"
-            local foodColor  = buffStatus.food  < buffStatus.total and "|cFFFF6666" or "|cFF66FF66"
-            local row = rows[idx]
-            row.isHeader = true
-            row.headerText:SetText(string.format(
-                "%sFlask %d/%d|r   %sFood %d/%d|r",
-                flaskColor, buffStatus.flask, buffStatus.total,
-                foodColor,  buffStatus.food,  buffStatus.total))
-            row.headerText:SetTextColor(1, 1, 1)
-            row.headerText:Show()
-            row.icon:Hide(); row.nameText:Hide(); row.timeText:Hide(); row.classBar:Hide()
-            row:Show()
-        end
+        ShowHeaderLine(rows[idx], string.format(
+            "%sFlask %d/%d|r   %sFood %d/%d|r",
+            flaskColor, buffStatus.flask, buffStatus.total,
+            foodColor,  buffStatus.food,  buffStatus.total), 1, 1, 1)
     end
 
-    -- Final layout pass (needed after buff row may have been added above)
+    for i = idx + 1, MAX_ROWS do
+        rows[i]:Hide()
+    end
+
+    -- Final layout pass
     local y = HEADER_HEIGHT
     for i = 1, idx do
         local row = rows[i]

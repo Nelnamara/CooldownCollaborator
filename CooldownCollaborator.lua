@@ -181,6 +181,7 @@ function CC:Init()
     self:BuildUI()
     self:BuildEssentialsBar()
     self:BuildLaneView()
+    self.wasInGroup = IsInGroup()
     self:ScanRoster()
 end
 
@@ -390,10 +391,32 @@ function CC:RequestRez()
     end
 end
 
+-- Refresh one window by its method name. An error in it goes to the game's
+-- error handler but never stops the caller, so the other windows (and the
+-- roster scan) still update.
+function CC:RefreshView(method)
+    local refresh = self[method]
+    if not refresh then return end
+    xpcall(function() refresh(self) end, geterrorhandler())
+end
+
 function CC:RefreshAllViews()
-    self:RefreshRows()
-    if CC.RefreshEssentials then CC:RefreshEssentials() end
-    if CC.RefreshLanes then CC:RefreshLanes() end
+    self:RefreshView("RefreshRows")
+    self:RefreshView("RefreshEssentials")
+    self:RefreshView("RefreshLanes")
+end
+
+-- Leaving the group closes the windows that opened for it: the main panel, the
+-- Essentials bar and the Lane view. Only on that change, so /cdc still shows the
+-- panel while solo; joining a group again opens them as before.
+function CC:CloseWindowsIfLeftGroup()
+    local inGroup = IsInGroup()
+    if self.wasInGroup and not inGroup then
+        if self.frame then self.frame:Hide() end
+        if self.essentialsFrame then self.essentialsFrame:Hide() end
+        if self.laneFrame then self.laneFrame:Hide() end
+    end
+    self.wasInGroup = inGroup
 end
 
 function CC:GetRemaining(playerName, spellID)
@@ -561,7 +584,8 @@ ef:RegisterEvent("ADDON_LOADED")
 ef:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         if ... == "CooldownCollaborator" then
-            CC:Init()
+            -- Events first: an error in Init (say its first refresh, after a
+            -- /reload in a raid) must not leave the addon deaf for the session.
             self:RegisterEvent("GROUP_ROSTER_UPDATE")
             self:RegisterEvent("UNIT_LEVEL")
             self:RegisterEvent("ENCOUNTER_START")
@@ -572,10 +596,12 @@ ef:SetScript("OnEvent", function(self, event, ...)
             end
             self:RegisterEvent("PLAYER_LOGOUT")
             self:RegisterEvent("PLAYER_LOGIN")
+            CC:Init()
         end
     elseif event == "GROUP_ROSTER_UPDATE" then
+        CC:CloseWindowsIfLeftGroup()
         CC:PruneState()
-        CC:RefreshRows()
+        CC:RefreshView("RefreshRows")
         CC:ScanRoster()
     elseif event == "UNIT_LEVEL" then
         -- a provider spell may have just come in reach (Roster.lua)
