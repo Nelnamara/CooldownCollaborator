@@ -834,8 +834,8 @@ function CC:BuildUI()
     self.frame = frame
 
     -- 0.5s ticker keeps timers refreshed while frame is visible
-    C_Timer.NewTicker(0.5, function()
-        if CC.frame and CC.frame:IsShown() then
+    C_Timer.NewTicker(CC.TICK_RATES.panel[1], function()
+        if CC.frame and CC.frame:IsShown() and CC:TickDue("panel") then
             CC:RefreshRows()
         end
     end)
@@ -1389,9 +1389,14 @@ function CC:RefreshRows()
     self.frame:SetHeight(y + PADDING)
     self:AnimatePanel()
 
-    -- In a group it opens by itself, unless the player closed it (R19)
-    if IsInGroup() and not self.db.panelClosed then
-        self.frame:Show()
+    -- In a group it opens by itself, unless the player closed it (R19); with "only in combat" or
+    -- "only on boss fights" it shows and hides with them (P30)
+    if IsInGroup() then
+        if not self:WindowsWanted() then
+            self.frame:Hide()
+        elseif not self.db.panelClosed then
+            self.frame:Show()
+        end
     end
 end
 

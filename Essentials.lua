@@ -727,8 +727,8 @@ function CC:BuildEssentialsBar()
     self:BuildBuffMissing()
     self:WatchPullTimers()
 
-    C_Timer.NewTicker(0.5, function()
-        if CC.essentialsFrame and CC.essentialsFrame:IsShown() then
+    C_Timer.NewTicker(CC.TICK_RATES.panel[1], function()
+        if CC.essentialsFrame and CC.essentialsFrame:IsShown() and CC:TickDue("essentials") then
             CC:RefreshEssentials()
         end
     end)
@@ -1322,7 +1322,7 @@ function CC:RefreshEssentials()
     if self.buffMissingFrame and self.buffMissingFrame:IsShown() then self:FillBuffMissing() end
 
     if IsInGroup() and self.db.essentialsEnabled then
-        self.essentialsFrame:Show()
+        self.essentialsFrame:SetShown(self:WindowsWanted())
     end
 end
 

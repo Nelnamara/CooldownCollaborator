@@ -44,6 +44,7 @@ CC.ClassColors = {
     DEMONHUNTER = { 0.64, 0.19, 0.79 },
     EVOKER      = { 0.20, 0.58, 0.50 },
     UNKNOWN     = { 0.50, 0.50, 0.50 },
+    ITEMS       = { 1.00, 0.82, 0.00 },   -- no class: items such as the Goblin Sapper Charge
 }
 
 -- Built at Init from the client's list (before custom spells and consumables

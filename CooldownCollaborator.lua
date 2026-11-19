@@ -190,7 +190,19 @@ local DEFAULTS = {
     rotations   = {},      -- [spellID] = { "Name-Realm", ... }: our own rotation orders (P39)
     alerts      = {},      -- [spellID] = { sound = <SoundKit ID, file or true>, flash = true, midscreen = false, warn = 0 } (P1)
     guildSync   = false,   -- also share over the guild channel; the panel gets a Guild tab (P41)
+
+    -- settings lane (19 Nov): the new windows' own locks, presets, when the windows show, lighter mode
+    deadListLocked   = false,
+    externalsLocked  = false,
+    manaLocked       = false,
+    burstLocked      = false,
+    showPreset       = "everything",  -- "everything", "simple", "healer", "tank" or "dps" (P2): which spells show, by kind
+    spellGroupBy     = "class",       -- Default Spells tab: "class" or "kind"
+    showWindows      = "always",      -- "always", "combat" or "boss": when the three main windows show (P30)
+    lighterMode      = false,         -- slower refresh for the panel, Essentials bar and Lane view (P31)
+    rezSkip          = {},            -- [name] = "last" or "never": players the rez call and dead list pass over (P40)
 }
+CC.DEFAULTS = DEFAULTS
 
 function CC:Init()
     if not CooldownCollaboratorDB then
@@ -658,12 +670,20 @@ end
 -- The rezzer who would answer a call for targetName: the first ready one who is
 -- not the target, and not dead, a ghost or disconnected (R6). nil: nobody.
 function CC:BestRezzer(targetName)
+    -- rezzers marked "never" are passed over; "last" ones only when nobody else is ready (P40)
+    local skip = self.db and self.db.rezSkip or {}
+    local lastChoice
     for _, entry in ipairs(self:GetCapabilityStatus("BATTLEREZ")) do
         if entry.ready and entry.name ~= targetName and entry.online ~= false and entry.alive ~= false then
-            return entry
+            local mode = skip[entry.name] or skip[self:ShortName(entry.name)]
+            if mode == "last" then
+                lastChoice = lastChoice or entry
+            elseif mode ~= "never" then
+                return entry
+            end
         end
     end
-    return nil
+    return lastChoice
 end
 
 function CC:RequestRez()
@@ -733,6 +753,37 @@ function CC:RefreshView(method)
     local refresh = self[method]
     if not refresh then return end
     xpcall(function() refresh(self) end, geterrorhandler())
+end
+
+-- When the three main windows (panel, Essentials bar, Lane view) show: always, only in combat, or
+-- only on a boss fight (db.showWindows, P30). Each window's show logic asks this one helper.
+function CC:WindowsWanted()
+    local mode = self.db and self.db.showWindows
+    if mode == "combat" then
+        return (self.inCombat or (UnitAffectingCombat and UnitAffectingCombat("player")) or false) and true or false
+    elseif mode == "boss" then
+        return self.inEncounter and true or false
+    end
+    return true
+end
+
+-- Lighter mode (P31): the refresh tickers run at the slower rate. Rates are seconds between
+-- refreshes: { normal, lighter }.
+CC.TICK_RATES = { panel = { 0.5, 1 }, lanes = { 0.2, 0.5 } }
+local lastTick = {}
+function CC:TickRate(key)
+    local r = CC.TICK_RATES[key == "essentials" and "panel" or key]
+    return r and (self.db and self.db.lighterMode and r[2] or r[1]) or 0
+end
+
+-- Called by a ticker running at the normal rate: true when a refresh is due at the current rate.
+function CC:TickDue(key)
+    local now = GetTime()
+    if now - (lastTick[key] or -1000) >= self:TickRate(key) - 0.001 then
+        lastTick[key] = now
+        return true
+    end
+    return false
 end
 
 function CC:RefreshAllViews()
@@ -1006,6 +1057,8 @@ ef:SetScript("OnEvent", function(self, event, ...)
             self:RegisterEvent("UNIT_LEVEL")
             self:RegisterEvent("ENCOUNTER_START")
             self:RegisterEvent("ENCOUNTER_END")
+            self:RegisterEvent("PLAYER_REGEN_DISABLED")
+            self:RegisterEvent("PLAYER_REGEN_ENABLED")
             self:RegisterEvent("CHAT_MSG_ADDON")
             if CC.isRetail then
                 self:RegisterEvent("INSPECT_READY")
@@ -1026,10 +1079,15 @@ ef:SetScript("OnEvent", function(self, event, ...)
     elseif event == "UNIT_LEVEL" then
         -- a provider spell may have just come in reach (Roster.lua)
         CC:OnUnitLevel(...)
+    elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+        CC.inCombat = event == "PLAYER_REGEN_DISABLED"
+        if CC.db and CC.db.showWindows == "combat" then CC:RefreshAllViews() end
     elseif event == "ENCOUNTER_START" then
         CC.inEncounter = true
+        if CC.db and CC.db.showWindows == "boss" then CC:RefreshAllViews() end
     elseif event == "ENCOUNTER_END" then
         CC.inEncounter = false
+        if CC.db and CC.db.showWindows == "boss" then CC:RefreshAllViews() end
         -- a second, then a random 0 to 2 s more, so a raid doesn't all send at once
         C_Timer.After(1 + math.random() * 2, function() CC:BroadcastState() end)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
@@ -1144,6 +1202,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
         print("  In group:", tostring(IsInGroup()), " In raid:", tostring(IsInRaid()))
         print("  In encounter:", tostring(CC.inEncounter))
+        print(string.format("  Lighter mode: %s; refresh every %.1fs (panel and Essentials bar), %.1fs (Lane view); windows show: %s",
+            CC.db.lighterMode and "on" or "off", CC:TickRate("panel"), CC:TickRate("lanes"), tostring(CC.db.showWindows)))
         print("  Min duration filter:", CC.db.minDuration)
         local any = false
         for name, entry in pairs(CC.state) do

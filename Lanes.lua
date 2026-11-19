@@ -89,7 +89,9 @@ function CC:NewLookWindow(opts)
     local edge = opts.edge or { 0.35, 0.35, 0.55 }
     self:StylePanelFrame(f, edge[1], edge[2], edge[3])
     f:SetScript("OnMouseDown", function(widget, btn)
-        if btn == "LeftButton" and not CC.db.laneLocked then widget:StartMoving() end
+        -- each window has its own lock: laneLocked, deadListLocked, externalsLocked ...
+        local lockKey = (opts.xKey:gsub("X$", "Locked"))
+        if btn == "LeftButton" and not CC.db[lockKey] then widget:StartMoving() end
     end)
     f:SetScript("OnMouseUp", function(widget)
         widget:StopMovingOrSizing()
@@ -348,8 +350,8 @@ function CC:BuildLaneView()
     self:LayoutLanes(heights)
     self:UpdateLaneLock()
 
-    C_Timer.NewTicker(0.2, function()
-        if CC.laneFrame and CC.laneFrame:IsShown() then
+    C_Timer.NewTicker(CC.TICK_RATES.lanes[1], function()
+        if CC.laneFrame and CC.laneFrame:IsShown() and CC:TickDue("lanes") then
             CC:RefreshLanes()
         end
     end)
@@ -480,7 +482,7 @@ function CC:RefreshLanes()
     self:LayoutLanes(heights)
 
     if IsInGroup() and self.db.laneEnabled then
-        self.laneFrame:Show()
+        self.laneFrame:SetShown(self:WindowsWanted())
     end
 end
 

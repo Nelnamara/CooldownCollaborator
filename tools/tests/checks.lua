@@ -38,9 +38,9 @@ end
 local EXPECT = {
 	retail  = { data = "Data_Retail.lua",  spells = 43, lust = "EVOKER,HUNTER,MAGE,SHAMAN", rez = "DEATHKNIGHT,DRUID,PALADIN,WARLOCK", log = false },
 	mop     = { data = "Data_Mists.lua",   spells = 41, lust = "MAGE,SHAMAN",               rez = "DEATHKNIGHT,DRUID,WARLOCK", log = true  },
-	tbc     = { data = "Data_TBC.lua",     spells = 22, lust = "SHAMAN",                    rez = "DRUID",                     log = true  },
-	era     = { data = "Data_Era.lua",     spells = 15, lust = nil,                         rez = "DRUID",                     log = true  },
-	forever = { data = "Data_Forever.lua", spells = 16, lust = nil,                         rez = "DRUID",                     log = false },
+	tbc     = { data = "Data_TBC.lua",     spells = 23, lust = "SHAMAN",                    rez = "DRUID",                     log = true  },
+	era     = { data = "Data_Era.lua",     spells = 16, lust = nil,                         rez = "DRUID",                     log = true  },
+	forever = { data = "Data_Forever.lua", spells = 17, lust = nil,                         rez = "DRUID",                     log = false },
 }
 local E = EXPECT[FLAVOR]
 local CURSE_TOCS = { ["CooldownCollaborator.toc"] = true, ["CooldownCollaborator_Camelot.toc"] = true,

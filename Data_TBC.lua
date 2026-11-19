@@ -46,6 +46,11 @@ CC.SpellData = {
     [20484] = { name = "Rebirth",                duration = 1200, icon = 136080, class = "DRUID",   ranks = { 20484, 20739, 20742, 20747, 20748, 26994 }, level = 20, kind = "rez" },
     [740]   = { name = "Tranquility",            duration = 600,  icon = 136107, class = "DRUID",   ranks = { 740, 8918, 9862, 9863, 26983 }, kind = "raid", effect = 8 },
     [5209]  = { name = "Challenging Roar",       duration = 600,  icon = 132117, class = "DRUID", kind = "utility" },
+
+    -- Items (no class): Goblin Sapper Charge, item 10646. No SpellCooldowns row; the item's effect
+    -- has a 300 s cooldown (ItemEffect 98888), so like a soulstone there is no ready-now watch.
+    -- Settings lists it under "Items" so it can be unticked.
+    [13241] = { name = "Goblin Sapper Charge",   duration = 300,  icon = 135826, class = "ITEMS", itemCooldown = true, kind = "utility" },
 }
 
 -- Who can provide each raid-wide capability (Roster.lua).
