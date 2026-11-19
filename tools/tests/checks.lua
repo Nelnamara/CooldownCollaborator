@@ -137,6 +137,22 @@ if FLAVOR == "retail" then
 	check("Fury of the Aspects is 390386 (391215 is Initiative)",
 		CC.SpellData[390386] and CC.SpellData[390386].name == "Fury of the Aspects" and CC.SpellData[391215] == nil)
 	check("Anti-Magic Zone 240 s", CC.SpellData[51052].duration == 240)
+	-- older rows set to the 12.1.5 data (one-charge spells: the charge's recharge)
+	local RETAIL_FIXED = {
+		[33206]  = { 180, 135936 },    -- Pain Suppression, one charge (was 90 s)
+		[45438]  = { 240, 135841 },    -- Ice Block, one charge (was 300 s)
+		[108280] = { 180, 538569 },    -- Healing Tide Totem (was 120 s)
+		[196718] = { 300, 1305154 },   -- Darkness (was 180 s)
+		[357170] = { 60, 4622478 },    -- Time Dilation, one charge (was 90 s)
+		[32182]  = { 300, 132313 },    -- Heroism's icon
+		[111771] = { 90, 607512 },     -- Demonic Gateway: icon fixed; the data's 10 s is not taken yet
+	}
+	local fixedBad = {}
+	for id, want in pairs(RETAIL_FIXED) do
+		local d = CC.SpellData[id]
+		if not d or d.duration ~= want[1] or d.icon ~= want[2] then fixedBad[#fixedBad + 1] = id end
+	end
+	check("Retail: corrected rows have the 12.1.5 cooldown and icon", #fixedBad == 0, table.concat(fixedBad, ","))
 end
 if CC.SpellData[20707] then
 	local ss = CC.SpellData[20707]
