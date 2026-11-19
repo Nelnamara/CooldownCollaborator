@@ -20,6 +20,7 @@ Roster.lua
 Essentials.lua
 Lanes.lua
 DeadList.lua
+Strips.lua
 Consumables.lua
 Minimap.lua
 Options.lua
