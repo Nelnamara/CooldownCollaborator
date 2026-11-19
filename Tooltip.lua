@@ -106,7 +106,7 @@ function CC:CooldownTooltipLines(ownerName, spellID)
         else
             add(string.format(L["Runs %s; the current version is %s."], tostring(peer.version), self.version), GOLD, true)
         end
-        add(L["Old copies can undo ready-now messages."], GREY, true)
+        add(L["An older copy shares less, so what shows here can be out of date."], GREY, true)
     end
     return lines
 end
