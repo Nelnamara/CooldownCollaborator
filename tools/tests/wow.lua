@@ -162,10 +162,33 @@ end
 Methods.GetName = function(s) return s.__name end
 Methods.GetParent = function(s) return s.__parent end
 Methods.SetParent = function(s, p) s.__parent = p end
-Methods.Show = function(s) s.__shown = true end
-Methods.Hide = function(s) s.__shown = false end
-Methods.SetShown = function(s, v) s.__shown = v and true or false end
+-- OnShow / OnHide (and their HookScript hooks) run when the frame's own shown state changes while its
+-- parents are shown, as on the real clients (a parent's change doesn't reach its children's scripts here)
+local function parentsShown(s)
+	local p = s.__parent
+	while p do
+		if not p.__shown then return false end
+		p = p.__parent
+	end
+	return true
+end
+local function runScript(s, k, ...)
+	local f = s.__scripts[k]
+	if f then xpcall(f, ERRH, s, ...) end
+	local h = s.__hooks and s.__hooks[k]
+	if h then xpcall(h, ERRH, s, ...) end
+end
+local function setShown(s, v)
+	v = v and true or false
+	if s.__shown == v then return end
+	s.__shown = v
+	if parentsShown(s) then runScript(s, v and "OnShow" or "OnHide") end
+end
+Methods.Show = function(s) setShown(s, true) end
+Methods.Hide = function(s) setShown(s, false) end
+Methods.SetShown = function(s, v) setShown(s, v) end
 Methods.IsShown = function(s) return s.__shown end
+Methods.IsVisible = function(s) return s.__shown and parentsShown(s) end
 Methods.SetScript = function(s, k, f) s.__scripts[k] = f end
 Methods.GetScript = function(s, k) return s.__scripts[k] end
 Methods.HookScript = function(s, k, f)
@@ -180,15 +203,171 @@ Methods.RegisterEvent = function(s, e)
 end
 Methods.UnregisterEvent = function(s, e) if eventFrames[e] then eventFrames[e][s] = nil end end
 Methods.IsEventRegistered = function(s, e) return eventFrames[e] and eventFrames[e][s] or false end
-Methods.SetWidth = function(s, w) s.__w = w end
-Methods.SetHeight = function(s, h) s.__h = h end
-Methods.SetSize = function(s, w, h) s.__w, s.__h = w, h or w end
+-- a size that changes runs OnSizeChanged (and its hooks) with the new size, as the clients do
+local function resized(s, w, h)
+	if s.__w == w and s.__h == h then return end
+	s.__w, s.__h = w, h
+	local f = s.__scripts.OnSizeChanged
+	if f then xpcall(f, ERRH, s, w, h) end
+	local hk = s.__hooks and s.__hooks.OnSizeChanged
+	if hk then xpcall(hk, ERRH, s, w, h) end
+end
+Methods.SetWidth = function(s, w) resized(s, w, s.__h) end
+Methods.SetHeight = function(s, h) resized(s, s.__w, h) end
+Methods.SetSize = function(s, w, h) resized(s, w, h or w) end
 Methods.GetWidth = function(s) return s.__w or 0 end
 Methods.GetHeight = function(s) return s.__h or 0 end
-Methods.SetPoint = function(s, ...) s.__points[#s.__points + 1] = { ... } end
-Methods.ClearAllPoints = function(s) s.__points = {} end
-Methods.GetCenter = function() return 0, 0 end
-Methods.GetEffectiveScale = function() return 1 end
+-- Geometry, as the real clients lay frames out (all of it exists on every client): a frame's rect comes
+-- from its anchors, its size and its effective scale (its own SetScale times its parents'); SetPoint's
+-- offsets are in the frame's own scale; GetLeft / GetTop / GetCenter ... answer in the frame's own scale
+-- (screen units divided by its effective scale), nil while it has no anchors. The screen is SCREEN_W x
+-- SCREEN_H units at scale 1 (768 tall, 16:9); UIParent fills it at UI_SCALE. A clamped frame is kept on
+-- the screen. Setting a point a frame already has replaces it; __points keeps every call in order (the
+-- older harnesses read it), the layout uses the last one per point. Anchoring to a frame that depends on
+-- this one errors, as the real clients refuse it.
+SCREEN_W, SCREEN_H = 768 * 16 / 9, 768
+local POINT_XY = {
+	TOPLEFT = { 0, 1 }, TOP = { 0.5, 1 }, TOPRIGHT = { 1, 1 }, LEFT = { 0, 0.5 }, CENTER = { 0.5, 0.5 },
+	RIGHT = { 1, 0.5 }, BOTTOMLEFT = { 0, 0 }, BOTTOM = { 0.5, 0 }, BOTTOMRIGHT = { 1, 0 },
+}
+local function effScale(s)
+	local e = s.__scale or 1
+	local p = s.__parent
+	while p do e = e * (p.__scale or 1); p = p.__parent end
+	return e
+end
+local function parsePoint(s, point, ...)
+	local n = select("#", ...)
+	local a, b, c, d = ...
+	if n == 0 then return { point, s.__parent, point, 0, 0 } end
+	if type(a) == "number" then return { point, s.__parent, point, a, b or 0 } end
+	local rel = a
+	if type(rel) == "string" then rel = _G[rel] end
+	if type(b) == "number" then return { point, rel, point, b, c or 0 } end
+	return { point, rel, b or point, c or 0, d or 0 }
+end
+local screenRect
+local function dependsOn(f, target, seen)
+	if f == target then return true end
+	if not f or seen[f] then return false end
+	seen[f] = true
+	for _, p in ipairs(f.__anchors or {}) do
+		if p[2] and dependsOn(p[2], target, seen) then return true end
+	end
+	return false
+end
+-- the rect in screen units { l, b, r, t }, or nil
+local function rectOf(s, depth)
+	if s == UIParent then return { 0, 0, SCREEN_W, SCREEN_H } end
+	depth = (depth or 0) + 1
+	if depth > 50 then error("anchor chain too deep") end
+	local anchors = s.__anchors
+	if not anchors or #anchors == 0 then return nil end
+	local e = effScale(s)
+	local w, h = (s.__w or 0) * e, (s.__h or 0) * e
+	local xs, ys = {}, {}
+	for _, p in ipairs(anchors) do
+		local rr = p[2] and rectOf(p[2], depth) or screenRect()
+		if not rr then return nil end
+		local rp = POINT_XY[p[3]] or POINT_XY.CENTER
+		local ax = rr[1] + (rr[3] - rr[1]) * rp[1] + (p[4] or 0) * e
+		local ay = rr[2] + (rr[4] - rr[2]) * rp[2] + (p[5] or 0) * e
+		local mp = POINT_XY[p[1]] or POINT_XY.CENTER
+		xs[mp[1]] = ax
+		ys[mp[2]] = ay
+	end
+	local l, r, b, t
+	if xs[0] and xs[1] then l, r = xs[0], xs[1]
+	elseif xs[0] then l = xs[0]; r = l + w
+	elseif xs[1] then r = xs[1]; l = r - w
+	else l = xs[0.5] - w / 2; r = l + w end
+	if ys[0] and ys[1] then b, t = ys[0], ys[1]
+	elseif ys[0] then b = ys[0]; t = b + h
+	elseif ys[1] then t = ys[1]; b = t - h
+	else b = ys[0.5] - h / 2; t = b + h end
+	if s.__clamped then
+		local dx, dy = 0, 0
+		if r > SCREEN_W then dx = SCREEN_W - r end
+		if l + dx < 0 then dx = -l end
+		if t > SCREEN_H then dy = SCREEN_H - t end
+		if b + dy < 0 and t - b <= SCREEN_H then dy = -b end
+		l, r, b, t = l + dx, r + dx, b + dy, t + dy
+	end
+	return { l, b, r, t }
+end
+screenRect = function() return { 0, 0, SCREEN_W, SCREEN_H } end
+STUB_RECT = rectOf   -- harness use: a frame's rect in screen units
+Methods.SetPoint = function(s, point, ...)
+	local p = parsePoint(s, point, ...)
+	if p[2] == s then error("Cannot anchor to itself") end
+	if p[2] and dependsOn(p[2], s, {}) then error("Cannot anchor to a region dependent on it") end
+	s.__points[#s.__points + 1] = { point, ... }
+	s.__anchors = s.__anchors or {}
+	for i, q in ipairs(s.__anchors) do
+		if q[1] == point then table.remove(s.__anchors, i); break end
+	end
+	s.__anchors[#s.__anchors + 1] = p
+end
+Methods.SetAllPoints = function(s, rel)
+	Methods.ClearAllPoints(s)
+	rel = rel or s.__parent
+	Methods.SetPoint(s, "TOPLEFT", rel, "TOPLEFT", 0, 0)
+	Methods.SetPoint(s, "BOTTOMRIGHT", rel, "BOTTOMRIGHT", 0, 0)
+end
+Methods.ClearAllPoints = function(s) s.__points = {}; s.__anchors = {} end
+Methods.GetNumPoints = function(s) return #(s.__anchors or {}) end
+Methods.GetPoint = function(s, i)
+	local p = (s.__anchors or {})[i or 1]
+	if p then return p[1], p[2], p[3], p[4], p[5] end
+end
+Methods.SetScale = function(s, v) s.__scale = v end
+Methods.GetScale = function(s) return s.__scale or 1 end
+Methods.GetEffectiveScale = function(s) return effScale(s) end
+local function side(s, i)
+	local r = rectOf(s)
+	if r then return r[i] / effScale(s) end
+end
+Methods.GetLeft = function(s) return side(s, 1) end
+Methods.GetBottom = function(s) return side(s, 2) end
+Methods.GetRight = function(s) return side(s, 3) end
+Methods.GetTop = function(s) return side(s, 4) end
+Methods.GetCenter = function(s)
+	local r = rectOf(s)
+	if not r then return nil end
+	local e = effScale(s)
+	return (r[1] + r[3]) / 2 / e, (r[2] + r[4]) / 2 / e
+end
+Methods.GetRect = function(s)
+	local r = rectOf(s)
+	if not r then return nil end
+	local e = effScale(s)
+	return r[1] / e, r[2] / e, (r[3] - r[1]) / e, (r[4] - r[2]) / e
+end
+Methods.SetClampedToScreen = function(s, v) s.__clamped = v and true or false end
+Methods.IsClampedToScreen = function(s) return s.__clamped or false end
+Methods.SetMovable = function(s, v) s.__movable = v and true or false end
+Methods.IsMovable = function(s) return s.__movable or false end
+Methods.RegisterForDrag = function(s, ...) s.__dragButtons = { ... } end
+Methods.SetUserPlaced = function(s, v) s.__userPlaced = v and true or false end
+Methods.IsUserPlaced = function(s) return s.__userPlaced or false end
+-- StartMoving: the frame follows the cursor (MoveCursor below) until StopMovingOrSizing; a frame that
+-- isn't movable doesn't move. It is marked user placed, as on the real clients. While it moves it is
+-- held by one absolute point on UIParent (the real clients pick their own point; code must not rely on it).
+MOVING = {}
+local function holdAbsolute(s)
+	local r = rectOf(s)
+	if not r then return end
+	local e = effScale(s)
+	s.__points = { { "BOTTOMLEFT", UIParent, "BOTTOMLEFT", r[1] / e, r[2] / e } }
+	s.__anchors = { { "BOTTOMLEFT", UIParent, "BOTTOMLEFT", r[1] / e, r[2] / e } }
+end
+Methods.StartMoving = function(s)
+	if not s.__movable then return end
+	holdAbsolute(s)
+	s.__userPlaced = true
+	MOVING[s] = true
+end
+Methods.StopMovingOrSizing = function(s) MOVING[s] = nil end
 Methods.SetFrameLevel = function(s, l) s.__level = l end
 Methods.GetFrameLevel = function(s) return s.__level end
 Methods.SetAlpha = function(s, a) s.__alpha = a end
@@ -248,6 +427,13 @@ function CreateFrame(otype, name, parent, template)
 end
 
 UIParent = CreateFrame("Frame", "UIParent")
+-- UIParent fills the screen at the UI scale: SCREEN_H / scale units tall (768 at scale 1)
+function SetUIScale(scale)
+	UI_SCALE = scale
+	UIParent.__scale = scale
+	UIParent.__w, UIParent.__h = SCREEN_W / scale, SCREEN_H / scale
+end
+SetUIScale(1)
 Minimap = CreateFrame("Minimap", "Minimap", UIParent)
 GameTooltip = CreateFrame("GameTooltip", "GameTooltip", UIParent)
 for _, n in ipairs({ "GameFontNormal", "GameFontHighlight", "GameFontNormalSmall", "GameFontHighlightSmall",
@@ -256,7 +442,33 @@ for _, n in ipairs({ "GameFontNormal", "GameFontHighlight", "GameFontNormalSmall
 end
 UISpecialFrames = {}
 BackdropTemplateMixin = {}
-function GetCursorPosition() return 0, 0 end
+-- the cursor, in screen units at scale 1 (as the real call answers: divide by a frame's effective scale)
+CURSOR_X, CURSOR_Y = 0, 0
+function GetCursorPosition() return CURSOR_X, CURSOR_Y end
+-- harness: the cursor moves by dx, dy screen units, and the frames being moved go with it
+function MoveCursor(dx, dy)
+	CURSOR_X, CURSOR_Y = CURSOR_X + dx, CURSOR_Y + dy
+	for f in pairs(MOVING) do
+		local e = f:GetEffectiveScale()
+		local p = f.__anchors[1]
+		p[4], p[5] = p[4] + dx / e, p[5] + dy / e
+		f.__points = { { p[1], p[2], p[3], p[4], p[5] } }
+	end
+end
+-- harness: press the left button on widget (at its centre), move dx, dy screen units, let go, as a
+-- player drags: OnMouseDown, then (registered for drag, and moved more than a few units: the clients
+-- start a drag after a few pixels) OnDragStart, the move, OnDragStop; then OnMouseUp. dx = dy = 0 is a click.
+function DragWidget(widget, dx, dy)
+	local r = STUB_RECT(widget)
+	if r then CURSOR_X, CURSOR_Y = (r[1] + r[3]) / 2, (r[2] + r[4]) / 2 end
+	local sc = widget.__scripts
+	local drag = widget.__dragButtons and math.abs(dx) + math.abs(dy) > 4
+	if sc.OnMouseDown then xpcall(sc.OnMouseDown, ERRH, widget, "LeftButton") end
+	if drag and sc.OnDragStart then xpcall(sc.OnDragStart, ERRH, widget, "LeftButton") end
+	MoveCursor(dx, dy)
+	if drag and sc.OnDragStop then xpcall(sc.OnDragStop, ERRH, widget) end
+	if sc.OnMouseUp then xpcall(sc.OnMouseUp, ERRH, widget, "LeftButton") end
+end
 SlashCmdList = {}
 COMBATLOG_OBJECT_TYPE_PLAYER = 0x400
 COMBATLOG_OBJECT_TYPE_PET = 0x1000
