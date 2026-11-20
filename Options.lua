@@ -305,7 +305,7 @@ local BLIZZARD_SOUNDS = {
 -- LibSharedMedia, only when another addon has loaded it.
 local function SharedMedia()
     if LibStub then
-        local ok, lib = pcall(LibStub, "LibSharedMedia-3.0", true)
+        local ok, lib = pcall(LibStub.GetLibrary, LibStub, "LibSharedMedia-3.0", true)
         if ok and type(lib) == "table" then return lib end
     end
     return nil
@@ -2248,9 +2248,9 @@ function CC:OpenOptions()
     end
     local profileDrops = {}
     local function ProfileRow(label, make)
-        local lbl = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        lbl:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y - 4)
-        lbl:SetText(label)
+        local rowLabel = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        rowLabel:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y - 4)
+        rowLabel:SetText(label)
         local control = make(150, y)
         y = y - 30
         return control
@@ -2268,9 +2268,9 @@ function CC:OpenOptions()
             if CC:NewProfile(widget:GetText()) then widget:SetText("") end
             widget:ClearFocus()
         end)
-        local hint = pr:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        hint:SetPoint("LEFT", e, "RIGHT", 8, 0)
-        hint:SetText(L["Type a name, then press Enter."])
+        local enterNote = pr:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        enterNote:SetPoint("LEFT", e, "RIGHT", 8, 0)
+        enterNote:SetText(L["Type a name, then press Enter."])
         return e
     end)
     profileDrops.copy = ProfileRow(L["Copy from:"], function(x, yy)

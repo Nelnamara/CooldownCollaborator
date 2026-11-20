@@ -277,7 +277,7 @@ function CC:BlockTop()
 end
 
 -- Layout runs again when one of the three shows, hides or changes size (the block's fit on screen).
-local function Watch(self, f)
+local function Watch(f)
     if f.ccBlockWatched then return end
     f.ccBlockWatched = true
     local function again() CC:LayoutBlock() end
@@ -311,7 +311,7 @@ function CC:LayoutBlock()
         local f = w and self[w.frame]
         if f then
             joined[key] = true
-            Watch(self, f)
+            Watch(f)
             f:ClearAllPoints()
             if prev then
                 f:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, 0)
@@ -328,7 +328,7 @@ function CC:LayoutBlock()
         local w = WindowByKey(key)
         local f = w and self[w.frame]
         if f and not joined[key] then
-            Watch(self, f)
+            Watch(f)
             f:ClearAllPoints()
             f:SetPoint("CENTER", UIParent, "CENTER", db[w.xKey] or 0, db[w.yKey] or 0)
             f:SetClampedToScreen(true)

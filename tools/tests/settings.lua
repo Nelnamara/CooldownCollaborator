@@ -353,13 +353,17 @@ do
 	check("  Test plays what is picked", SOUNDS[1] and SOUNDS[1].id == 8960)
 	-- another addon's sounds
 	local lsmSounds = { None = "", ["Bell Ding"] = "Interface\\AddOns\\Other\\bell.ogg", ["Blizzard: Queue Pop"] = 568011 }
-	LibStub = setmetatable({}, { __call = function(_, name, silent)
+	-- like the real LibStub: a table whose GetLibrary(major, silent) is also what LibStub(...) calls
+	local lsm = {
+		List = function() return { "Bell Ding", "Blizzard: Queue Pop", "None" } end,
+		Fetch = function(_, kind, key) return lsmSounds[key] end,
+	}
+	local stub = {}
+	function stub:GetLibrary(name, silent)
 		if name ~= "LibSharedMedia-3.0" then return nil end
-		return {
-			List = function() return { "Bell Ding", "Blizzard: Queue Pop", "None" } end,
-			Fetch = function(_, kind, key) return lsmSounds[key] end,
-		}
-	end })
+		return lsm
+	end
+	LibStub = setmetatable(stub, { __call = stub.GetLibrary })
 	local withLSM = CC:AlertSoundList()
 	check("LibSharedMedia loaded: its sounds follow Blizzard's, without None or what is already listed",
 		withLSM[#withLSM].value == "lsm:Bell Ding" and #withLSM == #list + 1, #withLSM)

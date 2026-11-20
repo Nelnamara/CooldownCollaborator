@@ -444,7 +444,7 @@ local function PlaceBubble(f, target)
         return "center"
     end
     l, r, t, b = l * scale, r * scale, t * scale, b * scale
-    local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+    local sw = UIParent:GetWidth()
     local bh = f:GetHeight()
     if r + BUBBLE_GAP + BUBBLE_W <= sw then
         f:SetPoint("TOPLEFT", target, "TOPRIGHT", BUBBLE_GAP, 0)
