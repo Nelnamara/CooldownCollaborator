@@ -1,0 +1,82 @@
+[
+ {
+  "title": "Public API and callbacks for other addons",
+  "quote": "I want a WeakAura or my own addon to ask who has Bloodlust ready, without scraping your frames.",
+  "what": "Other addons could call a small documented set of functions, such as who has which cooldown and when it ends. They could also sign up to hear when a cooldown starts or ends. WeakAuras custom triggers could then show your group cooldowns.",
+  "possible": "Possible on every client",
+  "today": "Today: nothing public; the addon is one global table and only CooldownTimeline3 gets a bridge",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Protocol version and hello handshake",
+  "quote": "Before I trust a sync addon I want to know it won't break the day the message format changes.",
+  "what": "Each copy sends a short hello with its protocol version and addon version when it joins a group. Copies can then tell who runs the addon, who runs an older one, and warn kindly about a mismatch. It also lets the panel say 'Bob has no addon' on Retail.",
+  "possible": "Possible on every client",
+  "today": "Today: bare spell:seconds:name:class lines with no version field; the only compatibility is old copies dropping R: messages",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Ask for state when joining a group",
+  "quote": "If I join a raid late I don't want a blank panel until everyone recasts.",
+  "what": "A new joiner sends one request and each member answers with their running cooldowns, spread out over a few seconds so nobody floods the channel. Reloads and mid-raid joins fill in at once.",
+  "possible": "Partly on Retail and WoW: Forever (only players who run the addon answer); Possible on Classic Era, TBC, MoP",
+  "today": "Today: each player re-sends their own state on roster change, with no request message",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Message throttling and packing",
+  "quote": "A raid of 25 all sending on the same boss cast is how addons get people disconnected.",
+  "what": "Batch several cooldowns in one message and use the shared send queue library so bursts are spaced. Add small random delays so a whole raid doesn't send in the same moment, and drop repeats of the same cast.",
+  "possible": "Possible on every client",
+  "today": "Today: one message per cooldown, retried every 2 s up to 15 times, no batching or library queue",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Share and import settings profiles",
+  "quote": "My players want one tracked-spell list for the whole guild, not each person ticking boxes.",
+  "what": "Export your tracked spell list, positions and sizes as a short text string and import it on another account. Profiles per character or per spec, with a copy button.",
+  "possible": "Possible on every client",
+  "today": "Today: one settings table for the account, no profiles, no export",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Translations for the settings and panel",
+  "quote": "About half my downloads are non English clients and I won't recommend a UI that stays English.",
+  "what": "All text goes through a locale table, with the first translations for German, French, Spanish and Korean from volunteers. Spell names already come from the client.",
+  "possible": "Possible on every client",
+  "today": "Today: English strings written straight into the code; no Locales folder",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Group cooldowns feed for other timeline and bar addons",
+  "quote": "Not everyone runs your own timeline addon, and I want my bar addon to show group cooldowns too.",
+  "what": "Offer the same group cooldown feed through a plain event and data object (LibDataBroker style and the new public API) so any bar or timeline addon can draw it. Ships a small example for WeakAuras.",
+  "possible": "Possible on every client",
+  "today": "Today: the feed only goes to CooldownTimeline3 by name",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Boss and encounter alerts with a cooldown plan",
+  "quote": "My raid leader wants 'use Spirit Link at the 2 minute mark' reminders tied to the fight.",
+  "what": "Let a leader mark which cooldown should go on which boss event (BigWigs or DBM timer) and the assigned player gets a prompt. Others see a plan row in the panel.",
+  "possible": "Partly on Retail and WoW: Forever (assigned player must run the addon; secret values can't be compared in combat); Possible on Classic Era, TBC, MoP",
+  "today": "Today: no assignments or boss timer link",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Trust items for the store page",
+  "quote": "Reviewers skim for a Wago listing, screenshots, a privacy line and a clear statement of what is sent.",
+  "what": "Add the Wago project ID to the TOCs, publish to Wago next to CurseForge, and write a short page that lists the exact messages the addon sends and that nothing leaves the game. Add a one click 'copy debug info' for bug reports.",
+  "possible": "Possible on every client",
+  "today": "Today: CurseForge ID only; /cdc debug prints to chat; no stated message list",
+  "persona": "Addon maker"
+ },
+ {
+  "title": "Shared charge counts for multi-use spells",
+  "quote": "Battle Rez is a pool of charges and my raid wants to see one number, not four players.",
+  "what": "Show the raid's Battle Rez charges left and the timer to the next one, taken from the player who can read it. Share the number so everyone sees the same count.",
+  "possible": "Partly on Retail and WoW: Forever (only a player running the addon can send it); Possible on Classic Era, TBC, MoP where it does not apply as a pool",
+  "today": "Today: reads your own charge pool only; others are guessed from casts",
+  "persona": "Addon maker"
+ }
+]

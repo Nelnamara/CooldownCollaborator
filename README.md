@@ -4,25 +4,37 @@
 
 CooldownCollaborator gives your group a live shared view of every major defensive and utility cooldown — who has it, how long until it's back, and whether it's ready to assign. Works for both 5-man party and full 40-player raids with automatic layout switching. One download covers all five clients, and each client tracks its own spell list.
 
-**Try it in your groups.** Version 1.1.0 is new on every client except Retail, and its link to CooldownTimeline3 is new everywhere. Testing in all kinds of groups (dungeons, raids, battlegrounds, with friends who run it too) is encouraged and appreciated. Tell us what you see, good or bad, in [Issues](https://github.com/Nelnamara/CooldownCollaborator/issues).
+**Try it in your groups.** Most of this is new since 1.1.1, on every client. Testing in all kinds of groups (dungeons, raids, battlegrounds, with friends who run it too) is encouraged and appreciated. Tell us what you see, good or bad, in [Issues](https://github.com/Nelnamara/CooldownCollaborator/issues).
 
 ---
 
 ## Features
 
-- **Unified CD panel** — tracked spells in a single draggable list (29 across 11 classes on Retail; each other client has its own list, see Tracked Cooldowns)
-- **Roster capability scan** — knows who *can* provide Bloodlust/Heroism/Time Warp/Fury of the Aspects or a Battle Rez before anyone has cast anything, based on class (no Bloodlust or Heroism on Classic Era and WoW: Forever)
-- **Essentials Bar** — slim always-visible view of just those high-value raid-wide resources, separate from the full list
-- **Lane View** — alternate visual: icons slide along a bar from "just used" to "ready" instead of a text countdown
-- **Request Rez** — raid leader/assist (or party leader) targets a dead player and announces which Battle Rez provider is ready, by name
+- **Unified CD panel** — one draggable list. Running cooldowns first, ready ones folded per spell, two columns from 10 players, greyed dead and offline owners, a `?` on guessed ones, version dots by each name, the next Bloodlust in the title, an icon style, an effect bar for active externals, spell tooltips, click to ask (whisper; Shift for the group). Retail tracks 43 spells, each other client has its own list (see Tracked Cooldowns)
+- **Roster capability scan** — knows who *can* provide Bloodlust/Heroism/Time Warp/Fury of the Aspects or a Battle Rez before anyone has cast anything, based on class and level (no Bloodlust or Heroism on Classic Era and WoW: Forever)
+- **Essentials Bar** — slim always-visible view of those raid-wide resources: the first few ready providers then "+N", Battle Rez charges, Soulstones, world buffs, and a flask/food count
+- **Lane View** — icons slide along a bar from "just used" to "ready"; ready providers line up on a row under each lane; `/cdc nexthit` rings what will be back by then
+- **Request Rez** — raid leader/assist (or party leader, or anyone in a 5-man) targets a dead player and announces which Battle Rez provider is ready, by name; says when the raid's charges are gone and when the next one is back
+- **Dead list** — a window listing the dead in the leader's order with a Call button each; opens when someone dies in combat
+- **Externals strip, mana strip, burst line** — externals with owner and time left; mana spells with how many are ready and an Ask button anyone may press; your big cooldowns above the group's lust and Power Infusion
+- **Ready alerts** — per spell: sound, row and bar flash, optional icon mid screen, optional warning N seconds before
+- **Raid plans and rotation order** — a leader shares a plan over the group channel; a prompt bar shows your planned uses from BigWigs or DBM timers or a time into the fight; rotation order shows as numbers on the rows
+- **Teams** — a tab on the panel for the players you pick
+- **Your role** — Everything (default), Basics, Healer, Tank, DPS, each saying what it tracks; or tick whole kinds of spells
+- **Joined windows** — the panel, Essentials Bar and Lane View start as one block that moves together; pull one loose, drop it back to rejoin
+- **Profiles and officer setups** — named profiles, export and import, per-character window places; an officer can send a setup, and members Accept, Not now or Never
+- **Guild sharing** — off by default; adds a Guild tab and sends hello, state requests and states on the guild channel
+- **Pulls and keys** — last pull log, post who is ready to raid chat, ask the group again when a key starts
 - **Cauldron/Feast tracking** — register a consumable buff by spell ID once (`/cdc consumable`) and it's tracked like any other shared resource
-- **Live countdowns** — 0.5-second refresh with green/yellow/red status coloring
-- **Class color coding** — per-class stripe and name coloring so you know the owner at a glance
-- **Party and raid support** — automatically tracks `party1`–`party4` in 5-mans and `raid1`–`raid40` in raids
-- **Addon sync** — broadcasts each client's own observed casts to other CooldownCollaborator users via `C_ChatInfo.SendAddonMessage`, with automatic retry if a send fails (death/resurrect windows, encounter lockdown, throttling)
-- **Standalone settings window** — not registered through Blizzard's Settings panel, so it never blocks your spellbook (a known issue with the in-game AddOns settings tab)
-- **Ready-now announcements** — when your own tracked spell comes off cooldown, your client tells the group, so talent-shortened cooldowns stop showing long on other screens
+- **Live countdowns** — refresh with green/yellow/red status coloring, or a lighter mode that refreshes less often
+- **Class color coding** — per-class stripe and name coloring
+- **Party and raid support** — tracks `party1`–`party4` in 5-mans and `raid1`–`raid40` in raids
+- **Addon sync** — message format 2 (see `docs/MESSAGE_FORMAT_2.md`): hidden addon messages to your party, raid or instance group only (the guild only with guild sharing on), carrying your own cooldowns, buff status, version, battle rez charges, Soulstone placements and what leaders and officers share; late joiners and /reloads are filled in; old 1.x copies still work
+- **Standalone settings window** — six tabs (Getting Started, Display, Lists, Spells, Plans, Profiles); not registered through Blizzard's Settings panel, so it never blocks your spellbook
+- **Ready-now announcements** — when your own tracked spell comes off cooldown, your client tells the group
 - **Works with CooldownTimeline3** — group cooldowns can show as icons on CooldownTimeline3's lanes (see below)
+- **Translations** — every player-visible string goes through a phrase table (`Locales/`): deDE, esES, esMX, frFR, itIT, koKR, ptBR, ruRU, zhCN, zhTW. A language shows English until it is translated on CurseForge
+- **Public feed** — other addons can read the group's cooldowns (`docs/API.md`)
 - **Draggable and lockable** — position and scale saved between sessions
 
 ---
@@ -71,40 +83,61 @@ CooldownCollaborator works together with the addon **CooldownTimeline3** (CDTL3)
 ### Slash Commands
 
 - **`/cdc`** — Toggle main panel visibility
-- **`/cdc lock`** / **`/cdc unlock`** — Lock or unlock frame position
-- **`/cdc reset`** — Reset to default position
+- **`/cdc lock`** / **`/cdc unlock`** — Lock or unlock the position of the windows
+- **`/cdc reset`** — Reset the panel to its default position
 - **`/cdc settings`** — Open the settings window
 - **`/cdc essentials`** — Toggle the Essentials Bar
 - **`/cdc lanes`** — Toggle the Lane View
+- **`/cdc nexthit <seconds or M:SS>`** / **`/cdc nexthit off`** — Set or clear the Lane View's look-ahead: what will be back by then gets a gold ring
 - **`/cdc roster`** — Print the current roster capability scan
-- **`/cdc rez`** — Request Rez on your current (dead) target — leader/assist only
-- **`/cdc consumable <spellID> <seconds> <name>`** — Register a Cauldron/Feast-style shared buff for tracking
+- **`/cdc rez`** — Call a Battle Rez on your current (dead) target. With nobody targeted it calls the top of the dead list. The party leader, a raid leader or assist, or anyone in a 5-man
+- **`/cdc lastpull`** — Print the last pull's log
+- **`/cdc post`** — Post who is ready to raid chat
+- **`/cdc report`** — Open a box with what to paste into a new issue on GitHub
+- **`/cdc tour`** — Take the tour again: one step for each window that is on, with Lock in place at the end (it also runs by itself the first time you are in a group)
+- **`/cdc consumable <spellID> <seconds> <flask|food|other> <name>`** — Register a flask, food or Cauldron/Feast-style buff for tracking. `flask` and `food` count in the Flask / Food line; `other` is tracked but not counted. Leave the category out and it is guessed from the name (the word flask or food anywhere in it)
+- **`/cdc consumable remove <spellID>`** — Stop tracking a consumable you added (they are also listed, with Remove buttons, on the Custom Spells tab in settings)
 - **`/cdc verbose`** — Toggle detailed cast/sync logging, for diagnosing tracking issues
 - **`/cdc debug`** — Print all tracked cooldowns, remaining times, and group/encounter state
 
 ### Settings
 
-Open with `/cdc settings`, or right-click the minimap button. You can show or hide ready cooldowns, lock the panel, hide the minimap button, set the smallest cooldown to track (30s to 180s), and set panel opacity and scale. Default Spells lets you untick any tracked spell. Custom Spells lets you add your own by name or ID and set its cooldown length.
+Open with `/cdc settings`, or right-click the minimap button. Six tabs: **Getting Started** (pick a window to read what it is for and see it with made-up players, Take the tour, Report a problem, the CooldownTimeline3 link), **Display** (windows on or off, lock and reset, opacity and scale, lighter mode, windows only in combat or at a boss, guild sharing), **Lists** (Essentials bar and burst line choices, rezzers to skip), **Spells** (Your role, kinds of spells, Default Spells, Custom Spells), **Plans** (the raid cooldown plan, rotation order, teams) and **Profiles** (Default, New, Copy from, Delete and Reset like every Ace addon, export and import, officer setups, layouts, last pull). Settings > Spells opens with **Your role** cards.
 
 Any other text after `/cdc` toggles the panel.
 
 ### Tracked Cooldowns
 
-**Retail (29):** Rallying Cry · Aura Mastery · Lay on Hands · Blessing of Protection · Guardian Spirit · Pain Suppression · Power Word: Barrier · Leap of Faith · Anti-Magic Zone · Raise Ally · Heroism · Bloodlust · Spirit Link Totem · Ancestral Protection Totem · Healing Tide Totem · Time Warp · Ice Block · Demonic Gateway · Revival · Life Cocoon · Tranquility · Rebirth · Innervate · Darkness · Rewind · Rescue · Zephyr · Time Dilation · Fury of the Aspects
+**Retail (43):** Rallying Cry · Shield Wall · Last Stand · Challenging Shout · Aura Mastery · Lay on Hands · Blessing of Protection · Blessing of Sacrifice · Intercession · Guardian of Ancient Kings · Ardent Defender · Guardian Spirit · Pain Suppression · Power Word: Barrier · Leap of Faith · Power Infusion · Anti-Magic Zone · Raise Ally · Icebound Fortitude · Vampiric Blood · Harrier's Cry · Heroism · Bloodlust · Spirit Link Totem · Ancestral Protection Totem · Healing Tide Totem · Time Warp · Ice Block · Soulstone · Revival · Life Cocoon · Fortifying Brew · Tranquility · Rebirth · Innervate · Survival Instincts · Darkness · Metamorphosis · Rewind · Rescue · Zephyr · Time Dilation · Fury of the Aspects
 
-**MoP Classic (32):** Rallying Cry · Devotion Aura · Lay on Hands · Hand of Protection · Hand of Sacrifice · Hand of Salvation · Guardian Spirit · Pain Suppression · Power Infusion · Power Word: Barrier · Divine Hymn · Hymn of Hope · Vampiric Embrace · Anti-Magic Zone · Raise Ally · Heroism · Bloodlust · Spirit Link Totem · Healing Tide Totem · Stormlash Totem · Time Warp · Revival · Life Cocoon · Tranquility · Rebirth · Innervate · Ironbark · Stampeding Roar · Soulstone · Avert Harm · Demoralizing Banner · Skull Banner
+**MoP Classic (41):** Rallying Cry · Skull Banner · Demoralizing Banner · Mocking Banner · Shield Wall · Last Stand · Lay on Hands · Hand of Protection · Hand of Sacrifice · Hand of Salvation · Devotion Aura · Guardian of Ancient Kings · Ardent Defender · Power Word: Barrier · Divine Hymn · Hymn of Hope · Vampiric Embrace · Guardian Spirit · Pain Suppression · Power Infusion · Anti-Magic Zone · Raise Ally · Icebound Fortitude · Vampiric Blood · Bloodlust · Heroism · Spirit Link Totem · Healing Tide Totem · Stormlash Totem · Time Warp · Soulstone · Revival · Life Cocoon · Avert Harm · Fortifying Brew · Tranquility · Ironbark · Innervate · Rebirth · Stampeding Roar · Survival Instincts
 
-**TBC Anniversary (17):** Shield Wall · Challenging Shout · Lay on Hands · Blessing of Protection · Divine Intervention · Power Infusion · Pain Suppression · Lightwell · Shadowfiend · Heroism · Bloodlust · Mana Tide Totem · Misdirection · Soulstone Resurrection · Innervate · Rebirth · Tranquility
+**TBC Anniversary (23):** Shield Wall · Challenging Shout · Last Stand · Lay on Hands · Divine Intervention · Blessing of Protection · Power Infusion · Pain Suppression · Shadowfiend · Lightwell · Fear Ward · Bloodlust · Heroism · Mana Tide Totem · Earth Elemental Totem · Reincarnation · Misdirection · Soulstone Resurrection · Innervate · Rebirth · Tranquility · Challenging Roar · Goblin Sapper Charge
 
-**Classic Era (12):** Shield Wall · Challenging Shout · Lay on Hands · Blessing of Protection · Divine Intervention · Power Infusion · Lightwell · Mana Tide Totem · Soulstone Resurrection · Innervate · Rebirth · Tranquility
+**Classic Era (16):** Shield Wall · Challenging Shout · Last Stand · Lay on Hands · Divine Intervention · Blessing of Protection · Power Infusion · Lightwell · Mana Tide Totem · Reincarnation · Soulstone Resurrection · Innervate · Rebirth · Tranquility · Challenging Roar · Goblin Sapper Charge
 
-**WoW: Forever (12):** the same twelve as Classic Era, with Forever's own timers (Lay on Hands 20 minutes, Shield Wall 15 minutes).
+**WoW: Forever (17):** the same sixteen as Classic Era, plus Fear Ward, with Forever's own timers (Lay on Hands 20 minutes, Shield Wall 15 minutes).
+
+**Combat rez providers:** Retail: Rebirth, Raise Ally, Intercession, Soulstone. MoP Classic: Rebirth, Raise Ally, Soulstone. Classic Era, TBC Anniversary, WoW: Forever: Rebirth (Soulstone is tracked there, a stone placed beforehand). On Retail every combat rez draws from one shared charge pool; with none left nobody can be rezzed.
 
 Every rank of a spell counts on Classic Era, TBC Anniversary and WoW: Forever. Each client also tracks its own flask and food buffs. You can add any custom spell or consumable buff in-game.
 
 ---
 
 ## Changelog
+
+### v2.0.0
+- New main panel, dead list, externals strip, mana strip, burst line, Essentials Bar and Lane View looks (see Features)
+- Ready alerts (thirty sounds, a speaker on each spell), raid plans, rotation order, teams, Your role cards, Ace-style profiles with a Default, officer setups, guild sharing
+- Getting Started says what each window is for and shows it with sample players; a first-run tour; the panel, Essentials Bar and Lane View start joined
+- Settings: six tabs with a Getting Started page, window on/off, combat or boss only, rezzers to skip, lighter mode
+- Warlocks (Soulstone) are Battle Rez providers on Retail and MoP; Retail tracks Intercession; Request Rez knows when the raid's charges are gone
+- Many more tracked spells on every client; Retail data matches 12.1.5 and Demonic Gateway is dropped
+- Group sync format 2: hello, state request, shared charges and Soulstones; late joiners filled in; old copies still understood
+- New commands: lastpull, post, report, tour, nexthit; `/cdc roster` in plain words
+- Fixed: on WoW: Forever, groupmates whose names carry a surname were ignored; a ranked spell's tooltip shows your own rank
+- Translation support (phrase table, ten languages); public feed for other addons
+- Fixed: Essentials Bar overflow in raids, windows staying up after leaving the group, minimap drag scale, flask/food double count
 
 ### v1.1.1
 - Fixed: you don't show as a ready Battle Rez or Bloodlust before you've learned it. Groupmates who haven't hit the level for it yet don't show either, and they pop in once they ding

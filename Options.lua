@@ -2,8 +2,10 @@
 -- Main settings: standalone CCOptionsFrame (spellbook-safe, Escape to close)
 -- Blizzard AddOns stub: single button that opens the standalone frame
 
+local L = CC.L
+
 local FRAME_W = 560
-local FRAME_H = 600
+local FRAME_H = 640
 local TAB_H   = 26
 
 local CLASS_ORDER = {
@@ -12,44 +14,18 @@ local CLASS_ORDER = {
     "DRUID", "DEMONHUNTER", "EVOKER", "HUNTER", "ROGUE",
 }
 local CLASS_DISPLAY = {
-    WARRIOR     = "Warrior",     PALADIN     = "Paladin",
-    PRIEST      = "Priest",      DEATHKNIGHT = "Death Knight",
-    SHAMAN      = "Shaman",      MAGE        = "Mage",
-    WARLOCK     = "Warlock",     MONK        = "Monk",
-    DRUID       = "Druid",       DEMONHUNTER = "Demon Hunter",
-    EVOKER      = "Evoker",      HUNTER      = "Hunter",
-    ROGUE       = "Rogue",
+    WARRIOR     = L["Warrior"],     PALADIN     = L["Paladin"],
+    PRIEST      = L["Priest"],      DEATHKNIGHT = L["Death Knight"],
+    SHAMAN      = L["Shaman"],      MAGE        = L["Mage"],
+    WARLOCK     = L["Warlock"],     MONK        = L["Monk"],
+    DRUID       = L["Druid"],       DEMONHUNTER = L["Demon Hunter"],
+    EVOKER      = L["Evoker"],      HUNTER      = L["Hunter"],
+    ROGUE       = L["Rogue"],
+    ITEMS       = L["ITEMS"],   -- the group header for item spells
 }
 local MIN_DURATIONS = { 30, 60, 90, 120, 180 }
 
 -- ── Helpers ──────────────────────────────────────────────────────────────────
-
-local function MakeLabel(parent, text, size, anchor, ox, oy)
-    local fs = parent:CreateFontString(nil, "OVERLAY", size or "GameFontHighlight")
-    fs:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", ox or 0, oy or -8)
-    fs:SetText(text)
-    return fs
-end
-
-local function MakeLine(parent, anchor, oy)
-    local t = parent:CreateTexture(nil, "ARTWORK")
-    t:SetSize(FRAME_W - 32, 1)
-    t:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, oy or -4)
-    t:SetColorTexture(0.3, 0.3, 0.4, 0.6)
-    return t
-end
-
-local function MakeCB(parent, label, anchor, ox, oy, getter, setter)
-    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    cb:SetSize(22, 22)
-    cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", ox or 0, oy or -4)
-    cb:SetChecked(getter())
-    cb:SetScript("OnClick", function(self) setter(self:GetChecked()) end)
-    local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lbl:SetPoint("LEFT", cb, "RIGHT", 2, 0)
-    lbl:SetText(label)
-    return cb, lbl
-end
 
 local function ResolveSpell(text)
     local linkID = text:match("|Hspell:(%d+)")
@@ -69,7 +45,679 @@ local function LookupSpellName(spellID)
     return CC.Compat.GetSpellInfo(spellID)
 end
 
+-- ── Windows: one list for Getting Started, lock, reset and on/off ────────────
+-- Each entry names the saved setting and the frame, so a control and a slash command
+-- always agree. `onKey` nil means the main panel: its On is "not closed by the player".
+-- `joins`: the window is one of the joined block (Setups.lua, Joined windows).
+
+CC.WINDOWS = {
+    { key = "main",       label = L["Main panel"],     frame = "frame",           w = 64, h = 46, xKey = "x",           yKey = "y",
+      lockKey = "locked",          lockUpdate = "UpdateLock", joins = true },
+    { key = "essentials", label = L["Essentials bar"], frame = "essentialsFrame", w = 40, h = 46, xKey = "essentialsX", yKey = "essentialsY",
+      onKey = "essentialsEnabled", refresh = "RefreshEssentials", lockKey = "essentialsLocked", lockUpdate = "UpdateEssentialsLock", joins = true },
+    { key = "lanes",      label = L["Lane view"],      frame = "laneFrame",       w = 70, h = 30, xKey = "laneX",       yKey = "laneY",
+      onKey = "laneEnabled",       refresh = "RefreshLanes", lockKey = "laneLocked", lockUpdate = "UpdateLaneLock", joins = true },
+    { key = "dead",       label = L["Dead list"],      frame = "deadFrame",       w = 46, h = 36, xKey = "deadListX",   yKey = "deadListY",
+      onKey = "deadListEnabled",   refresh = "RefreshDeadList", lockKey = "deadListLocked" },
+    { key = "externals",  label = L["Externals"],      frame = "externalsFrame",  w = 58, h = 20, xKey = "externalsX",  yKey = "externalsY",
+      onKey = "externalsEnabled",  refresh = "RefreshExternalsStrip", lockKey = "externalsLocked" },
+    { key = "mana",       label = L["Mana"],           frame = "manaFrame",       w = 40, h = 26, xKey = "manaX",       yKey = "manaY",
+      onKey = "manaEnabled",       refresh = "RefreshManaStrip", lockKey = "manaLocked" },
+    { key = "burst",      label = L["Burst"],          frame = "burstFrame",      w = 72, h = 16, xKey = "burstX",      yKey = "burstY",
+      onKey = "burstEnabled",      refresh = "RefreshBurstLine", lockKey = "burstLocked" },
+}
+
+-- What each window is for, one line each (Getting Started and the tour use the same line), and short
+-- notes on its parts (Getting Started). Each is written from what the window does in the code.
+CC.WINDOW_HELP = {
+    main = {
+        line = L["Every tracked cooldown in your group: who used what, and when it's back. Click a row to ask that player for it."],
+        notes = {
+            L["The title says how many of your group run CooldownCollaborator, and where your game has Bloodlust, who has it next."],
+            L["Cooldowns still counting down come first, the soonest back at the top."],
+            L["Ready ones fold into one line per spell with their owners' names; a ? means ready as far as we know."],
+            L["Click a ready line to whisper its owner for it; Shift-click asks the whole group."],
+        },
+    },
+    essentials = {
+        line = L["Who can Battle Rez right now (and Bloodlust, where your game has it), with a Rez button, and the group's flask and food."],
+        notes = {
+            L["Each heading counts the players who can do it now; Battle Rez also shows the raid's rez charges where your game has them."],
+            L["Under it, the players who can: the ready ones first."],
+            L["Rez asks in group chat for a ready rezzer to raise your dead target, or the top of the Dead list. In a raid, the leader and assists have it."],
+            L["The line at the bottom counts how many in the group have a flask and food."],
+        },
+    },
+    lanes = {
+        line = L["A lane for Battle Rez (and one for Bloodlust where your game has it): used ones count down along it, ready players sit under it."],
+        notes = {
+            L["Each lane is one cooldown the whole group shares."],
+            L["A used one slides along the lane to the right; the nearer the end, the sooner it is back."],
+            L["Players who are ready wait in the Ready row under the lane."],
+            L["/cdc nexthit 2:00, or a pull countdown, rings in gold the ones that will be back before the hit."],
+        },
+    },
+    dead = {
+        line = L["Opens when someone dies in a fight: the dead in rez order, each with a Call button that asks a living rezzer."],
+        notes = {
+            L["Healers come first, then tanks, then damage; the longest dead first inside each."],
+            L["The time after a name is how long they have been dead."],
+            L["Call asks in group chat for the rezzer named at the bottom. In a raid, the leader and assists can call."],
+            L["The bottom line says who would answer: the first living player with a Battle Rez ready."],
+        },
+    },
+    externals = {
+        line = L["The cooldowns your group can put on one player about to take a big hit: ready ones first, the owner's name under each."],
+        notes = {
+            L["One icon for each external cooldown another player in your group has."],
+            L["Ready ones come first; the ones cooling down are dimmed with the time left."],
+            L["The name under an icon is its owner; a ? means ready as far as we know."],
+            L["An owner who is dead or offline has the icon greyed with a mark."],
+        },
+    },
+    mana = {
+        line = L["The mana cooldowns your group has, how many are ready and who would answer, with an Ask button that whispers them."],
+        notes = {
+            L["One icon for each mana cooldown someone in your group has."],
+            L["Under it: how many are ready, and the player who would answer."],
+            L["Ask whispers that player \"<spell> on me please\". Anyone may press it."],
+        },
+    },
+    burst = {
+        line = L["Your big cooldowns above a two-minute line, the group's Bloodlust and Power Infusion below it, and a gold band where they line up."],
+        notes = {
+            L["The top row is your own big cooldowns, placed by how long until they are back: now on the left, 2:00 on the right."],
+            L["The bottom row is the group's next Bloodlust and Power Infusion, where your game has them."],
+            L["The gold band is the earliest time they are all back and one of yours is too; its time is above it."],
+        },
+    },
+}
+
+function CC:WindowIsOn(w)
+    if not w.onKey then return not self.db.panelClosed end
+    return self.db[w.onKey] and true or false
+end
+
+function CC:SetWindowOn(w, on)
+    on = on and true or false
+    if not w.onKey then
+        if on then self:OpenPanel() else self:ClosePanel() end
+        return
+    end
+    self.db[w.onKey] = on
+    self:RefreshView(w.refresh)
+end
+
+function CC:SetOneWindowLocked(w, locked)
+    self.db[w.lockKey] = locked and true or false
+    if w.lockUpdate and self[w.lockUpdate] then self[w.lockUpdate](self) end
+    if self.lockCheck then self.lockCheck:SetChecked(self:AreWindowsLocked()) end
+end
+
+-- Back to where the window starts: the saved position's default, and the frame moves there now. The
+-- Essentials bar, the main panel and the Lane view go back into the joined block, each in its slot (Setups.lua).
+function CC:ResetWindow(w)
+    local defaults = self.DEFAULTS or {}
+    local x, y = defaults[w.xKey] or 0, defaults[w.yKey] or 0
+    self.db[w.xKey], self.db[w.yKey] = x, y
+    if w.joins then
+        self:RejoinWindow(w.key)
+        return
+    end
+    local f = self[w.frame]
+    if f then
+        f:ClearAllPoints()
+        f:SetPoint("CENTER", UIParent, "CENTER", x, y)
+    end
+    if self.LayoutColumn then self:LayoutColumn() end
+end
+
+-- One lock for every window: /cdc lock, /cdc unlock and the Settings box come through here.
+function CC:AreWindowsLocked()
+    for _, w in ipairs(CC.WINDOWS) do
+        if not self.db[w.lockKey] then return false end
+    end
+    return true
+end
+
+function CC:SetWindowsLocked(locked)
+    locked = locked and true or false
+    for _, w in ipairs(CC.WINDOWS) do self.db[w.lockKey] = locked end
+    self:UpdateLock()
+    self:UpdateEssentialsLock()
+    self:UpdateLaneLock()
+    if self.lockCheck then self.lockCheck:SetChecked(locked) end
+    if self.startPage and self.startPage.refresh then self.startPage.refresh() end
+end
+
+-- ── Show presets and kinds (P2) ──────────────────────────────────────────────
+-- A preset picks spells by their `kind` (the Data rows). Choosing one unticks the default
+-- spells whose kind it leaves out; a spell with no kind stays as it was. Everything ticks all.
+
+CC.PRESET_ORDER = { "everything", "simple", "healer", "tank", "dps" }
+CC.PRESETS = {
+    everything = { label = L["Everything"], desc = L["Every spell in the list"] },
+    simple     = { label = L["Basics"],  desc = L["Battle rez, lust and raid cooldowns"],
+                   kinds = { rez = true, lust = true, raid = true } },
+    healer     = { label = L["Healer"],  desc = L["Basics, plus externals and mana"],
+                   kinds = { rez = true, lust = true, raid = true, external = true, mana = true } },
+    tank       = { label = L["Tank"],    desc = L["Basics, plus externals and utility"],
+                   kinds = { rez = true, lust = true, raid = true, external = true, utility = true } },
+    dps        = { label = L["DPS"],     desc = L["Basics, plus utility"],
+                   kinds = { rez = true, lust = true, raid = true, utility = true } },
+}
+-- "My own" is not a preset to pick: it shows when the ticks were changed by hand (showPreset "custom").
+CC.CUSTOM_ROLE = { label = L["My own"], desc = L["Shows when you've ticked spells yourself"] }
+
+local KIND_ORDER = { "rez", "lust", "raid", "external", "mana", "personal", "utility" }
+local KIND_LABEL = {
+    rez = L["Battle rez"], lust = L["Bloodlust"], raid = L["Raid cooldowns"], external = L["Externals"],
+    mana = L["Mana"], personal = L["Personal defensives"], utility = L["Utility"], other = L["Other"],
+}
+
+function CC:ApplyShowPreset(name)
+    local preset = CC.PRESETS[name]
+    if not preset then return false end
+    self.db.showPreset = name
+    self.db.disabledSpells = self.db.disabledSpells or {}
+    for id, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable then
+            if preset.kinds and data.kind and not preset.kinds[data.kind] then
+                self.db.disabledSpells[id] = true
+            else
+                self.db.disabledSpells[id] = nil
+            end
+        end
+    end
+    self:RefreshView("RefreshRows")
+    self:RefreshDefaultSpellList()
+    if self.RefreshPresetButtons then self:RefreshPresetButtons() end
+    return true
+end
+
+-- The kinds this client has default spells of, in the order the ticks show them.
+function CC:KindsPresent()
+    local has, list = {}, {}
+    for _, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable and data.kind then has[data.kind] = true end
+    end
+    for _, k in ipairs(KIND_ORDER) do
+        if has[k] then list[#list + 1] = k end
+    end
+    return list
+end
+
+-- A kind is ticked when every default spell of it is on.
+function CC:KindIsShown(kind)
+    local any = false
+    for id, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable and data.kind == kind then
+            any = true
+            if self.db.disabledSpells and self.db.disabledSpells[id] then return false end
+        end
+    end
+    return any
+end
+
+-- Switch every default spell of a kind on or off; the role becomes My own.
+function CC:SetKindShown(kind, on)
+    self.db.disabledSpells = self.db.disabledSpells or {}
+    for id, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable and data.kind == kind then
+            self.db.disabledSpells[id] = (not on) and true or nil
+        end
+    end
+    self.db.showPreset = "custom"
+    self:RefreshView("RefreshRows")
+    self:RefreshDefaultSpellList()
+    if self.RefreshPresetButtons then self:RefreshPresetButtons() end
+end
+
+-- ── Ready alerts per spell (P1) ──────────────────────────────────────────────
+
+-- The game's named sound constants, with the plain number where a client lacks the name.
+local function Sound(name, number)
+    return SOUNDKIT and SOUNDKIT[name] or number
+end
+CC.ALERT_SOUNDS = {
+    { id = Sound("RAID_WARNING", 8959),             label = L["Raid warning"] },
+    { id = Sound("READY_CHECK", 8960),              label = L["Ready check"] },
+    { id = Sound("ALARM_CLOCK_WARNING_3", 12867),   label = L["Alarm clock"] },
+    { id = Sound("AUCTION_WINDOW_OPEN", 5274),      label = L["Auction bell"] },
+}
+
+-- Blizzard sounds CooldownTimeline3 checked: file data IDs that exist in every client (its Media.lua).
+-- Left out: its Raid Warning (567397) and Alarm Clock 2 (567399), which are the first and third sounds above.
+-- A saved alert holds "file:<id>" for these, a SoundKit number for the four above, "lsm:<name>" for
+-- another addon's sound and, from older saves, true (the first sound) or a file path.
+local BLIZZARD_SOUNDS = {
+    { 567488, L["PvP warning"] },       { 567439, L["Quest complete"] },     { 567400, L["Quest accepted"] },
+    { 567516, L["Quest progress"] },    { 569593, L["Level up"] },           { 568016, L["Reputation rank up"] },
+    { 568587, L["Queue joined"] },      { 568011, L["Queue pop"] },          { 567436, L["Alarm clock 1"] },
+    { 567458, L["Alarm clock 3"] },     { 567484, L["Text ping"] },          { 567421, L["Whisper"] },
+    { 567451, L["Group invite"] },      { 567416, L["Map ping"] },           { 567518, L["Friend online"] },
+    { 567402, L["Battle.net toast"] },  { 915759, L["Store toast"] },        { 567497, L["Flight point discovered"] },
+    { 567428, L["Coin"] },              { 566558, L["Night elf bell"] },     { 568154, L["Shay's bell"] },
+    { 569763, L["Holy cast"] },         { 5259954, L["Sparkle chime"] },     { 6226466, L["Gold cast"] },
+    { 4906957, L["Trading Post celebration"] }, { 4910746, L["Trading Post coins"] },
+}
+
+-- LibSharedMedia, only when another addon has loaded it.
+local function SharedMedia()
+    if LibStub then
+        local ok, lib = pcall(LibStub.GetLibrary, LibStub, "LibSharedMedia-3.0", true)
+        if ok and type(lib) == "table" then return lib end
+    end
+    return nil
+end
+
+-- Every sound the dropdown offers, in order: the four, Blizzard's, then another addon's. { value, label }
+function CC:AlertSoundList()
+    local list, fileIDs = {}, {}
+    for _, s in ipairs(CC.ALERT_SOUNDS) do list[#list + 1] = { value = s.id, label = s.label } end
+    for _, s in ipairs(BLIZZARD_SOUNDS) do
+        list[#list + 1] = { value = "file:" .. s[1], label = s[2] }
+        fileIDs[s[1]] = true
+    end
+    local lsm = SharedMedia()
+    if lsm and lsm.List then
+        local ok, names = pcall(lsm.List, lsm, "sound")
+        for _, name in ipairs(ok and type(names) == "table" and names or {}) do
+            local okF, path = pcall(lsm.Fetch, lsm, "sound", name, true)
+            if name ~= "None" and okF and path and not fileIDs[path] then
+                list[#list + 1] = { value = "lsm:" .. name, label = name }
+            end
+        end
+    end
+    return list
+end
+
+-- A saved sound as the list names it (true is the first one); the others stay as they are.
+function CC:AlertSoundValue(sound)
+    if sound == true then return CC.ALERT_SOUNDS[1].id end
+    return sound
+end
+
+-- ── A dropdown from the addon's own frames ───────────────────────────────────
+-- A button showing the picked value and an arrow; a click opens one list under it (it scrolls when
+-- long); picking, Escape or a click elsewhere closes it. No UIDropDownMenu or Menu API, so it is the
+-- same on every client. items: a list of { value, label } or a function returning one.
+
+local DROP_ROW, DROP_MAX = 18, 10
+
+local function CloseDropdown()
+    local f = CC.dropdown
+    if f then f:Hide(); f.catcher:Hide() end
+end
+
+local function BuildDropdownList()
+    local f = CreateFrame("Frame", "CCDropdownList", UIParent, CC.BackdropTemplate)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetClampedToScreen(true)
+    f:EnableMouse(true)
+    f:SetBackdrop({
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 10,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    f:SetBackdropColor(0.04, 0.04, 0.07, 1)
+    f:SetBackdropBorderColor(0.5, 0.5, 0.65, 1)
+    -- a click anywhere else closes it
+    local catcher = CreateFrame("Button", nil, UIParent)
+    catcher:SetAllPoints(UIParent)
+    catcher:SetFrameStrata("FULLSCREEN_DIALOG")
+    catcher:RegisterForClicks("AnyUp")
+    catcher:SetScript("OnClick", CloseDropdown)
+    catcher:Hide()
+    f.catcher = catcher
+    f:SetFrameLevel(catcher:GetFrameLevel() + 2)
+    f:HookScript("OnShow", function() catcher:Show() end)
+    f:HookScript("OnHide", function() catcher:Hide() end)
+    -- Escape closes the list and nothing else (a window named in UISpecialFrames would close with it)
+    f:EnableKeyboard(true)
+    f:SetScript("OnKeyDown", function(widget, key)
+        if widget.SetPropagateKeyboardInput then widget:SetPropagateKeyboardInput(key ~= "ESCAPE") end
+        if key == "ESCAPE" then CloseDropdown() end
+    end)
+    f.scroll = CreateFrame("ScrollFrame", "CCDropdownScroll", f, "UIPanelScrollFrameTemplate")
+    f.scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
+    f.content = CreateFrame("Frame", nil, f.scroll)
+    f.scroll:SetScrollChild(f.content)
+    f.rows = {}
+    f:Hide()
+    return f
+end
+
+local function OpenDropdown(owner)
+    local f = CC.dropdown
+    if not f then f = BuildDropdownList(); CC.dropdown = f end
+    local items = owner:Items()
+    local picked = owner.get()
+    local n = #items
+    if n == 0 then return end
+    local visible = math.min(n, DROP_MAX)
+    local scrolls = n > DROP_MAX
+    local textW = 0
+    for i, it in ipairs(items) do
+        local row = f.rows[i]
+        if not row then
+            row = CreateFrame("Button", nil, f.content)
+            row:SetHeight(DROP_ROW)
+            local hl = row:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.15)
+            row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.text:SetPoint("LEFT", row, "LEFT", 6, 0)
+            row.text:SetJustifyH("LEFT")
+            row:SetScript("OnClick", function(widget)
+                local o = f.owner
+                CloseDropdown()
+                if o then o.pick(widget.value); o:Refresh() end
+            end)
+            f.rows[i] = row
+        end
+        row.value = it.value
+        row.text:SetText(it.label)
+        local picked_ = picked ~= nil and it.value == picked
+        row.text:SetTextColor(picked_ and 1 or 0.9, picked_ and 0.82 or 0.9, picked_ and 0 or 0.9)
+        textW = math.max(textW, row.text:GetStringWidth() or 0)
+    end
+    for i = n + 1, #f.rows do f.rows[i]:Hide() end
+    local rowW = math.max(owner:GetWidth(), math.ceil(textW) + 16)
+    f.content:SetSize(rowW, n * DROP_ROW)
+    f.scroll:SetSize(rowW, visible * DROP_ROW)
+    for i = 1, n do
+        local row = f.rows[i]
+        row:SetWidth(rowW)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", f.content, "TOPLEFT", 0, -(i - 1) * DROP_ROW)
+        row:Show()
+    end
+    f:SetSize(rowW + 8 + (scrolls and 22 or 0), visible * DROP_ROW + 8)
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, 2)
+    f.owner = owner
+    f.n = n
+    f.catcher:Show()
+    f:Show()
+    f:Raise()
+    -- the picked one in view
+    local at = 0
+    for i, it in ipairs(items) do if picked ~= nil and it.value == picked then at = i end end
+    f.scroll:SetVerticalScroll(scrolls and math.max(0, math.min((at - 1) * DROP_ROW, (n - visible) * DROP_ROW)) or 0)
+end
+
+-- Returns the button; button:Refresh() redraws its text; button:SetEnabled(false) greys it.
+local function NewDropdown(parent, x, y, w, items, get, pick, fallback)
+    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    b:SetSize(w, 22)
+    b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    local arrow = b:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(16, 16)
+    arrow:SetPoint("RIGHT", b, "RIGHT", -4, -1)
+    arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+    arrow:SetTexCoord(0.2, 0.8, 0.2, 0.8)
+    local fs = b:GetFontString()
+    if fs then
+        fs:ClearAllPoints()
+        fs:SetPoint("LEFT", b, "LEFT", 10, 0)
+        fs:SetPoint("RIGHT", b, "RIGHT", -22, 0)
+        fs:SetJustifyH("LEFT")
+    end
+    b.get, b.pick = get, pick
+    function b:Items() return type(items) == "function" and items() or items end
+    function b:Refresh()
+        local v, label = self.get(), nil
+        for _, it in ipairs(self:Items()) do
+            if v ~= nil and it.value == v then label = it.label break end
+        end
+        self:SetText(label or fallback or "")
+    end
+    b:SetScript("OnClick", function(widget)
+        if CC.dropdown and CC.dropdown:IsShown() then CloseDropdown() else OpenDropdown(widget) end
+    end)
+    b:Refresh()
+    return b
+end
+
+function CC:GetAlert(spellID)
+    local a = self.db.alerts
+    local cfg = a and a[spellID]
+    return type(cfg) == "table" and cfg or nil
+end
+
+function CC:SetAlertEnabled(spellID, on)
+    self.db.alerts = self.db.alerts or {}
+    if on then
+        if not self:GetAlert(spellID) then
+            self.db.alerts[spellID] = { sound = true, flash = true, midscreen = false, warn = 0 }
+        end
+    else
+        self.db.alerts[spellID] = nil
+    end
+    self:UpdateAlertBell(spellID)
+end
+
+-- field: "sound" (true, an ID or false), "flash", "midscreen" or "warn" (seconds)
+function CC:SetAlertField(spellID, field, value)
+    local cfg = self:GetAlert(spellID)
+    if not cfg then return false end
+    cfg[field] = value
+    return true
+end
+
+-- Which entry of CC.ALERT_SOUNDS the saved sound is (true: the first, the raid warning).
+function CC:AlertSoundIndex(cfg)
+    if cfg.sound == true then return 1 end
+    for i, s in ipairs(CC.ALERT_SOUNDS) do
+        if s.id == cfg.sound then return i end
+    end
+    return nil
+end
+
+local bells = {}   -- [spellID] = the bell buttons showing it
+
+-- The speaker: off and grey when the spell has no ready alert, with sound waves and gold when it has one.
+local SPEAKER_OFF = "Interface\\AddOns\\CooldownCollaborator\\Media\\speaker-off.tga"
+local SPEAKER_ON  = "Interface\\AddOns\\CooldownCollaborator\\Media\\speaker-on.tga"
+local function PaintSpeaker(icon, on)
+    icon:SetTexture(on and SPEAKER_ON or SPEAKER_OFF)
+    if on then icon:SetVertexColor(1, 0.82, 0) else icon:SetVertexColor(0.55, 0.55, 0.55) end
+end
+
+function CC:UpdateAlertBell(spellID)
+    for _, b in ipairs(bells[spellID] or {}) do
+        if b.icon then PaintSpeaker(b.icon, self:GetAlert(spellID) ~= nil) end
+    end
+end
+
+local function NewBell(row, spellID, anchor, dx)
+    local b = CreateFrame("Button", nil, row)
+    b:SetSize(18, 18)
+    b:SetPoint("RIGHT", anchor, "RIGHT", dx, 0)
+    local icon = b:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    b.icon = icon
+    PaintSpeaker(icon, CC:GetAlert(spellID) ~= nil)
+    b:SetScript("OnClick", function(widget) CC:OpenAlertOptions(spellID, widget) end)
+    b:SetScript("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Ready alert"])
+        GameTooltip:AddLine(L["Sound, row flash, a mid-screen icon or a warning before it is back, for this spell."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    bells[spellID] = bells[spellID] or {}
+    table.insert(bells[spellID], b)
+    return b
+end
+
+-- The one alert box, for whichever spell's bell was clicked.
+function CC:OpenAlertOptions(spellID, anchor)
+    local f = self.alertFrame
+    if not f then
+        f = CreateFrame("Frame", "CCAlertOptions", UIParent, CC.BackdropTemplate)
+        f:SetSize(250, 236)
+        f:SetFrameStrata("DIALOG")
+        f:SetClampedToScreen(true)
+        f:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 20,
+            insets = { left = 6, right = 6, top = 6, bottom = 6 },
+        })
+        f:SetBackdropColor(0.06, 0.06, 0.10, 0.98)
+        f:SetBackdropBorderColor(0.4, 0.4, 0.6, 1)
+        tinsert(UISpecialFrames, "CCAlertOptions")
+        local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+        close:SetScript("OnClick", function() f:Hide() end)
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -14)
+        f.title:SetWidth(210)
+        f.title:SetJustifyH("LEFT")
+
+        local function Check(y, text, onClick)
+            local cb = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+            cb:SetSize(22, 22)
+            cb:SetPoint("TOPLEFT", f, "TOPLEFT", 12, y)
+            local lbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            lbl:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+            lbl:SetText(text)
+            cb:SetScript("OnClick", function(widget) onClick(widget:GetChecked() and true or false) end)
+            return cb
+        end
+        local function Sid() return f.spellID end
+
+        f.enable = Check(-40, L["Alert when it is ready"], function(on)
+            CC:SetAlertEnabled(Sid(), on)
+            f:Refresh()
+        end)
+        f.sound = Check(-68, L["Play a sound"], function(on)
+            local cfg = CC:GetAlert(Sid())
+            if cfg then cfg.sound = on and (cfg.lastSound or true) or false end
+            f:Refresh()
+        end)
+        f.soundBtn = NewDropdown(f, 40, -96, 140,
+            function() return CC:AlertSoundList() end,
+            function()
+                local cfg = CC:GetAlert(Sid())
+                return cfg and cfg.sound and CC:AlertSoundValue(cfg.sound) or nil
+            end,
+            function(value)
+                local cfg = CC:GetAlert(Sid())
+                if cfg and cfg.sound then cfg.sound = value end
+            end, L["Custom sound"])
+        f.testBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        f.testBtn:SetText(L["Test"])
+        f.testBtn:SetSize(50, 22)
+        f.testBtn:SetPoint("LEFT", f.soundBtn, "RIGHT", 4, 0)
+        f.testBtn:SetScript("OnClick", function()
+            local cfg = CC:GetAlert(Sid())
+            if cfg and cfg.sound then CC:PlayAlertSound(cfg.sound) end
+        end)
+        f.flash = Check(-124, L["Flash its row"], function(on)
+            CC:SetAlertField(Sid(), "flash", on)
+        end)
+        f.mid = Check(-152, L["Show its icon in the middle of the screen"], function(on)
+            CC:SetAlertField(Sid(), "midscreen", on)
+        end)
+        local warnLbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        warnLbl:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -190)
+        warnLbl:SetText(L["Warn this many seconds before:"])
+        f.warn = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        f.warn:SetSize(40, 20)
+        f.warn:SetPoint("LEFT", warnLbl, "RIGHT", 10, 0)
+        f.warn:SetAutoFocus(false)
+        f.warn:SetNumeric(true)
+        f.warn:SetMaxLetters(3)
+        f.warn:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
+        f.warn:SetScript("OnEnterPressed", function(widget) widget:ClearFocus() end)
+        f.warn:SetScript("OnTextChanged", function(widget, userInput)
+            if userInput then CC:SetAlertField(Sid(), "warn", tonumber(widget:GetText()) or 0) end
+        end)
+
+        function f:Refresh()
+            local cfg = CC:GetAlert(self.spellID) or {}
+            local on = CC:GetAlert(self.spellID) ~= nil
+            local hasSound = on and cfg.sound and true or false
+            self.enable:SetChecked(on)
+            self.sound:SetChecked(hasSound)
+            self.soundBtn:Refresh()
+            if not hasSound then self.soundBtn:SetText(L["No sound"]) end
+            self.soundBtn:SetEnabled(hasSound)
+            self.testBtn:SetEnabled(hasSound)
+            self.flash:SetChecked(on and cfg.flash ~= false)
+            self.mid:SetChecked(on and cfg.midscreen == true)
+            self.warn:SetText(tostring(tonumber(cfg.warn) or 0))
+            for _, w in ipairs({ self.sound, self.flash, self.mid, self.warn }) do w:SetEnabled(on) end
+        end
+        self.alertFrame = f
+    end
+    f.spellID = spellID
+    local data = CC.SpellData[spellID]
+    f.title:SetText(string.format(L["%s ready alert"], data and data.name or string.format(L["Spell %d"], spellID)))
+    f:ClearAllPoints()
+    if self.optionsFrame then
+        f:SetPoint("TOPLEFT", self.optionsFrame, "TOPRIGHT", 4, 0)
+    else
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
+    f:Refresh()
+    f:Show()
+    return anchor
+end
+
 -- ── Default Spells tab ───────────────────────────────────────────────────────
+
+local ROW = 22
+local HDR = 20
+
+-- One spell's row in the Default Spells list: icon, name, cooldown, bell, tick.
+local function DefaultRow(content, y, sid, data)
+    local row = CreateFrame("Frame", nil, content)
+    row:SetSize(content:GetWidth() - 4, ROW)
+    row:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -y)
+
+    local ico = row:CreateTexture(nil, "ARTWORK")
+    ico:SetSize(16, 16)
+    ico:SetPoint("LEFT", 0, 0)
+    ico:SetTexture(data.icon)
+    ico:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+
+    local nm = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    nm:SetPoint("LEFT", ico, "RIGHT", 4, 0)
+    nm:SetWidth(190)
+    nm:SetJustifyH("LEFT")
+    nm:SetText(data.name)
+
+    local dur = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    dur:SetPoint("LEFT", nm, "RIGHT", 4, 0)
+    local m, s = math.floor(data.duration/60), data.duration % 60
+    dur:SetText(s == 0 and (m.."m") or (m > 0 and (m.."m "..s.."s") or (s.."s")))
+
+    local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+    cb:SetSize(20, 20)
+    cb:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    cb:SetChecked(not (CC.db.disabledSpells and CC.db.disabledSpells[sid]))
+    NewBell(row, sid, cb, -24)
+
+    local function Dim()
+        local a = (CC.db.disabledSpells and CC.db.disabledSpells[sid]) and 0.35 or 1.0
+        ico:SetAlpha(a); nm:SetAlpha(a); dur:SetAlpha(a)
+    end
+    cb:SetScript("OnClick", function(widget)
+        if widget:GetChecked() then CC.db.disabledSpells[sid] = nil
+        else CC.db.disabledSpells[sid] = true end
+        CC.db.showPreset = "custom"
+        CC:RefreshRows()
+        Dim()
+        if CC.RefreshPresetButtons then CC:RefreshPresetButtons() end
+    end)
+    Dim()
+end
 
 function CC:RefreshDefaultSpellList()
     local content = self.defaultSpellContent
@@ -77,76 +725,48 @@ function CC:RefreshDefaultSpellList()
 
     for _, c in pairs({ content:GetChildren() }) do c:Hide(); c:SetParent(nil) end
     for _, r in pairs({ content:GetRegions() }) do r:Hide() end
+    for id in pairs(bells) do bells[id] = nil end
 
-    local byClass = {}
+    -- group by class (the default) or by what the spell is for
+    local byKind = self.db.spellGroupBy == "kind"
+    local groups, order, label = {}, {}, {}
+    if byKind then
+        for _, k in ipairs(KIND_ORDER) do order[#order + 1] = k; label[k] = KIND_LABEL[k] end
+        order[#order + 1] = "other"; label.other = KIND_LABEL.other
+    else
+        for _, c in ipairs(CLASS_ORDER) do order[#order + 1] = c; label[c] = CLASS_DISPLAY[c] end
+        order[#order + 1] = "ITEMS"; label.ITEMS = CLASS_DISPLAY.ITEMS
+    end
     for spellID, data in pairs(CC.SpellData) do
         if not data.custom and not data.consumable then
-            local cls = data.class or "UNKNOWN"
-            if not byClass[cls] then byClass[cls] = {} end
-            byClass[cls][#byClass[cls]+1] = { id = spellID, data = data }
+            local g
+            if byKind then
+                g = KIND_LABEL[data.kind or ""] and data.kind or "other"
+            else
+                g = data.class or "UNKNOWN"
+            end
+            groups[g] = groups[g] or {}
+            groups[g][#groups[g] + 1] = { id = spellID, data = data }
         end
     end
-    for cls in pairs(byClass) do
-        table.sort(byClass[cls], function(a, b) return a.data.name < b.data.name end)
+    for g in pairs(groups) do
+        table.sort(groups[g], function(a, b) return a.data.name < b.data.name end)
     end
 
-    local ROW = 22
-    local HDR = 20
-    local y   = 0
-
-    for _, cls in ipairs(CLASS_ORDER) do
-        local spells = byClass[cls]
+    local y = 0
+    for _, g in ipairs(order) do
+        local spells = groups[g]
         if spells and #spells > 0 then
-            local c = CC.ClassColors[cls] or CC.ClassColors.UNKNOWN
+            local c = byKind and { 1, 0.82, 0 } or CC.ClassColors[g] or CC.ClassColors.UNKNOWN
 
             local hdr = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             hdr:SetPoint("TOPLEFT", content, "TOPLEFT", 2, -y)
-            hdr:SetText(CLASS_DISPLAY[cls] or cls)
+            hdr:SetText(label[g] or g)
             hdr:SetTextColor(c[1], c[2], c[3])
             y = y + HDR
 
             for _, entry in ipairs(spells) do
-                local sid  = entry.id
-                local data = entry.data
-
-                local row = CreateFrame("Frame", nil, content)
-                row:SetSize(content:GetWidth() - 4, ROW)
-                row:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -y)
-
-                local ico = row:CreateTexture(nil, "ARTWORK")
-                ico:SetSize(16, 16)
-                ico:SetPoint("LEFT", 0, 0)
-                ico:SetTexture(data.icon)
-                ico:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-
-                local nm = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                nm:SetPoint("LEFT", ico, "RIGHT", 4, 0)
-                nm:SetWidth(210)
-                nm:SetJustifyH("LEFT")
-                nm:SetText(data.name)
-
-                local dur = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-                dur:SetPoint("LEFT", nm, "RIGHT", 4, 0)
-                local m, s = math.floor(data.duration/60), data.duration % 60
-                dur:SetText(s == 0 and (m.."m") or (m > 0 and (m.."m "..s.."s") or (s.."s")))
-
-                local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-                cb:SetSize(20, 20)
-                cb:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-                cb:SetChecked(not (CC.db.disabledSpells and CC.db.disabledSpells[sid]))
-
-                local function Dim()
-                    local a = (CC.db.disabledSpells and CC.db.disabledSpells[sid]) and 0.35 or 1.0
-                    ico:SetAlpha(a); nm:SetAlpha(a); dur:SetAlpha(a)
-                end
-                cb:SetScript("OnClick", function(self)
-                    if self:GetChecked() then CC.db.disabledSpells[sid] = nil
-                    else CC.db.disabledSpells[sid] = true end
-                    CC:RefreshRows()
-                    Dim()
-                end)
-                Dim()
-
+                DefaultRow(content, y, entry.id, entry.data)
                 y = y + ROW
             end
             y = y + 4
@@ -158,19 +778,31 @@ end
 
 -- ── Custom Spells tab ────────────────────────────────────────────────────────
 
+-- Turn a shift-clicked spell link into the box's text while it has focus
+local function SpellIDFromLink(link)
+    local id = type(link) == "string" and link:match("|Hspell:(%d+)")
+    return id and tonumber(id) or nil
+end
+
 function CC:RefreshSpellList()
     local content = self.spellListContent
     if not content then return end
 
     for _, c in pairs({ content:GetChildren() }) do c:Hide(); c:SetParent(nil) end
 
-    local ROW = 22
+    -- the empty-list note and the consumables heading are single strings made once, shown or
+    -- hidden and placed again on every refresh, so none is left behind under a row
+    if not self.noCustomFS then
+        self.noCustomFS = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        self.noCustomFS:SetText(L["No custom spells added yet."])
+        self.consumableHdrFS = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        self.consumableHdrFS:SetText(L["Consumables you added with /cdc consumable:"])
+    end
+
     local y   = 0
     local any = false
 
-    for idStr, data in pairs(self.db.customSpells) do
-        any = true
-        local sid = tonumber(idStr)
+    local function MakeRow(data, fallbackName, onRemove, alertID)
         local row = CreateFrame("Frame", nil, content)
         row:SetSize(content:GetWidth(), ROW)
         row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
@@ -184,27 +816,268 @@ function CC:RefreshSpellList()
         local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         lbl:SetPoint("LEFT", ico, "RIGHT", 4, 0)
         lbl:SetText(string.format("|cFFCCCCCC%s|r  |cFF888888%ds|r",
-            data.name or idStr, data.duration or 0))
+            data.name or fallbackName, data.duration or 0))
 
         local rmv = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         rmv:SetSize(56, 18)
         rmv:SetPoint("LEFT", lbl, "RIGHT", 8, 0)
-        rmv:SetText("Remove")
-        local s = sid
-        rmv:SetScript("OnClick", function() CC:RemoveCustomSpell(s) end)
-
+        rmv:SetText(L["Remove"])
+        rmv:SetScript("OnClick", onRemove)
+        if alertID then NewBell(row, alertID, rmv, 22) end
         y = y + ROW
     end
 
-    if not any then
-        local fs = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        fs:SetPoint("TOPLEFT", 0, 0)
-        fs:SetText("No custom spells added yet.")
+    for idStr, data in pairs(self.db.customSpells) do
+        any = true
+        local sid = tonumber(idStr)
+        MakeRow(data, idStr, function() CC:RemoveCustomSpell(sid) end, sid)
+    end
+
+    self.noCustomFS:ClearAllPoints()
+    self.noCustomFS:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+    self.noCustomFS:SetShown(not any)
+    if not any then y = ROW end
+
+    -- consumables registered with /cdc consumable, each with a Remove button
+    local list = {}
+    for idStr, data in pairs(self.db.consumableBuffs or {}) do
+        list[#list + 1] = { sid = tonumber(idStr), data = data, idStr = idStr }
+    end
+    table.sort(list, function(l, r) return (l.sid or 0) < (r.sid or 0) end)
+    self.consumableHdrFS:ClearAllPoints()
+    self.consumableHdrFS:SetShown(#list > 0)
+    if #list > 0 then
+        y = y + 8
+        self.consumableHdrFS:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
+        y = y + 18
+        for _, e in ipairs(list) do
+            local sid = e.sid
+            MakeRow(e.data, e.idStr, function() CC:RemoveConsumableBuff(sid, true) end)
+        end
     end
     content:SetHeight(math.max(y, 20))
 end
 
+-- ── CooldownTimeline3 ────────────────────────────────────────────────────────
+
+-- Opens CooldownTimeline3's settings on Filters, where Group cooldowns sits (Defaults > Group
+-- cooldowns). False when it isn't loaded.
+function CC:OpenCDTL3GroupSettings()
+    if not self:BridgeAvailable() then return false end
+    ---@diagnostic disable-next-line: undefined-field
+    local api = _G.CDTL3
+    if type(api) ~= "table" or type(api.ChatCommand) ~= "function" then return false end
+    return pcall(api.ChatCommand, api, "filters") and true or false
+end
+
+-- ── Rezzers to skip (P40) ────────────────────────────────────────────────────
+
+-- mode: "last" (only when nobody else can), "never", or nil to forget the name
+function CC:SetRezSkip(name, mode)
+    name = type(name) == "string" and name:gsub("^%s+", ""):gsub("%s+$", "") or nil
+    if not name or name == "" then return false end
+    self.db.rezSkip = self.db.rezSkip or {}
+    if mode == "last" or mode == "never" then
+        self.db.rezSkip[name] = mode
+    else
+        self.db.rezSkip[name] = nil
+    end
+    if self.RefreshRezSkipList then self:RefreshRezSkipList() end
+    return true
+end
+
 -- ── Standalone options frame ─────────────────────────────────────────────────
+
+-- The Defensives line's and the burst line's spells: a saved list overrides the rule below.
+local function IsDefensiveDefault(data) return data.kind == "external" or data.kind == "raid" end
+local function IsBurstDefault(data)
+    return (data.kind == "personal" or data.kind == "raid") and (data.duration or 0) >= 90
+end
+
+function CC:DefensiveCandidates()
+    local list = {}
+    for id, data in pairs(CC.SpellData) do
+        if not data.consumable and (data.kind == "external" or data.kind == "raid" or data.kind == "personal") then
+            list[#list + 1] = id
+        end
+    end
+    table.sort(list, function(a, b) return (CC.SpellData[a].name or "") < (CC.SpellData[b].name or "") end)
+    return list
+end
+
+function CC:DefensiveIsCounted(id)
+    local saved = self.db.essentialsDefensives
+    if type(saved) == "table" and #saved > 0 then
+        for _, v in ipairs(saved) do if tonumber(v) == id then return true end end
+        return false
+    end
+    return IsDefensiveDefault(CC.SpellData[id])
+end
+
+function CC:SetDefensiveCounted(id, on)
+    local set = {}
+    for _, cid in ipairs(self:DefensiveCandidates()) do
+        if self:DefensiveIsCounted(cid) then set[cid] = true end
+    end
+    set[id] = on and true or nil
+    local list = {}
+    for cid in pairs(set) do list[#list + 1] = cid end
+    table.sort(list)
+    self.db.essentialsDefensives = list   -- an empty list means the default again
+end
+
+function CC:BurstCandidates()
+    local _, class = UnitClass("player")
+    local list = {}
+    for id, data in pairs(CC.SpellData) do
+        if data.class == class and not data.consumable and data.kind ~= "lust" then list[#list + 1] = id end
+    end
+    table.sort(list, function(a, b) return (CC.SpellData[a].name or "") < (CC.SpellData[b].name or "") end)
+    return list
+end
+
+function CC:BurstIsCounted(id)
+    local chosen = self.db.burstSpells
+    if type(chosen) == "table" and next(chosen) ~= nil then
+        return (chosen[id] or chosen[tostring(id)]) and true or false
+    end
+    return IsBurstDefault(CC.SpellData[id])
+end
+
+function CC:SetBurstCounted(id, on)
+    local set = {}
+    for _, cid in ipairs(self:BurstCandidates()) do
+        if self:BurstIsCounted(cid) then set[cid] = true end
+    end
+    set[id] = on and true or nil
+    self.db.burstSpells = set   -- an empty set means the default again
+end
+
+-- The Essentials bar's buff counts, in the order the bar shows them: Flask, Food, then this client's others.
+function CC:BuffCountKeys()
+    local keys = { "flask", "food" }
+    for _, c in ipairs(CC.BuffCategories or {}) do keys[#keys + 1] = c.key end
+    return keys
+end
+
+function CC:SetBuffCountShown(key, on)
+    local shown = {}
+    for _, k in ipairs(self.db.essentialsBuffCounts or {}) do shown[k] = true end
+    shown[key] = on and true or nil
+    local list = {}
+    for _, k in ipairs(self:BuffCountKeys()) do
+        if shown[k] then list[#list + 1] = k end
+    end
+    self.db.essentialsBuffCounts = list
+    self:RefreshView("RefreshEssentials")
+end
+
+-- ── Editors: plans (P12), rotation orders (P39), teams (P43) ─────────────────
+
+local function Trim(s) return ((tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))) end
+
+-- A tracked spell's ID from a name, an ID or a link.
+function CC:ResolveTracked(text)
+    text = Trim(text)
+    if text == "" then return nil end
+    return CC.SpellByName[text] or ResolveSpell(text)
+end
+
+-- A plan row's trigger: "1:30" or "90" is a time into the fight (second value), anything else
+-- is the boss timer's text (first value).
+function CC:ParseTrigger(text)
+    text = Trim(text)
+    if text == "" then return nil, nil end
+    local m, s = text:match("^(%d+):(%d%d)$")
+    if m then return nil, tonumber(m) * 60 + tonumber(s) end
+    if text:match("^%d+$") then return nil, tonumber(text) end
+    return text, nil
+end
+
+-- inputs: { { trigger, player, spell } ... } as typed. Rows missing a part are skipped (counted).
+function CC:PlanRowsFromInput(inputs)
+    local rows, skipped = {}, 0
+    for _, r in ipairs(inputs or {}) do
+        local timer, at = self:ParseTrigger(r.trigger)
+        local sid = self:ResolveTracked(r.spell)
+        local player = Trim(r.player)
+        if (timer or at) and sid and player ~= "" then
+            rows[#rows + 1] = { timer = timer, at = at, player = player, spellID = sid }
+        elseif Trim(r.trigger) ~= "" or player ~= "" or Trim(r.spell) ~= "" then
+            skipped = skipped + 1
+        end
+    end
+    return rows, skipped
+end
+
+function CC:PlanInputsFromRows(rows)
+    local inputs = {}
+    for _, row in ipairs(rows or {}) do
+        local data = CC.SpellData[row.spellID]
+        inputs[#inputs + 1] = {
+            trigger = row.timer or self:LookClock(row.at or 0),
+            player = row.player,
+            spell = data and data.name or tostring(row.spellID),
+        }
+    end
+    return inputs
+end
+
+function CC:SavePlan(name, inputs)
+    name = Trim(name)
+    if name == "" then return false end
+    local rows, skipped = self:PlanRowsFromInput(inputs)
+    self.db.plans[name] = { rows = rows, at = time() }
+    return true, #rows, skipped
+end
+
+-- The order text "A, B, C" (or one a line) as a list of names.
+local function NameList(text)
+    local list = {}
+    for item in tostring(text or ""):gmatch("[^,\r\n]+") do
+        item = Trim(item)
+        if item ~= "" then list[#list + 1] = item end
+    end
+    return list
+end
+
+function CC:SaveRotationFromText(spellText, namesText)
+    local sid = self:ResolveTracked(spellText)
+    if not sid then return false end
+    local names = {}
+    for _, n in ipairs(NameList(namesText)) do names[#names + 1] = n end   -- bare names match a member at use time
+    self:SetRotation(sid, names)
+    return true, sid
+end
+
+function CC:SaveTeam(name, members)
+    name = Trim(name)
+    if name == "" then return false end
+    local list = {}
+    for _, m in ipairs(members or {}) do
+        m = Trim(m)
+        if m ~= "" then list[#list + 1] = m end
+    end
+    self.db.teams = self.db.teams or {}
+    self.db.teams[name] = list
+    self:RefreshView("RefreshRows")
+    return true
+end
+
+function CC:RemoveTeam(name)
+    if not (self.db.teams and self.db.teams[name]) then return false end
+    self.db.teams[name] = nil
+    self:RefreshView("RefreshRows")
+    return true
+end
+
+-- The Settings window, if built, shows what is set now.
+function CC:RefreshOptions()
+    if self.optionsFrame and self.optionsFrame.RefreshAll then self.optionsFrame.RefreshAll() end
+    if self.RefreshDefaultSpellList then self:RefreshDefaultSpellList() end
+    if self.RefreshSpellList then self:RefreshSpellList() end
+    if self.RefreshProfileControls then self:RefreshProfileControls() end
+end
 
 function CC:OpenOptions()
     if self.optionsFrame then
@@ -246,187 +1119,123 @@ function CC:OpenOptions()
     closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -4)
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 
-    local yOff = -46   -- current vertical pen position from top of f
+    -- ── Widgets ───────────────────────────────────────────────────────────
 
-    -- ── Display settings ──────────────────────────────────────────────────
-
-    local hdrDisp = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    hdrDisp:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    hdrDisp:SetText("Display Settings")
-    yOff = yOff - 16
-    MakeLine(f, hdrDisp, -2)
-    yOff = yOff - 6
-
-    local anchor = f   -- for relative positioning below
-    local anchorY = yOff
-
-    local cbReady = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-    cbReady:SetSize(22, 22)
-    cbReady:SetPoint("TOPLEFT", f, "TOPLEFT", 16, anchorY)
-    cbReady:SetChecked(CC.db.showReady)
-    cbReady:SetScript("OnClick", function(self)
-        CC.db.showReady = self:GetChecked(); CC:RefreshRows()
-    end)
-    local lReady = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lReady:SetPoint("LEFT", cbReady, "RIGHT", 2, 0)
-    lReady:SetText("Show ready cooldowns")
-    yOff = yOff - 26
-
-    local cbLock = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-    cbLock:SetSize(22, 22)
-    cbLock:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    cbLock:SetChecked(CC.db.locked)
-    cbLock:SetScript("OnClick", function(self)
-        CC.db.locked = self:GetChecked(); CC:UpdateLock()
-    end)
-    local lLock = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lLock:SetPoint("LEFT", cbLock, "RIGHT", 2, 0)
-    lLock:SetText("Lock panel position")
-    yOff = yOff - 26
-
-    local cbMM = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-    cbMM:SetSize(22, 22)
-    cbMM:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    cbMM:SetChecked(CC.db.minimapHide)
-    cbMM:SetScript("OnClick", function(self)
-        CC.db.minimapHide = self:GetChecked()
-        if CC.minimapBtn then CC.minimapBtn:SetShown(not CC.db.minimapHide) end
-    end)
-    local lMM = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lMM:SetPoint("LEFT", cbMM, "RIGHT", 2, 0)
-    lMM:SetText("Hide minimap button")
-    yOff = yOff - 26
-
-    -- CDTL3 bridge: greyed/hidden unless CDTL3 (with the timer API) is loaded
-    local cbBridge = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-    cbBridge:SetSize(22, 22)
-    cbBridge:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
-    cbBridge:SetScript("OnClick", function(self)
-        CC:SetShowOnCDTL3(self:GetChecked())
-    end)
-    local lBridge = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lBridge:SetPoint("LEFT", cbBridge, "RIGHT", 2, 0)
-    lBridge:SetText("Show group cooldowns on CooldownTimeline3's lanes")
-    cbBridge:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Show group cooldowns on CooldownTimeline3's lanes")
-        GameTooltip:AddLine("Your cooldowns and your group's show as icons with a countdown on CooldownTimeline3's lanes. CooldownTimeline3 decides which lane. Change it in CooldownTimeline3 under Filters > Defaults > Group cooldowns.", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    cbBridge:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    function CC:RefreshBridgeOption()
-        local avail = CC:BridgeAvailable()
-        cbBridge:SetShown(avail)
-        lBridge:SetShown(avail)
-        cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
+    -- Every control that shows a saved setting registers how to read it again, so reopening the
+    -- window or switching profile shows what is set now (CC:RefreshOptions).
+    local refreshers = {}
+    local refreshing = false
+    local function Track(fn) refreshers[#refreshers + 1] = fn; return fn end
+    function f.RefreshAll()
+        refreshing = true
+        for _, fn in ipairs(refreshers) do xpcall(fn, geterrorhandler()) end
+        refreshing = false
+        if CC.RefreshBridgeOption then CC:RefreshBridgeOption() end
+        if CC.RefreshTeamTicks then CC:RefreshTeamTicks() end
+        if CC.RefreshRezSkipList then CC:RefreshRezSkipList() end
+        if CC.startPage and CC.startPage.refresh then CC.startPage.refresh() end
     end
-    CC:RefreshBridgeOption()
-    yOff = yOff - 30
 
-    -- Min duration buttons
-    local mdLbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    mdLbl:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    mdLbl:SetText("Minimum cooldown to track:")
-    yOff = yOff - 26
-
-    local durBtns = {}
-    for i, val in ipairs(MIN_DURATIONS) do
-        local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        b:SetSize(50, 22)
-        b:SetText(val.."s")
-        if i == 1 then
-            b:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-        else
-            b:SetPoint("LEFT", durBtns[i-1], "RIGHT", 4, 0)
+    local function NewCheck(parent, x, y, text, get, set, tip)
+        local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+        cb:SetSize(22, 22)
+        cb:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        cb:SetChecked(get())
+        Track(function() cb:SetChecked(get()) end)
+        cb:SetScript("OnClick", function(widget) set(widget:GetChecked() and true or false) end)
+        local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        lbl:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        lbl:SetText(text)
+        if tip then
+            cb:SetScript("OnEnter", function(widget)
+                GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
+                GameTooltip:SetText(text)
+                GameTooltip:AddLine(tip, 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
         end
-        local v = val
-        b:SetScript("OnClick", function()
-            CC.db.minDuration = v
-            for _, btn in ipairs(durBtns) do btn:SetEnabled(true) end
-            b:SetEnabled(false)
-            CC:RefreshRows()
-        end)
-        if CC.db.minDuration == val then b:SetEnabled(false) end
-        durBtns[i] = b
+        return cb, lbl
     end
-    yOff = yOff - 30
 
-    -- Alpha slider
-    local alphaLbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    alphaLbl:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    alphaLbl:SetText("Panel opacity:")
-    local alphaSlider = CreateFrame("Slider", nil, f, "OptionsSliderTemplate")
-    alphaSlider:SetSize(200, 16)
-    alphaSlider:SetPoint("LEFT", alphaLbl, "RIGHT", 10, 0)
-    alphaSlider:SetMinMaxValues(0.2, 1.0)
-    alphaSlider:SetValueStep(0.05)
-    alphaSlider:SetObeyStepOnDrag(true)
-    alphaSlider:SetValue(CC.db.alpha or 0.9)
-    alphaSlider.Text:SetText("")
-    alphaSlider.Low:SetText("20%")
-    alphaSlider.High:SetText("100%")
-    local alphaVal = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    alphaVal:SetPoint("LEFT", alphaSlider, "RIGHT", 6, 0)
-    alphaVal:SetText(string.format("%.0f%%", (CC.db.alpha or 0.9) * 100))
-    alphaSlider:SetScript("OnValueChanged", function(self, v)
-        CC.db.alpha = v
-        alphaVal:SetText(string.format("%.0f%%", v * 100))
-        if CC.frame then CC.frame:SetAlpha(v) end
-    end)
-    yOff = yOff - 30
+    -- A button sized to its words: today's width where a caller passes one is the least it gets.
+    local BUTTON_PAD = 24
+    local function FitWidth(b, minW)
+        local tw = b.GetTextWidth and b:GetTextWidth() or 0
+        if not tw or tw == 0 then
+            local fs = b.GetFontString and b:GetFontString()
+            tw = fs and fs:GetStringWidth() or 0
+        end
+        return math.max(minW or 0, math.ceil(tw) + BUTTON_PAD)
+    end
 
-    -- Scale slider
-    local scaleLbl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleLbl:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    scaleLbl:SetText("Panel scale:    ")
-    local scaleSlider = CreateFrame("Slider", nil, f, "OptionsSliderTemplate")
-    scaleSlider:SetSize(200, 16)
-    scaleSlider:SetPoint("LEFT", scaleLbl, "RIGHT", 10, 0)
-    scaleSlider:SetMinMaxValues(0.5, 2.0)
-    scaleSlider:SetValueStep(0.1)
-    scaleSlider:SetObeyStepOnDrag(true)
-    scaleSlider:SetValue(CC.db.scale or 1.0)
-    scaleSlider.Text:SetText("")
-    scaleSlider.Low:SetText("0.5x")
-    scaleSlider.High:SetText("2.0x")
-    local scaleVal = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    scaleVal:SetPoint("LEFT", scaleSlider, "RIGHT", 6, 0)
-    scaleVal:SetText(string.format("%.1fx", CC.db.scale or 1.0))
-    scaleSlider:SetScript("OnValueChanged", function(self, v)
-        CC.db.scale = v
-        scaleVal:SetText(string.format("%.1fx", v))
-        if CC.frame then CC.frame:SetScale(v) end
-    end)
-    yOff = yOff - 26
+    local function NewButton(parent, x, y, w, text, onClick)
+        local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        b:SetText(text)
+        b:SetSize(FitWidth(b, w), 22)
+        b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        b.px = x
+        b:SetScript("OnClick", onClick)
+        return b
+    end
 
-    -- ── Spell tracking section ────────────────────────────────────────────
+    -- A row of buttons, the chosen one greyed; a button that would pass the page's width starts a new
+    -- line. Returns a function that redraws it, the buttons and the row's real height.
+    local function NewChoice(parent, x, y, options, width, get, pick)
+        local buttons = {}
+        local function Redraw()
+            for _, b in ipairs(buttons) do b:SetEnabled(b.value ~= get()) end
+        end
+        local limit = (parent:GetWidth() or 0) - 8
+        local cx, cy = x, y
+        for i, opt in ipairs(options) do
+            local b = NewButton(parent, cx, cy, width, opt.label, function()
+                pick(opt.value); Redraw()
+            end)
+            if cx > x and limit > 0 and cx + b:GetWidth() > limit then
+                cx, cy = x, cy - 26
+                b:ClearAllPoints()
+                b:SetPoint("TOPLEFT", parent, "TOPLEFT", cx, cy)
+                b.px = cx
+            end
+            cx = cx + b:GetWidth() + 4
+            b.value = opt.value
+            buttons[i] = b
+        end
+        Redraw()
+        Track(Redraw)
+        return Redraw, buttons, (y - cy) + 22
+    end
 
-    local hdrSpells = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    hdrSpells:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
-    hdrSpells:SetText("Spell Tracking")
-    yOff = yOff - 16
-    MakeLine(f, hdrSpells, -2)
-    yOff = yOff - 10
+    local function NewHeader(parent, y, text)
+        local h = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        h:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, y)
+        h:SetText(text)
+        local line = parent:CreateTexture(nil, "ARTWORK")
+        line:SetSize(FRAME_W - 70, 1)
+        line:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, y - 16)
+        line:SetColorTexture(0.3, 0.3, 0.4, 0.6)
+        return h
+    end
 
-    -- Tab buttons
-    local TAB_Y = yOff
-    local tabDefault = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    tabDefault:SetSize(130, TAB_H)
-    tabDefault:SetText("Default Spells")
-    tabDefault:SetPoint("TOPLEFT", f, "TOPLEFT", 16, TAB_Y)
+    local function NewNote(parent, x, y, width, text)
+        local n = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        n:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        n:SetWidth(width)
+        n:SetJustifyH("LEFT")
+        n:SetText(text)
+        return n
+    end
 
-    local tabCustom = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    tabCustom:SetSize(130, TAB_H)
-    tabCustom:SetText("Custom Spells")
-    tabCustom:SetPoint("LEFT", tabDefault, "RIGHT", 4, 0)
+    -- ── Tabs and pages ────────────────────────────────────────────────────
 
-    yOff = yOff - (TAB_H + 4)
+    local TAB_Y = -44
+    local tabNames = { L["Getting Started"], L["Display"], L["Lists"], L["Spells"], L["Plans"], L["Profiles"] }
+    local tabs, pages = {}, {}
 
-    -- Content area
     local contentArea = CreateFrame("Frame", nil, f, CC.BackdropTemplate)
-    contentArea:SetSize(FRAME_W - 32, FRAME_H - (-yOff) - 16)
-    contentArea:SetPoint("TOPLEFT", f, "TOPLEFT", 16, yOff)
+    contentArea:SetSize(FRAME_W - 32, FRAME_H - (-TAB_Y) - TAB_H - 22)
+    contentArea:SetPoint("TOPLEFT", f, "TOPLEFT", 16, TAB_Y - TAB_H - 4)
     contentArea:SetBackdrop({
         bgFile  = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -435,35 +1244,625 @@ function CC:OpenOptions()
     })
     contentArea:SetBackdropColor(0.04, 0.04, 0.07, 0.8)
     contentArea:SetBackdropBorderColor(0.25, 0.25, 0.35, 0.8)
-
     local CAW = contentArea:GetWidth() - 8
     local CAH = contentArea:GetHeight() - 8
 
+    local function ShowPage(index)
+        for i, p in ipairs(pages) do
+            p:SetShown(i == index)
+            tabs[i]:SetEnabled(i ~= index)
+        end
+        f.page = index
+        if index == 5 and CC.RefreshTeamTicks then CC:RefreshTeamTicks() end
+        if index == 1 and CC.startPage then CC.startPage.refresh() end
+    end
+    for i, name in ipairs(tabNames) do
+        local t = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        t:SetSize(i == 1 and 112 or 80, TAB_H)
+        t:SetText(name)
+        t:SetPoint("TOPLEFT", f, "TOPLEFT", 16 + (i == 1 and 0 or 114 + (i - 2) * 82), TAB_Y)
+        t:SetScript("OnClick", function() ShowPage(i) end)
+        tabs[i] = t
+    end
+
+    local function NewPage(scrolling)
+        if scrolling then
+            local scroll = CreateFrame("ScrollFrame", nil, contentArea, "UIPanelScrollFrameTemplate")
+            scroll:SetSize(CAW - 16, CAH)
+            scroll:SetPoint("TOPLEFT", contentArea, "TOPLEFT", 4, -4)
+            local content = CreateFrame("Frame", nil, scroll)
+            content:SetWidth(CAW - 32)
+            scroll:SetScrollChild(content)
+            return scroll, content
+        end
+        local p = CreateFrame("Frame", nil, contentArea)
+        p:SetSize(CAW, CAH)
+        p:SetPoint("TOPLEFT", contentArea, "TOPLEFT", 4, -4)
+        return p, p
+    end
+
+    -- ══ Page 1: Getting Started ═══════════════════════════════════════════
+    -- Pick and see: the seven windows as a list with each one's On tick; the picked one's name, its line and
+    -- notes on its parts, with Lock, Reset and Show it now (a sample on the real window, Tour.lua). Under
+    -- them the CooldownTimeline3 card, Take the tour and Report a problem.
+
+    local startPage = NewPage(false)
+    pages[1] = startPage
+    do
+    local LIST_X, RIGHT_X = 4, 176
+    local RIGHT_W = CAW - RIGHT_X - 8
+    -- the wrapped height of a text: what the game says, or at least what its characters need (6.5 pixels each,
+    -- 13 a line), so a long line never runs into the next
+    local function TextHeight(fs, text, width, perChar, lineH)
+        local lines = math.max(1, math.ceil(#text * perChar / width))
+        return math.max(fs:GetStringHeight() or 0, lines * lineH)
+    end
+
+    local intro = NewNote(startPage, 4, -2, CAW - 16,
+        L["Everyone in your group who runs CooldownCollaborator shares their cooldowns. Pick a window to see what it shows."])
+    local INTRO_H = TextHeight(intro, L["Everyone in your group who runs CooldownCollaborator shares their cooldowns. Pick a window to see what it shows."], CAW - 16, 6.5, 13)
+    local TOP_Y = -(INTRO_H + 12)
+
+    -- left: the windows, each with its On tick
+    local rows = {}
+    local picked
+    local RenderPick
+    for i, w in ipairs(CC.WINDOWS) do
+        local row = {}
+        local y = TOP_Y - (i - 1) * 28
+        row.on = CreateFrame("CheckButton", nil, startPage, "UICheckButtonTemplate")
+        row.on:SetSize(22, 22)
+        row.on:SetPoint("TOPLEFT", startPage, "TOPLEFT", LIST_X, y)
+        row.on:SetScript("OnClick", function(widget) CC:SetWindowOn(w, widget:GetChecked() and true or false) end)
+        row.pick = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+        row.pick:SetText(w.label)
+        row.pick:SetSize(FitWidth(row.pick, 110), 22)
+        row.pick:SetPoint("TOPLEFT", startPage, "TOPLEFT", LIST_X + 26, y)
+        row.pick:SetScript("OnClick", function() RenderPick(w); CC:ShowWindowNow(w) end)   -- pick and see
+        row.window = w
+        rows[i] = row
+    end
+
+    -- right: the picked window
+    local nameFS = startPage:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    nameFS:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, TOP_Y)
+    local lineFS = startPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lineFS:SetWidth(RIGHT_W)
+    lineFS:SetJustifyH("LEFT")
+    local noteFS = {}
+    for i = 1, 4 do
+        local n = startPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        n:SetWidth(RIGHT_W)
+        n:SetJustifyH("LEFT")
+        noteFS[i] = n
+    end
+    local lockCB = CreateFrame("CheckButton", nil, startPage, "UICheckButtonTemplate")
+    lockCB:SetSize(22, 22)
+    local lockLbl = startPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lockLbl:SetPoint("LEFT", lockCB, "RIGHT", 2, 0)
+    lockLbl:SetText(L["Lock"])
+    lockCB:SetScript("OnClick", function(widget)
+        if picked then CC:SetOneWindowLocked(picked, widget:GetChecked() and true or false) end
+    end)
+    local resetBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    resetBtn:SetText(L["Reset"])
+    resetBtn:SetSize(FitWidth(resetBtn, 60), 22)
+    resetBtn:SetScript("OnClick", function() if picked then CC:ResetWindow(picked) end end)
+    resetBtn:SetScript("OnEnter", function(widget)
+        if not picked then return end
+        GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
+        GameTooltip:SetText(string.format(L["Reset %s"], picked.label))
+        GameTooltip:AddLine(L["Moves the window back to where it starts."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    resetBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local showBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    showBtn:SetText(L["Show it now"])
+    showBtn:SetSize(FitWidth(showBtn, 90), 22)
+    showBtn:SetScript("OnClick", function() if picked then CC:ShowWindowNow(picked) end end)
+    showBtn:SetScript("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Show it now"])
+        GameTooltip:AddLine(L["Shows the window with made-up players for 20 seconds, even on your own. Nothing is sent to your group."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    showBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    RenderPick = function(w)
+        picked = w
+        startPage.picked = w
+        local help = CC.WINDOW_HELP[w.key] or { line = "", notes = {} }
+        nameFS:SetText(w.label)
+        lineFS:SetText(help.line)
+        lineFS:ClearAllPoints()
+        lineFS:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, TOP_Y - 28)
+        local y = TOP_Y - 28 - TextHeight(lineFS, help.line, RIGHT_W, 7.4, 15) - 8
+        for i, n in ipairs(noteFS) do
+            local text = help.notes[i]
+            if text then
+                local numbered = string.format(L["%d. %s"], i, text)
+                n:SetText(numbered)
+                n:ClearAllPoints()
+                n:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, y)
+                y = y - TextHeight(n, numbered, RIGHT_W, 6.5, 13) - 5
+                n:Show()
+            else
+                n:SetText("")
+                n:Hide()
+            end
+        end
+        y = y - 6
+        lockCB:ClearAllPoints()
+        lockCB:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, y)
+        resetBtn:ClearAllPoints()
+        resetBtn:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X + 80, y)
+        showBtn:ClearAllPoints()
+        showBtn:SetPoint("LEFT", resetBtn, "RIGHT", 6, 0)
+        startPage.rightBottom = y - 22
+        lockCB:SetChecked(CC.db and CC.db[w.lockKey] and true or false)
+        for _, row in ipairs(rows) do row.pick:SetEnabled(row.window ~= w) end
+    end
+
+    -- the foot: the CooldownTimeline3 card, then Take the tour and Report a problem
+    local FOOT_H = 22
+    local tourBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    tourBtn:SetText(L["Take the tour"])
+    tourBtn:SetSize(FitWidth(tourBtn, 110), FOOT_H)
+    tourBtn:SetPoint("BOTTOMLEFT", startPage, "BOTTOMLEFT", 4, 6)
+    tourBtn:SetScript("OnClick", function() CC:StartTour(true) end)
+    local reportBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    reportBtn:SetText(L["Report a problem"])
+    reportBtn:SetSize(FitWidth(reportBtn, 130), FOOT_H)
+    reportBtn:SetPoint("LEFT", tourBtn, "RIGHT", 8, 0)
+    reportBtn:SetScript("OnClick", function() CC:ShowReport() end)
+    startPage.tourBtn, startPage.reportBtn = tourBtn, reportBtn
+
+    do
+        local CARD_H = 84
+        local card = CreateFrame("Frame", nil, startPage, CC.BackdropTemplate)
+        card:SetSize(CAW - 12, CARD_H)
+        card:SetPoint("BOTTOMLEFT", startPage, "BOTTOMLEFT", 2, 6 + FOOT_H + 8)
+        card:SetBackdrop({
+            bgFile  = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 8,
+            insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        })
+        card:SetBackdropColor(0.08, 0.08, 0.14, 0.9)
+        card:SetBackdropBorderColor(0.35, 0.35, 0.55, 0.9)
+        local head = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        head:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -10)
+        head:SetText("CooldownTimeline3")
+        local text = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        text:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -6)
+        text:SetWidth(CAW - 12 - 20)
+        text:SetJustifyH("LEFT")
+        local btn = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
+        btn:SetText(L["Open Group cooldowns settings"])
+        btn:SetSize(FitWidth(btn, 190), 22)
+        btn:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 10)
+        btn:SetScript("OnClick", function() CC:OpenCDTL3GroupSettings() end)
+        local where = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        where:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 12)
+        where:SetText(L["Not installed. Get it on CurseForge or Wago."])
+        function card.Refresh()
+            local avail = CC:BridgeAvailable()
+            btn:SetShown(avail)
+            where:SetShown(not avail)
+            text:SetText(avail
+                and L["Adds your group's cooldowns to its lanes as icons with a countdown. It decides which lane they go on."]
+                or L["Adds your group's cooldowns to its timeline lanes as icons with a countdown, beside your own."])
+        end
+        card.button = btn
+        startPage.cdtl3Card = card
+    end
+
+    startPage.refresh = function()
+        for _, row in ipairs(rows) do
+            row.on:SetChecked(CC:WindowIsOn(row.window))
+        end
+        if picked then lockCB:SetChecked(CC.db[picked.lockKey] and true or false) end
+        startPage.cdtl3Card.Refresh()
+    end
+    startPage.rows, startPage.noteFS, startPage.nameFS, startPage.lineFS = rows, noteFS, nameFS, lineFS
+    startPage.lockCB, startPage.resetBtn, startPage.showBtn = lockCB, resetBtn, showBtn
+    startPage.pick = RenderPick
+    RenderPick(CC.WINDOWS[1])
+    end
+    CC.startPage = startPage
+
+    -- ══ Page 2: Display ═══════════════════════════════════════════════════
+
+    local dispScroll, d = NewPage(true)
+    pages[2] = dispScroll
+    local y = -2
+
+    NewHeader(d, y, L["Panel"]); y = y - 24
+    NewCheck(d, 4, y, L["Show ready cooldowns"], function() return CC.db.showReady end,
+        function(v) CC.db.showReady = v; CC:RefreshRows() end)
+    y = y - 26
+
+    local cbLock = NewCheck(d, 4, y, L["Lock windows"], function() return CC:AreWindowsLocked() end,
+        function(v) CC:SetWindowsLocked(v) end)
+    CC.lockCheck = cbLock
+    -- /cdc lock and /cdc unlock may have changed it while this window was closed
+    -- (the window shows what is set now: /cdc lock, a profile switch or guild sharing may have changed it)
+    f:SetScript("OnShow", function()
+        f.RefreshAll()
+        -- Getting Started opens with the main panel picked
+        if CC.startPage and CC.startPage.pick then CC.startPage.pick(CC.WINDOWS[1]) end
+    end)
+    -- a sample window (Tour.lua) ends with Settings
+    f:HookScript("OnHide", function() CC:HideSample() end)
+    y = y - 26
+
+    NewCheck(d, 4, y, L["Hide minimap button"], function() return CC.db.minimapHide end, function(v)
+        CC.db.minimapHide = v
+        if CC.minimapBtn then CC.minimapBtn:SetShown(not v) end
+    end)
+    y = y - 26
+
+    -- CDTL3 bridge: greyed/hidden unless CDTL3 (with the timer API) is loaded
+    local bridgeTip = L["Your cooldowns and your group's show as icons with a countdown on CooldownTimeline3's lanes. CooldownTimeline3 decides which lane. Change it in CooldownTimeline3 under Filters > Defaults > Group cooldowns."]
+    local cbBridge, lBridge = NewCheck(d, 4, y, L["Show group cooldowns on CooldownTimeline3's lanes"],
+        function() return CC.db.showOnCDTL3 ~= false end, function(v) CC:SetShowOnCDTL3(v) end, bridgeTip)
+    function CC:RefreshBridgeOption()
+        local avail = CC:BridgeAvailable()
+        cbBridge:SetShown(avail)
+        lBridge:SetShown(avail)
+        cbBridge:SetChecked(CC.db.showOnCDTL3 ~= false)
+    end
+    CC:RefreshBridgeOption()
+    y = y - 30
+
+    CC.guildCheck = NewCheck(d, 4, y, L["Share with my guild (adds a Guild tab to the panel)"],
+        function() return CC.db.guildSync == true end, function(v) CC:SetGuildSync(v) end,
+        L["Your cooldowns and who runs the addon go out on the guild channel, and the panel gets a Guild tab. Off by default."])
+    y = y - 30
+
+    NewHeader(d, y, L["Accept setups from:"]); y = y - 24
+    local _, _, rowH = NewChoice(d, 4, y, {
+        { label = L["Guild master and officers"], value = "officers" },
+        { label = L["Any rank"], value = "any" },
+        { label = L["Nobody"], value = "nobody" },
+    }, 150, function() return CC.db.setupFrom or "officers" end, function(v) CC.db.setupFrom = v end)
+    y = y - rowH - 8
+
+    local lbl = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lbl:SetPoint("TOPLEFT", d, "TOPLEFT", 4, y - 4)
+    lbl:SetText(L["Panel style:"])
+    _, _, rowH = NewChoice(d, 100, y, { { label = L["Text rows"], value = "text" }, { label = L["Icon row"], value = "icons" } }, 100,
+        function() return CC.db.panelStyle or "text" end,
+        function(v) CC.db.panelStyle = v; CC:RefreshRows() end)
+    y = y - rowH - 10
+
+    -- Min duration buttons
+    local mdLbl = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    mdLbl:SetPoint("TOPLEFT", d, "TOPLEFT", 4, y)
+    mdLbl:SetText(L["Minimum cooldown to track:"])
+    y = y - 22
+    local durOptions = {}
+    for _, val in ipairs(MIN_DURATIONS) do durOptions[#durOptions + 1] = { label = val .. "s", value = val } end
+    _, _, rowH = NewChoice(d, 4, y, durOptions, 50, function() return CC.db.minDuration end,
+        function(v) CC.db.minDuration = v; CC:RefreshRows() end)
+    y = y - rowH - 10
+
+    local function NewSlider(label, lo, hi, step, lowText, highText, get, set, format)
+        local sl = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        sl:SetPoint("TOPLEFT", d, "TOPLEFT", 4, y)
+        sl:SetText(label)
+        local slider = CreateFrame("Slider", nil, d, "OptionsSliderTemplate")
+        slider:SetSize(200, 16)
+        slider:SetPoint("TOPLEFT", d, "TOPLEFT", 150, y - 2)
+        slider:SetMinMaxValues(lo, hi)
+        slider:SetValueStep(step)
+        slider:SetObeyStepOnDrag(true)
+        slider:SetValue(get())
+        slider.Text:SetText("")
+        slider.Low:SetText(lowText)
+        slider.High:SetText(highText)
+        local val = d:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        val:SetPoint("LEFT", slider, "RIGHT", 6, 0)
+        val:SetText(format(get()))
+        slider:SetScript("OnValueChanged", function(_, v)
+            if refreshing then val:SetText(format(v)) return end
+            set(v)
+            val:SetText(format(v))
+        end)
+        Track(function() slider:SetValue(get()) end)
+        y = y - 30
+        return slider
+    end
+    NewSlider(L["Panel opacity:"], 0.2, 1.0, 0.05, "20%", "100%",
+        function() return CC.db.alpha or 0.9 end,
+        function(v) CC.db.alpha = v; if CC.frame then CC.frame:SetAlpha(v) end end,
+        function(v) return string.format("%.0f%%", v * 100) end)
+    NewSlider(L["Panel scale:"], 0.5, 2.0, 0.1, "0.5x", "2.0x",
+        function() return CC.db.scale or 1.0 end,
+        function(v) CC.db.scale = v; if CC.frame then CC.frame:SetScale(v) end end,
+        function(v) return string.format("%.1fx", v) end)
+
+    y = y - 6
+    NewHeader(d, y, L["When the windows show"]); y = y - 24
+    _, _, rowH = NewChoice(d, 4, y, {
+        { label = L["Always"], value = "always" },
+        { label = L["Only in combat"], value = "combat" },
+        { label = L["Only on boss fights"], value = "boss" },
+    }, 150, function() return CC.db.showWindows or "always" end,
+        function(v) CC.db.showWindows = v; CC:RefreshAllViews() end)
+    y = y - rowH - 6
+    NewNote(d, 4, y, CAW - 40, L["The main panel, the Essentials bar and the Lane view. Closing a window yourself still keeps it shut."])
+    y = y - 30
+
+    NewCheck(d, 4, y, L["Lighter mode"], function() return CC.db.lighterMode == true end,
+        function(v) CC.db.lighterMode = v end,
+        L["Refreshes the panel and the Essentials bar every second instead of every half second, and the Lane view every half second instead of every fifth. /cdc debug shows the rates."])
+    y = y - 30
+    d:SetHeight(-y + 10)
+
+    -- ══ Page 3: Bars & Lists ══════════════════════════════════════════════
+
+    local listScroll, b = NewPage(true)
+    pages[3] = listScroll
+    y = -2
+
+    NewHeader(b, y, L["Essentials bar: buff counts"]); y = y - 24
+    local shownCounts = {}
+    local function CountsShown()
+        wipe(shownCounts)
+        for _, k in ipairs(CC.db.essentialsBuffCounts or {}) do shownCounts[k] = true end
+    end
+    for i, key in ipairs(CC:BuffCountKeys()) do
+        local count = CC.BuffCounts and CC.BuffCounts[key]
+        local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+        CountsShown()
+        NewCheck(b, 4 + col * 240, y - rowN * 24, count and count.label or key,
+            function() return shownCounts[key] == true end,
+            function(v) CC:SetBuffCountShown(key, v) end)
+    end
+    y = y - math.ceil(#CC:BuffCountKeys() / 2) * 24 - 6
+    do
+        local aimLbl = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        aimLbl:SetPoint("TOPLEFT", b, "TOPLEFT", 4, y)
+        aimLbl:SetText(L["Green from this many players:"])
+        local slider = CreateFrame("Slider", nil, b, "OptionsSliderTemplate")
+        slider:SetSize(180, 16)
+        slider:SetPoint("TOPLEFT", b, "TOPLEFT", 220, y - 2)
+        slider:SetMinMaxValues(0, 40)
+        slider:SetValueStep(1)
+        slider:SetObeyStepOnDrag(true)
+        slider.Text:SetText("")
+        slider.Low:SetText(L["whole group"])
+        slider.High:SetText("40")
+        local val = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        val:SetPoint("LEFT", slider, "RIGHT", 6, 0)
+        local function Say(v) val:SetText(v > 0 and tostring(v) or L["whole group"]) end
+        local aim = tonumber(CC.db.essentialsBuffAim) or 0
+        slider:SetValue(aim)
+        Say(aim)
+        slider:SetScript("OnValueChanged", function(_, v)
+            v = math.floor(v + 0.5)
+            if not refreshing then CC.db.essentialsBuffAim = v end
+            Say(v)
+        end)
+        Track(function() slider:SetValue(tonumber(CC.db.essentialsBuffAim) or 0) end)
+        y = y - 34
+    end
+
+    -- A list of spells with ticks, two to a line; returns the next y.
+    local function SpellTicks(list, isOn, setOn)
+        for i, id in ipairs(list) do
+            local data = CC.SpellData[id]
+            local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+            local cb, lb = NewCheck(b, 4 + col * 240, y - rowN * 22, data.name or tostring(id),
+                function() return isOn(id) end, function(v) setOn(id, v) end)
+            cb:SetSize(20, 20)
+            lb:SetFontObject(GameFontHighlightSmall)
+            lb:SetWidth(190)
+            lb:SetJustifyH("LEFT")
+        end
+        y = y - math.ceil(#list / 2) * 22 - 6
+    end
+
+    NewHeader(b, y, L["Essentials bar: Defensives line"]); y = y - 24
+    NewNote(b, 4, y, CAW - 40, L["The cooldowns the line counts. Unticking every one goes back to every external and raid cooldown."])
+    y = y - 30
+    SpellTicks(CC:DefensiveCandidates(), function(id) return CC:DefensiveIsCounted(id) end,
+        function(id, v) CC:SetDefensiveCounted(id, v); CC:RefreshView("RefreshEssentials") end)
+
+    NewHeader(b, y, L["Burst line: your counted spells"]); y = y - 24
+    NewNote(b, 4, y, CAW - 40, L["Your own cooldowns the burst line shows. Unticking every one goes back to your personal and raid cooldowns of 90 s or more."])
+    y = y - 30
+    SpellTicks(CC:BurstCandidates(), function(id) return CC:BurstIsCounted(id) end,
+        function(id, v) CC:SetBurstCounted(id, v); CC:RefreshView("RefreshBurstLine") end)
+
+    NewHeader(b, y, L["Rezzers to skip"]); y = y - 24
+    NewNote(b, 4, y, CAW - 40,
+        L["Last choice: asked only when nobody else can. Never: not asked at all. The rez call and the dead list both follow it."])
+    y = y - 30
+    local skipInput = CreateFrame("EditBox", nil, b, "InputBoxTemplate")
+    skipInput:SetSize(150, 22)
+    skipInput:SetPoint("TOPLEFT", b, "TOPLEFT", 10, y)
+    skipInput:SetAutoFocus(false)
+    skipInput:SetMaxLetters(60)
+    skipInput:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
+    local function SkipName()
+        local text = skipInput:GetText()
+        if (not text or text == "") and UnitExists("target") then
+            local ok, name = pcall(CC.FullName, CC, "target")
+            text = ok and name and CC:ShortName(name) or ""
+        end
+        return text
+    end
+    local function AddSkip(mode)
+        if CC:SetRezSkip(SkipName(), mode) then skipInput:SetText("") end
+    end
+    NewButton(b, 166, y + 1, 90, L["Last choice"], function() AddSkip("last") end)
+    NewButton(b, 260, y + 1, 60, L["Never"], function() AddSkip("never") end)
+    y = y - 26
+    NewNote(b, 10, y, CAW - 50, L["Type a player's name, or leave it empty to use your target."])
+    y = y - 22
+    local skipTop = y
+    local skipRows = {}
+    function CC:RefreshRezSkipList()
+        for _, r in ipairs(skipRows) do r:Hide() end
+        local names = {}
+        for name in pairs(CC.db.rezSkip or {}) do names[#names + 1] = name end
+        table.sort(names)
+        for i, name in ipairs(names) do
+            local r = skipRows[i]
+            if not r then
+                r = CreateFrame("Frame", nil, b)
+                r:SetSize(CAW - 40, 22)
+                r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                r.text:SetPoint("LEFT", r, "LEFT", 6, 0)
+                r.mode = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+                r.mode:SetSize(90, 18)
+                r.mode:SetPoint("LEFT", r, "LEFT", 220, 0)
+                r.rm = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+                r.rm:SetSize(56, 18)
+                r.rm:SetPoint("LEFT", r.mode, "RIGHT", 4, 0)
+                r.rm:SetText(L["Remove"])
+                skipRows[i] = r
+            end
+            r:SetPoint("TOPLEFT", b, "TOPLEFT", 4, skipTop - (i - 1) * 22)
+            r.text:SetText(name)
+            local mode = CC.db.rezSkip[name]
+            r.mode:SetText(mode == "never" and L["Never"] or L["Last choice"])
+            r.mode:SetScript("OnClick", function()
+                CC:SetRezSkip(name, mode == "never" and "last" or "never")
+            end)
+            r.rm:SetScript("OnClick", function() CC:SetRezSkip(name, nil) end)
+            r:Show()
+        end
+        b:SetHeight(-skipTop + #names * 22 + 14)
+    end
+    CC:RefreshRezSkipList()
+
+    -- ══ Page 4: Spells ════════════════════════════════════════════════════
+
+    local spellPage = NewPage(false)
+    pages[4] = spellPage
+
+    -- Your role (P2): cards that pick the spells by kind, and the kinds one by one underneath
+    local roleHdr = spellPage:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    roleHdr:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, -6)
+    roleHdr:SetText(L["Your role"])
+    NewNote(spellPage, 4, -24, CAW - 16, L["Picks the spells this window tracks. Tick or untick any spell below afterwards."])
+
+    local ROLE_W, ROLE_H = 168, 46
+    local roleCards = {}
+    CC.roleCards = roleCards
+    for i, key in ipairs({ "everything", "simple", "healer", "tank", "dps", "custom" }) do
+        local info = key == "custom" and CC.CUSTOM_ROLE or CC.PRESETS[key]
+        local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
+        local card = CreateFrame("Button", nil, spellPage, CC.BackdropTemplate)
+        card:SetSize(ROLE_W - 4, ROLE_H - 4)
+        card:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4 + col * ROLE_W, -44 - row * ROLE_H)
+        card:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        card:SetBackdropColor(0.08, 0.08, 0.14, 0.9)
+        local nm = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        nm:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -6)
+        nm:SetText(info.label)
+        local ds = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        ds:SetPoint("TOPLEFT", nm, "BOTTOMLEFT", 0, -2)
+        ds:SetWidth(ROLE_W - 22)
+        ds:SetJustifyH("LEFT")
+        ds:SetText(info.desc)
+        card.key = key
+        if key ~= "custom" then   -- My own only lights up: it is what hand-ticking leaves
+            local hl = card:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.08)
+            card:SetScript("OnClick", function() CC:ApplyShowPreset(key) end)
+        end
+        roleCards[#roleCards + 1] = card
+    end
+    local function RedrawRoles()
+        local cur = CC.db.showPreset or "everything"
+        for _, card in ipairs(roleCards) do
+            card.picked = card.key == cur
+            if card.picked then card:SetBackdropBorderColor(1, 0.82, 0, 1) else card:SetBackdropBorderColor(0.35, 0.35, 0.5, 1) end
+        end
+    end
+
+    -- Kinds of spells: folded, closed until the small button opens it
+    local KINDS_Y = -44 - 2 * ROLE_H - 2
+    local kindChecks, kindsOpen = {}, false
+    local kindsBtn
+    local LayoutSpellPage   -- below
+    for i, kind in ipairs(CC:KindsPresent()) do
+        local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+        local cb, lb = NewCheck(spellPage, 14 + col * 240, KINDS_Y - 28 - rowN * 22, KIND_LABEL[kind],
+            function() return CC:KindIsShown(kind) end, function(v) CC:SetKindShown(kind, v) end,
+            L["Switches every default spell of this kind on or off. The role becomes My own."])
+        cb:SetSize(20, 20)
+        cb:Hide(); lb:Hide()
+        kindChecks[#kindChecks + 1] = { cb = cb, lb = lb, kind = kind }
+    end
+    local function ShowKinds(open)
+        kindsOpen = open
+        for _, k in ipairs(kindChecks) do k.cb:SetShown(open); k.lb:SetShown(open) end
+        kindsBtn:SetText((open and "- " or "+ ") .. L["Kinds of spells"])
+        kindsBtn:SetWidth(FitWidth(kindsBtn, 120))
+        if LayoutSpellPage then LayoutSpellPage() end
+    end
+    kindsBtn = NewButton(spellPage, 4, KINDS_Y, 120, "+ " .. L["Kinds of spells"], function() ShowKinds(not kindsOpen) end)
+    CC.kindsToggle = kindsBtn
+    CC.kindChecks = kindChecks
+    kindsBtn:SetHeight(20)
+
+    function CC:RefreshPresetButtons()
+        RedrawRoles()
+        for _, k in ipairs(kindChecks) do k.cb:SetChecked(CC:KindIsShown(k.kind)) end
+    end
+    Track(function() CC:RefreshPresetButtons() end)
+
+    -- sub-tabs and grouping (placed by LayoutSpellPage, under the kinds when they are open)
+    local SUB_Y = KINDS_Y - 28
+    local tabDefault = NewButton(spellPage, 4, SUB_Y, 110, L["Default Spells"], function() end)
+    local tabCustom  = NewButton(spellPage, 118, SUB_Y, 110, L["Custom Spells"], function() end)
+    local groupLbl = spellPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    groupLbl:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 270, SUB_Y - 5)
+    groupLbl:SetText(L["Group by:"])
+    local redrawGroup, groupButtons = NewChoice(spellPage, 330, SUB_Y, {
+        { label = L["Class"], value = "class" }, { label = L["Kind"], value = "kind" },
+    }, 80, function() return CC.db.spellGroupBy or "class" end,
+        function(v) CC.db.spellGroupBy = v; CC:RefreshDefaultSpellList() end)
+
+    local LIST_Y = SUB_Y - 28
+    local LIST_H = CAH - (-LIST_Y) - 4
+
     -- ── Default spells panel ──
 
-    local defPanel = CreateFrame("ScrollFrame", "CCDefScroll", contentArea, "UIPanelScrollFrameTemplate")
-    defPanel:SetSize(CAW - 16, CAH)
-    defPanel:SetPoint("TOPLEFT", contentArea, "TOPLEFT", 4, -4)
+    local defPanel = CreateFrame("ScrollFrame", "CCDefScroll", spellPage, "UIPanelScrollFrameTemplate")
+    defPanel:SetSize(CAW - 24, LIST_H)
+    defPanel:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, LIST_Y)
 
     local defContent = CreateFrame("Frame", nil, defPanel)
-    defContent:SetWidth(CAW - 32)
+    defContent:SetWidth(CAW - 40)
     defPanel:SetScrollChild(defContent)
 
     self.defaultSpellContent = defContent
 
     -- ── Custom spells panel ──
 
-    local custPanel = CreateFrame("Frame", nil, contentArea)
-    custPanel:SetSize(CAW, CAH)
-    custPanel:SetPoint("TOPLEFT", contentArea, "TOPLEFT", 4, -4)
+    local custPanel = CreateFrame("Frame", nil, spellPage)
+    custPanel:SetSize(CAW - 8, LIST_H)
+    custPanel:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, LIST_Y)
     custPanel:Hide()
 
     -- Instruction
     local hint = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOPLEFT", custPanel, "TOPLEFT", 4, -4)
-    hint:SetText("Type a spell name or ID, then set its cooldown duration and click Add.\nShift-click a spell link to auto-fill (spellbook must be open).")
+    hint:SetText(L["Type a spell name or ID, then set its cooldown duration and click Add.\nClick the box, then shift-click a spell in your spellbook to fill it in."])
     hint:SetJustifyH("LEFT")
-    hint:SetWidth(CAW - 16)
+    hint:SetWidth(CAW - 24)
 
     local spellInput = CreateFrame("EditBox", "CCSpellInput", custPanel, "InputBoxTemplate")
     spellInput:SetSize(180, 22)
@@ -471,7 +1870,7 @@ function CC:OpenOptions()
     spellInput:SetAutoFocus(false)
     spellInput:SetNumeric(false)
     spellInput:SetMaxLetters(128)
-    spellInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    spellInput:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
 
     local preview = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     preview:SetPoint("LEFT", spellInput, "RIGHT", 8, 0)
@@ -480,7 +1879,7 @@ function CC:OpenOptions()
 
     local durLbl = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     durLbl:SetPoint("TOPLEFT", spellInput, "BOTTOMLEFT", 0, -10)
-    durLbl:SetText("Duration (sec):")
+    durLbl:SetText(L["Duration (sec):"])
 
     local durInput = CreateFrame("EditBox", "CCDurInput", custPanel, "InputBoxTemplate")
     durInput:SetSize(60, 22)
@@ -488,32 +1887,53 @@ function CC:OpenOptions()
     durInput:SetAutoFocus(false)
     durInput:SetNumeric(true)
     durInput:SetMaxLetters(5)
-    durInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    durInput:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
 
     local addBtn = CreateFrame("Button", nil, custPanel, "UIPanelButtonTemplate")
     addBtn:SetSize(80, 22)
     addBtn:SetPoint("LEFT", durInput, "RIGHT", 8, 0)
-    addBtn:SetText("Add Spell")
+    addBtn:SetText(L["Add Spell"])
 
     local pendingID = nil
 
-    spellInput:SetScript("OnTextChanged", function(self, userInput)
+    local function TakeSpellID(id)
+        pendingID = id
+        spellInput:SetText(tostring(id))
+        local name = LookupSpellName(id)
+        preview:SetText(name or ("|cFFFF4444" .. L["Unknown"] .. "|r"))
+    end
+
+    -- A shift-clicked spell link goes to the game's link-insert call, which only knows chat boxes.
+    -- Follow it (after it runs, so chat is untouched) and take the link while this box has focus.
+    -- The call is ChatFrameUtil.InsertLink on the newer interface and ChatEdit_InsertLink on the
+    -- older; each is hooked where it exists, and taking the same link twice is harmless.
+    local function OnLinkInserted(link)
+        if not spellInput:HasFocus() then return end
+        local id = SpellIDFromLink(link)
+        if id then TakeSpellID(id) end
+    end
+    if ChatFrameUtil and ChatFrameUtil.InsertLink then
+        pcall(hooksecurefunc, ChatFrameUtil, "InsertLink", OnLinkInserted)
+    end
+    ---@diagnostic disable-next-line: undefined-global
+    if ChatEdit_InsertLink then
+        pcall(hooksecurefunc, "ChatEdit_InsertLink", OnLinkInserted)
+    end
+
+    spellInput:SetScript("OnTextChanged", function(widget, userInput)
         if not userInput then return end
-        local text = self:GetText()
+        local text = widget:GetText()
         local linkID = text:match("|Hspell:(%d+)")
         if linkID then
-            pendingID = tonumber(linkID)
-            self:SetText(linkID)
-            local name = LookupSpellName(pendingID)
-            preview:SetText(name or "|cFFFF4444Unknown|r")
+            TakeSpellID(tonumber(linkID))
             return
         end
         pendingID = ResolveSpell(text)
         if pendingID then
             local name = LookupSpellName(pendingID)
-            preview:SetText(name or "|cFFFF4444Unknown ID|r")
+            preview:SetText(name or ("|cFFFF4444" .. L["Unknown ID"] .. "|r"))
         elseif text:len() > 0 then
-            preview:SetText("|cFF888888resolving...|r")
+            preview:SetText("|cFF888888" .. L["resolving..."] .. "|r")
         else
             preview:SetText("")
         end
@@ -532,35 +1952,411 @@ function CC:OpenOptions()
     -- Custom list scroll
     local listHdr = custPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     listHdr:SetPoint("TOPLEFT", durLbl, "BOTTOMLEFT", 0, -18)
-    listHdr:SetText("Custom tracked spells:")
+    listHdr:SetText(L["Custom tracked spells:"])
 
-    local listScroll = CreateFrame("ScrollFrame", "CCCustScroll", custPanel, "UIPanelScrollFrameTemplate")
-    listScroll:SetSize(CAW - 16, CAH - 130)
-    listScroll:SetPoint("TOPLEFT", listHdr, "BOTTOMLEFT", 0, -6)
+    local listScroll2 = CreateFrame("ScrollFrame", "CCCustScroll", custPanel, "UIPanelScrollFrameTemplate")
+    listScroll2:SetSize(CAW - 24, LIST_H - 130)
+    listScroll2:SetPoint("TOPLEFT", listHdr, "BOTTOMLEFT", 0, -6)
 
-    local listContent = CreateFrame("Frame", nil, listScroll)
-    listContent:SetWidth(CAW - 32)
-    listScroll:SetScrollChild(listContent)
+    local listContent = CreateFrame("Frame", nil, listScroll2)
+    listContent:SetWidth(CAW - 40)
+    listScroll2:SetScrollChild(listContent)
     self.spellListContent = listContent
 
-    -- ── Tab switching ──
+    -- ── Spell sub-tab switching ──
 
     local function ShowDefault()
         defPanel:Show(); custPanel:Hide()
         tabDefault:SetEnabled(false); tabCustom:SetEnabled(true)
+        for _, gb in ipairs(groupButtons) do gb:Show() end
+        groupLbl:Show()
     end
     local function ShowCustom()
         defPanel:Hide(); custPanel:Show()
         tabDefault:SetEnabled(true); tabCustom:SetEnabled(false)
+        for _, gb in ipairs(groupButtons) do gb:Hide() end
+        groupLbl:Hide()
         CC:RefreshSpellList()
+    end
+    LayoutSpellPage = function()
+        local subY = SUB_Y - (kindsOpen and (math.ceil(#kindChecks / 2) * 22 + 6) or 0)
+        tabDefault:ClearAllPoints(); tabDefault:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, subY)
+        tabCustom:ClearAllPoints();  tabCustom:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 118, subY)
+        groupLbl:ClearAllPoints();   groupLbl:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 270, subY - 5)
+        for _, gb in ipairs(groupButtons) do
+            gb:ClearAllPoints()
+            gb:SetPoint("TOPLEFT", spellPage, "TOPLEFT", gb.px, subY)
+        end
+        local listY = subY - 28
+        local listH = CAH - (-listY) - 4
+        defPanel:ClearAllPoints();  defPanel:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, listY)
+        custPanel:ClearAllPoints(); custPanel:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, listY)
+        defPanel:SetSize(CAW - 24, listH)
+        custPanel:SetSize(CAW - 8, listH)
+        listScroll2:SetSize(CAW - 24, listH - 130)
     end
     tabDefault:SetScript("OnClick", ShowDefault)
     tabCustom:SetScript("OnClick",  ShowCustom)
+    redrawGroup()
 
-    -- Default tab active on open
+    -- ══ Page 5: Plans, rotations and teams ════════════════════════════════
+
+    local planScroll, pl = NewPage(true)
+    pages[5] = planScroll
+    y = -2
+
+    local function NewEdit(parent, x, yy, w, text)
+        local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        e:SetSize(w, 20)
+        e:SetPoint("TOPLEFT", parent, "TOPLEFT", x, yy)
+        e:SetAutoFocus(false)
+        e:SetMaxLetters(120)
+        e:SetScript("OnEscapePressed", function(widget) widget:ClearFocus() end)
+        if text then e:SetText(text) end
+        return e
+    end
+
+    NewHeader(pl, y, L["Raid cooldown plan"]); y = y - 24
+    local planLbl = pl:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    planLbl:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y - 3)
+    planLbl:SetText(L["Plan:"])
+    local planName = NewEdit(pl, 44, y, 130, "")
+    local planSaved = pl:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local planStatus = pl:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local function SayPlans()
+        local names = {}
+        for n in pairs(CC.db.plans or {}) do names[#names + 1] = n end
+        table.sort(names)
+        planSaved:SetText(string.format(L["Saved: %s"], #names > 0 and table.concat(names, ", ") or L["none"])
+            .. (CC.db.activePlan and ("   " .. string.format(L["Active: %s"], tostring(CC.db.activePlan))) or ""))
+    end
+    local PLAN_ROWS = 14
+    local planRows = {}
+    local function PlanInputs()
+        local inputs = {}
+        for i = 1, PLAN_ROWS do
+            local r = planRows[i]
+            inputs[i] = { trigger = r.trigger:GetText(), player = r.player:GetText(), spell = r.spell:GetText() }
+        end
+        return inputs
+    end
+    local function ShowPlan(plan)
+        local inputs = plan and CC:PlanInputsFromRows(plan.rows) or {}
+        for i = 1, PLAN_ROWS do
+            local r, v = planRows[i], inputs[i] or {}
+            r.trigger:SetText(v.trigger or ""); r.player:SetText(v.player or ""); r.spell:SetText(v.spell or "")
+        end
+    end
+    NewButton(pl, 180, y + 1, 52, L["Load"], function()
+        local plan = CC.db.plans[Trim(planName:GetText())]
+        ShowPlan(plan)
+        planStatus:SetText(plan and L["Loaded."] or ("|cFFFF4444" .. L["No plan by that name."] .. "|r"))
+    end)
+    NewButton(pl, 234, y + 1, 52, L["Save"], function()
+        local ok, n, skipped = CC:SavePlan(planName:GetText(), PlanInputs())
+        local saved
+        if ok then
+            if skipped > 0 then
+                saved = string.format(n == 1 and L["Saved %d row, %d skipped (a part is missing)."] or L["Saved %d rows, %d skipped (a part is missing)."], n, skipped)
+            else
+                saved = string.format(n == 1 and L["Saved %d row."] or L["Saved %d rows."], n)
+            end
+        end
+        planStatus:SetText(saved or ("|cFFFF4444" .. L["Give the plan a name first."] .. "|r"))
+        SayPlans()
+    end)
+    NewButton(pl, 288, y + 1, 56, L["Delete"], function()
+        CC.db.plans[Trim(planName:GetText())] = nil
+        if CC.db.activePlan == Trim(planName:GetText()) then CC.db.activePlan = false end
+        SayPlans()
+    end)
+    NewButton(pl, 346, y + 1, 56, L["Share"], function()
+        local name = Trim(planName:GetText())
+        if CC.db.plans[name] then CC:SharePlan(name) end
+        SayPlans()
+    end)
+    NewButton(pl, 404, y + 1, 84, L["Make active"], function()
+        local name = Trim(planName:GetText())
+        if CC.db.plans[name] then CC.db.activePlan = name end
+        SayPlans()
+    end)
+    y = y - 26
+    planSaved:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    planSaved:SetWidth(CAW - 40)
+    planSaved:SetJustifyH("LEFT")
+    y = y - 16
+    NewNote(pl, 4, y, CAW - 40, L["A row: when (a boss timer's text, or the time into the fight like 1:30), who, and which spell. The player gets a prompt as it comes up. Share sends it to the group (leader or assist)."])
+    y = y - 42
+    for _, h in ipairs({ { 4, L["When"] }, { 176, L["Player"] }, { 300, L["Spell"] } }) do
+        local l = pl:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        l:SetPoint("TOPLEFT", pl, "TOPLEFT", h[1] + 6, y)
+        l:SetText(h[2])
+    end
+    y = y - 16
+    for i = 1, PLAN_ROWS do
+        planRows[i] = {
+            trigger = NewEdit(pl, 4, y, 166), player = NewEdit(pl, 176, y, 118), spell = NewEdit(pl, 300, y, 150),
+        }
+        y = y - 22
+    end
+    planStatus:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    y = y - 22
+    SayPlans()
+
+    NewHeader(pl, y, L["Rotation order"]); y = y - 24
+    NewNote(pl, 4, y, CAW - 40, L["A spell several players take in turn. The panel numbers the rows in this order; the group gets it when you lead or assist."])
+    y = y - 30
+    local rotSpell = NewEdit(pl, 4, y, 170, "")
+    local rotNames = NewEdit(pl, 180, y, 270, "")
+    rotNames:SetMaxLetters(400)
+    y = y - 22
+    NewNote(pl, 4, y, CAW - 40, L["Left: the spell's name or ID. Right: the players in order, separated by commas."])
+    y = y - 20
+    local rotList = pl:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local function SayRotations()
+        local lines = {}
+        for sid, names in pairs(CC.db.rotations or {}) do
+            local data = CC.SpellData[sid]
+            local short = {}
+            for _, n in ipairs(names) do short[#short + 1] = CC:ShortName(n) end
+            lines[#lines + 1] = (data and data.name or tostring(sid)) .. ": " .. table.concat(short, " > ")
+        end
+        table.sort(lines)
+        rotList:SetText(#lines > 0 and table.concat(lines, "\n") or L["No rotation orders saved."])
+    end
+    NewButton(pl, 4, y, 60, L["Save"], function()
+        CC:SaveRotationFromText(rotSpell:GetText(), rotNames:GetText()); SayRotations()
+    end)
+    NewButton(pl, 68, y, 60, L["Clear"], function()
+        CC:SaveRotationFromText(rotSpell:GetText(), ""); SayRotations()
+    end)
+    NewButton(pl, 132, y, 120, L["Fill from group"], function()
+        local names = {}
+        for name in pairs(CC:GetActiveGroupNames()) do names[#names + 1] = CC:ShortName(name) end
+        table.sort(names)
+        rotNames:SetText(table.concat(names, ", "))
+    end)
+    y = y - 28
+    rotList:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    rotList:SetWidth(CAW - 40)
+    rotList:SetJustifyH("LEFT")
+    SayRotations()
+    y = y - 60
+
+    NewHeader(pl, y, L["Teams"]); y = y - 24
+    NewNote(pl, 4, y, CAW - 40, L["A team is a tab on the panel that lists only its members. Tick people in your group, or type names."])
+    y = y - 30
+    local teamName = NewEdit(pl, 4, y, 150, "")
+    local teamTyped = NewEdit(pl, 160, y, 290, "")
+    teamTyped:SetMaxLetters(400)
+    y = y - 24
+    local teamTicks = {}
+    local teamTicked = {}   -- name -> true, kept while the list scrolls
+    local tickRow = 0       -- rows scrolled past (two names a row)
+    local tickHolder = CreateFrame("Frame", nil, pl)
+    tickHolder:SetPoint("TOPLEFT", pl, "TOPLEFT", 0, y)
+    tickHolder:SetSize(480, 200)
+    CC.teamTicks, CC.teamTickHolder = teamTicks, tickHolder   -- (the tests look at them)
+    for i = 1, 20 do
+        local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+        local cb = CreateFrame("CheckButton", nil, pl, "UICheckButtonTemplate")
+        cb:SetSize(20, 20)
+        cb:SetPoint("TOPLEFT", pl, "TOPLEFT", 4 + col * 240, y - rowN * 20)
+        cb.label = pl:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        cb.label:SetPoint("LEFT", cb, "RIGHT", 0, 0)
+        cb:SetScript("OnClick", function(widget) if widget.who then teamTicked[widget.who] = widget:GetChecked() and true or nil end end)
+        teamTicks[i] = cb
+    end
+    -- the group's names (every one, scrolled with the mouse wheel past the first 20)
+    function CC:RefreshTeamTicks()
+        local names = {}
+        for name in pairs(self:GetActiveGroupNames()) do names[#names + 1] = name end
+        table.sort(names)
+        for name in pairs(teamTicked) do
+            local here = false
+            for _, n in ipairs(names) do if n == name then here = true end end
+            if not here then teamTicked[name] = nil end
+        end
+        local maxRow = math.max(0, math.ceil(#names / 2) - 10)
+        tickHolder:EnableMouseWheel(maxRow > 0)
+        if tickRow > maxRow then tickRow = maxRow end
+        for i, cb in ipairs(teamTicks) do
+            local name = names[tickRow * 2 + i]
+            cb.who = name
+            cb:SetShown(name ~= nil)
+            cb.label:SetShown(name ~= nil)
+            cb.label:SetText(name and self:ShortName(name) or "")
+            cb:SetChecked(name ~= nil and teamTicked[name] == true)
+        end
+    end
+    tickHolder:SetScript("OnMouseWheel", function(_, delta)
+        tickRow = math.max(0, tickRow - delta)
+        CC:RefreshTeamTicks()
+    end)
+    CC:RefreshTeamTicks()
+    y = y - 200
+    local teamList = pl:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local function SayTeams()
+        local lines = {}
+        for _, n in ipairs(CC:TeamNames()) do
+            lines[#lines + 1] = n .. ": " .. table.concat(CC.db.teams[n], ", ")
+        end
+        teamList:SetText(#lines > 0 and table.concat(lines, "\n") or L["No teams saved."])
+    end
+    NewButton(pl, 4, y, 80, L["Save team"], function()
+        local members = NameList(teamTyped:GetText())
+        for name in pairs(teamTicked) do members[#members + 1] = CC:ShortName(name) end
+        table.sort(members)
+        CC:SaveTeam(teamName:GetText(), members); SayTeams()
+    end)
+    NewButton(pl, 88, y, 80, L["Load team"], function()
+        local members = CC.db.teams[Trim(teamName:GetText())]
+        if members then teamTyped:SetText(table.concat(members, ", ")) end
+    end)
+    NewButton(pl, 172, y, 90, L["Remove team"], function()
+        CC:RemoveTeam(Trim(teamName:GetText())); SayTeams()
+    end)
+    y = y - 28
+    teamList:SetPoint("TOPLEFT", pl, "TOPLEFT", 4, y)
+    teamList:SetWidth(CAW - 40)
+    teamList:SetJustifyH("LEFT")
+    SayTeams()
+    y = y - 60
+    pl:SetHeight(-y + 10)
+
+    -- ══ Page 6: Profiles, setups and tools ════════════════════════════════
+
+    local profScroll, pr = NewPage(true)
+    pages[6] = profScroll
+    y = -2
+
+    NewHeader(pr, y, L["Profiles"]); y = y - 24
+    NewNote(pr, 4, y, CAW - 40,
+        L["You can change the active profile so each character has different settings, or share one profile between characters."])
+    y = y - 38
+    NewButton(pr, 4, y, 120, L["Reset Profile"], function() CC:ResetProfile() end)
+    y = y - 30
+
+    local function ProfileItems(skipCurrent, skipDefault)
+        local items, current = {}, CC:CurrentProfile()
+        for _, name in ipairs(CC:ProfileNames()) do
+            if not (skipCurrent and name == current) and not (skipDefault and name == "Default") then
+                items[#items + 1] = { value = name, label = name == "Default" and L["Default"] or name }
+            end
+        end
+        return items
+    end
+    local profileDrops = {}
+    local function ProfileRow(label, make)
+        local rowLabel = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        rowLabel:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y - 4)
+        rowLabel:SetText(label)
+        local control = make(150, y)
+        y = y - 30
+        return control
+    end
+    profileDrops.current = ProfileRow(L["Current profile:"], function(x, yy)
+        return NewDropdown(pr, x, yy, 180,
+            function() return ProfileItems(false, false) end,
+            function() return CC:CurrentProfile() end,
+            function(name) CC:UseProfile(name) end)
+    end)
+    local newName = ProfileRow(L["New:"], function(x, yy)
+        local e = NewEdit(pr, x + 4, yy - 1, 170, "")
+        e:SetMaxLetters(40)
+        e:SetScript("OnEnterPressed", function(widget)
+            if CC:NewProfile(widget:GetText()) then widget:SetText("") end
+            widget:ClearFocus()
+        end)
+        local enterNote = pr:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        enterNote:SetPoint("LEFT", e, "RIGHT", 8, 0)
+        enterNote:SetText(L["Type a name, then press Enter."])
+        return e
+    end)
+    profileDrops.copy = ProfileRow(L["Copy from:"], function(x, yy)
+        return NewDropdown(pr, x, yy, 180,
+            function() return ProfileItems(true, false) end,
+            function() return nil end,
+            function(name) CC:CopyProfile(name) end, L["Pick a profile"])
+    end)
+    profileDrops.delete = ProfileRow(L["Delete a profile:"], function(x, yy)
+        return NewDropdown(pr, x, yy, 180,
+            function() return ProfileItems(true, true) end,
+            function() return nil end,
+            function(name) CC:DeleteProfile(name) end, L["Pick a profile"])
+    end)
+    CC.profileDrops = profileDrops
+    CC.profileNewBox = newName
+    function CC:RefreshProfileControls()
+        for _, dd in pairs(profileDrops) do dd:Refresh() end
+    end
+    Track(function() CC:RefreshProfileControls() end)
+    y = y - 4
+    NewCheck(pr, 4, y, L["This character keeps its own window places"],
+        function() return CC:KeepsOwnPlaces() end, function(v) CC:SetKeepOwnPlaces(v) end,
+        L["Whatever profile it follows, this character's windows stay where they are now."])
+    y = y - 30
+
+    NewHeader(pr, y, L["Export and import"]); y = y - 24
+    NewNote(pr, 4, y, CAW - 40, L["A setup is your tracked and custom spells, ready alerts and window places, as text."])
+    y = y - 30
+    NewButton(pr, 4, y, 100, L["Export setup"], function()
+        CC:ShowCopyBox(L["Your setup: copy this"], CC:ExportSetup(CC:CurrentProfile()))
+    end)
+    NewButton(pr, 108, y, 100, L["Import setup"], function() CC:ShowImportBox() end)
+    NewButton(pr, 212, y, 150, L["Undo last setup"], function()
+        print("|cFF54a3ffCDC|r " .. (CC:UndoSetup() and L["Back to what you had."] or L["Nothing to undo."]))
+    end)
+    y = y - 28
+    NewButton(pr, 4, y, 230, L["Send my setup to the guild (officers)"], function() CC:SendOfficerSetup() end)
+    y = y - 22
+    NewNote(pr, 4, y, CAW - 40, L["Members see a box naming you and choose Accept, Not now or Never."])
+    y = y - 34
+
+    NewHeader(pr, y, L["Layouts"]); y = y - 24
+    NewNote(pr, 4, y, CAW - 40, L["Window places are kept apart for a party and a raid and switch when your group type changes."])
+    y = y - 30
+    NewButton(pr, 4, y, 140, L["Reset all windows"], function() CC:ResetAllWindows() end)
+    y = y - 34
+
+    NewHeader(pr, y, L["Pulls, posting and new keys"]); y = y - 24
+    NewCheck(pr, 4, y, L["After a boss, say the pull's log is ready"], function() return CC.db.lastPullOffer == true end,
+        function(v) CC.db.lastPullOffer = v end, L["/cdc lastpull lists the tracked cooldowns used in the last pull."])
+    y = y - 26
+    NewCheck(pr, 4, y, L["On a key start, ask the group for its cooldowns again"], function() return CC.db.resetOnNewRun ~= false end,
+        function(v) CC.db.resetOnNewRun = v end)
+    y = y - 30
+    NewButton(pr, 4, y, 110, L["Last pull"], function() CC:PrintLastPull() end)
+    NewButton(pr, 118, y, 110, L["Post ready"], function() CC:PostReady() end)
+    y = y - 34
+    NewNote(pr, 4, y, CAW - 40, L["Post ready lists these spells and who has them in raid or party chat (none ticked: rez and lust):"])
+    y = y - 30
+    do
+        local list = {}
+        for id, data in pairs(CC.SpellData) do
+            if not data.consumable and (data.kind == "rez" or data.kind == "lust" or data.kind == "raid"
+                or data.kind == "external" or data.kind == "mana") then list[#list + 1] = id end
+        end
+        table.sort(list, function(a, c) return CC.SpellData[a].name < CC.SpellData[c].name end)
+        for i, id in ipairs(list) do
+            local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+            local cb, lb = NewCheck(pr, 4 + col * 240, y - rowN * 22, CC.SpellData[id].name,
+                function() return CC.db.postSpells[id] == true end,
+                function(v) CC.db.postSpells[id] = v or nil end)
+            cb:SetSize(20, 20)
+            lb:SetFontObject(GameFontHighlightSmall)
+        end
+        y = y - math.ceil(#list / 2) * 22
+    end
+    pr:SetHeight(-y + 10)
+
+    -- Getting Started opens first
+    CC:RefreshPresetButtons()
     ShowDefault()
     CC:RefreshDefaultSpellList()
     CC:RefreshSpellList()
+    startPage.refresh()
+    ShowPage(1)
 
     self.optionsFrame = f
     f:Show()
@@ -578,12 +2374,12 @@ function CC:BuildOptionsPanel()
 
     local note = panel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
     note:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -8)
-    note:SetText("Click below to open the full settings window.\nYou can also right-click the minimap button or type /cdc settings.")
+    note:SetText(L["Click below to open the full settings window.\nYou can also right-click the minimap button or type /cdc settings."])
 
     local openBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     openBtn:SetSize(200, 26)
     openBtn:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -12)
-    openBtn:SetText("Open CooldownCollaborator Settings")
+    openBtn:SetText(L["Open CooldownCollaborator Settings"])
     openBtn:SetScript("OnClick", function() CC:OpenOptions() end)
 
     -- The Settings panel where the client has it, else the old Interface
@@ -595,8 +2391,11 @@ function CC:BuildOptionsPanel()
             pcall(Settings.RegisterAddOnCategory, category)
             self.optionsCategoryID = category.ID
         end
+    -- Older clients without the Settings API (Classic) use the interface options list.
+    ---@diagnostic disable-next-line: undefined-global
     elseif InterfaceOptions_AddCategory then
         panel.name = "CooldownCollaborator"
+        ---@diagnostic disable-next-line: undefined-global
         pcall(InterfaceOptions_AddCategory, panel)
     end
 end

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "B1",
+    "verdict": "held",
+    "why": "Essentials.lua:149 and :164 leave idx at 11 (or the flask strip makes it 11 at :207), then :226-228 index rows[11], which :67 never built (MAX_ROWS = 10 at :11). The Show at :234-235 is never reached, and Roster.lua:136 errors before :138 RefreshLanes. My probe (probe-v1/p1.lua) confirms the exact threshold on all five clients: 2 headers + 8 providers errors on Retail, MoP and TBC, 1 header + 9 druids on Era and Forever; 7 or 8 stays clean. It is worse than written: after a /reload inside such a raid the same error escapes CC:Init (CooldownCollaborator.lua:184, called at :564), so :565-574 never register GROUP_ROSTER_UPDATE, CHAT_MSG_ADDON or PLAYER_LOGOUT, and the addon hears no syncs and saves no position that session (probe: all three unregistered on all five clients; that the raid is readable at ADDON_LOADED on a reload is client behaviour).",
+    "what": "",
+    "clients": "All clients (Retail and MoP raids and battlegrounds hit it most; Era, TBC and Forever need nine or more druids, or shamans plus druids on TBC)",
+    "where": "Essentials.lua:226",
+    "severity": "high"
+  },
+  {
+    "id": "B2",
+    "verdict": "held",
+    "why": "Nothing clears a ready entry for a player still in the group (Events.lua:102-112 prunes only leavers; CooldownCollaborator.lua:281 and :545 re-date to ready). UI.lua:164 keeps ready rows when showReady is on (default true, CooldownCollaborator.lua:134), :179-181 sorts them first and :191 cuts at 14 (:4). Flask and food are recorded and synced as cooldowns (Consumables.lua:185 and :209 -> CooldownCollaborator.lua:270, received at :292-308), Options.lua:64 hides them from Default Spells, and the 180 s top minimum (Options.lua:23) can't filter 900-7200 s buffs. The only relief is unticking 'Show ready cooldowns' (Options.lua:243-252), which hides every ready row; it is not the default and nothing points to it.",
+    "what": "",
+    "clients": "All clients",
+    "where": "UI.lua:178",
+    "severity": "high"
+  },
+  {
+    "id": "B3",
+    "verdict": "held",
+    "why": "Consumables.lua:223-225 sends only on a change or once per session, and that first send is lost when solo (:239 returns, but :224 has already set buffBroadcastDone). Nothing else sends CDCBUFF: no roster hook, no request message (Comms.lua:96-99 only receives), BroadcastState (Events.lua:116-126) resends cooldowns only, and :245 ignores the send result while cooldown syncs retry (Comms.lua:63-66). A reloader starts with an empty buffRoster (:24) that only messages fill (:252).",
+    "what": "",
+    "clients": "All clients",
+    "where": "Consumables.lua:223",
+    "severity": "medium"
+  },
+  {
+    "id": "B4",
+    "verdict": "narrowed",
+    "why": "The double count is real: Consumables.lua:284 counts 'player' and :286 counts raid1..N, which in a raid includes the player, so the total is one high and your own flask/food counts twice. But the colour test (Essentials.lua:209-210, 'flask < total') still comes out right in every case: if you have the buff both numbers rise by one, and if you don't, the total is above the count anyway. probe-v1/p1.lua on all five clients: a 5-player raid reads 6/6 green when all are flasked, and red whenever anyone (you or another) is missing. missingFlask/missingFood are never read anywhere.",
+    "what": "In a raid the 'Flask N/N  Food N/N' line counts you twice, so both numbers are one too high (a 20-player raid shows out of 21). The red or green colour is still right: it turns green only when everyone has the buff.",
+    "clients": "All clients",
+    "where": "Consumables.lua:284-286",
+    "severity": "low"
+  },
+  {
+    "id": "B5",
+    "verdict": "held",
+    "why": "CooldownCollaborator.lua:250-251 return before the send (:270), the CDTL3 bridge (:271) and the ready-now watch (:266-268). The panel already filters both at render (UI.lua:160-161) and receivers don't filter (:292-308), so the early return only changes what others see; Options.lua:123-128 and README.md:87 present unticking as a display choice. The minimum tops out at 180 s (Options.lua:23), so it can't drop Rebirth or lust (600 and 300 s on Retail, Data_Retail.lua:20-30, :42), only 60-179 s spells; the Rebirth example works through unticking only.",
+    "what": "",
+    "clients": "Retail, Forever (Era, TBC and MoP partly cover it from the combat log, within its range)",
+    "where": "CooldownCollaborator.lua:250",
+    "severity": "medium"
+  },
+  {
+    "id": "B6",
+    "verdict": "held",
+    "why": "UI.lua:222-225 shows the frame at the end of every RefreshRows when IsInGroup(), with no hidden-by-user flag; the only other Hide is at build time (UI.lua:136). RefreshRows runs on every recorded or synced cast and every ready-now (CooldownCollaborator.lua:272, :283, :307, :549 via :394), every roster update (:578), and a flask or food poll records too (Consumables.lua:185). docs/DESCRIPTION.md:48 and :55 tell players '/cdc shows or hides the panel', so this contradicts the documented behaviour.",
+    "what": "",
+    "clients": "All clients",
+    "where": "UI.lua:222",
+    "severity": "medium"
+  },
+  {
+    "id": "B7",
+    "verdict": "narrowed",
+    "why": "The maths holds: UI.lua:236-240 subtracts UIParent's centre (UIParent units) from the frame's GetCenter (frame units), and BuildUI applies the result as a frame-unit offset (UI.lua:34-35), so at scale s each save (PLAYER_LOGOUT, CooldownCollaborator.lua:614-615; every mouse-up, UI.lua:55-58) moves the spot by U(1-s). But a drag goes through StartMoving (UI.lua:52), which marks the named frame user-placed, and the game's own layout file then puts a dragged CCMainFrame back where it was (the reason AceGUI resets SetUserPlaced after a drag, cdtl3-dev Libs/AceGUI-3.0/widgets/AceGUIContainer-TreeGroup.lua:269), so the drift shows only on a panel not yet dragged on that character. The DB is account-wide (all six TOCs use '## SavedVariables', not per character), so each alt starts from the shifted spot. This is client behaviour the stub can't show (GetCenter returns 0,0).",
+    "what": "If you set 'Panel scale' to anything but 1.0 and haven't dragged the panel on that character yet, it jumps toward a screen corner on each /reload or login. Once you drag it, the game remembers the spot for that character, but each alt starts from the shifted position and drifts the same way until you drag it there too.",
+    "clients": "All clients",
+    "where": "UI.lua:236-240",
+    "severity": "low"
+  },
+  {
+    "id": "B8",
+    "verdict": "narrowed",
+    "why": "The gap is real: essentialsLocked and laneLocked are read (Essentials.lua:48, :241; Lanes.lua:25, :163) but nothing sets them past the defaults (CooldownCollaborator.lua:146, :152), and /cdc lock (:622-625) and the settings box (Options.lua:259-260) touch only the main panel. It is smaller than written: the docs and label describe the lock as the panel's alone (docs/DESCRIPTION.md:56 'lock or unlock its position', Options.lua:264 'Lock panel position'), and a click by itself moves nothing; a frame moves only while the button is held and the mouse moves (StartMoving on mouse-down, stop on mouse-up, Essentials.lua:47-55, Lanes.lua:24-32).",
+    "what": "The Essentials bar and Lane view can't be locked: '/cdc lock' and the settings box lock only the main panel, and no command or setting covers the other two. Pressing and dragging either one mid-fight still moves it, though a plain click does not.",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:622",
+    "severity": "low"
+  },
+  {
+    "id": "B9",
+    "verdict": "narrowed",
+    "why": "The cut is real (Lanes.lua:59 six icons, :100 longest remaining first, :109-110 shows status[1..6]), and the trigger is six on cooldown, not seven: probe-v1/p2.lua with 6 cooling + 1 ready shows 0 ready icons on Retail and Era. It needs six providers in one lane on cooldown at the same moment, which Retail rarely reaches (raid-wide battle-rez charges, one lust per fight). Big Era, TBC and Forever raids are where it happens, since Rebirth's cooldown there is 20-30 minutes (Data_Era.lua:28, Data_TBC.lua:35, Data_Forever.lua:32). The Lane view is also off until turned on (CooldownCollaborator.lua:148).",
+    "what": "Each Lane view lane shows six icons and keeps the ones with the longest time left, so once six providers are on cooldown at the same time, the ready ones aren't shown. This mostly happens in large Classic Era, TBC or Forever raids with many druids, where Rebirth takes 20 to 30 minutes to come back.",
+    "clients": "All clients (mostly Era, TBC and Forever raids)",
+    "where": "Lanes.lua:100",
+    "severity": "low"
+  },
+  {
+    "id": "B10",
+    "verdict": "held",
+    "why": "Every ready entry gets progress 1 (Lanes.lua:117), so the same x of 218 (:120). The overlap test (:128) pushes each one to a new level, and :139 lowers it 18 px per level with no cap, while the frame height is fixed at build (:19: 92 with two lanes, 58 with one) and nothing clips children. probe-v1/p2.lua: 7 ready druids give a lowest offset of -90 from the Battle Rez lane centre (70 below the top on Retail, 36 on Era), against frame heights 92 and 58. Anyone not yet seen casting counts as ready (Roster.lua:280-281), so the start of a group is the worst case.",
+    "what": "",
+    "clients": "All clients",
+    "where": "Lanes.lua:139",
+    "severity": "medium"
+  },
+  {
+    "id": "B11",
+    "verdict": "held",
+    "why": "The icon is on ARTWORK (Lanes.lua:60) and the 'border' is an OVERLAY texture on the same lane frame (:65-66), sized ICON_SIZE+4 and centred on the icon (:148-149), then filled by SetColorTexture at 0.6 alpha (:150). OVERLAY draws above ARTWORK within one frame, and SetColorTexture fills the whole 26x26 area, so the icon sits under a 60% colour wash.",
+    "what": "",
+    "clients": "All clients",
+    "where": "Lanes.lua:150",
+    "severity": "low"
+  },
+  {
+    "id": "B12",
+    "verdict": "held",
+    "why": "AddCustomSpell overwrites the built-in with no check (CooldownCollaborator.lua:218-224, and Options.lua:502-509 doesn't check either). RemoveCustomSpell nils it with no restore (:233-235), so RecordCooldown (:249) and RecordCooldownFromComm (:295) drop the spell, GetRemaining returns nil (:405) so that player reads ready, and Essentials skips the icon (Essentials.lua:174); probe-v1/p2.lua shows DRUID -> UNKNOWN -> nil on Retail and Era. I lower the severity: it takes two deliberate steps on the Custom Spells tab, and the built-in comes back at the next /reload, because the Data file rebuilds SpellData and :232 already removed the custom entry from the saved list.",
+    "what": "",
+    "clients": "All clients",
+    "where": "CooldownCollaborator.lua:233",
+    "severity": "low"
+  }
+]

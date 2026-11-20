@@ -1,0 +1,695 @@
+[
+ {
+  "id": "2026-11-18-cc-red-team-01",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Breaks in raids",
+   "order": 1,
+   "title": "Essentials bar throws a Lua error in raids, and a /reload there leaves the addon deaf",
+   "text": "When the Essentials bar needs more than its 10 lines (the lust and Battle Rez headers plus about eight providers: any 20-player Retail raid, or a TBC or MoP 25-man), every refresh stops with a Lua error before the bar shows. The same error stops the Lane view opening and /cdc roster printing. A /reload inside such a raid hits it during start-up, so for the rest of the session the addon hears nobody's cooldowns, group changes or boss ends.",
+   "tags": [
+    "Lua error",
+    "All clients (Era and Forever need nine or more druids)",
+    "Essentials.lua:226",
+    "Held up, both reviewers"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-02",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Breaks in raids",
+   "order": 2,
+   "title": "Main panel fills with READY rows in a raid and stops showing running timers",
+   "text": "Every spell anyone has used stays on the panel as READY for the rest of the session, READY rows sort to the top, and the panel has 14 rows. After a few pulls in a raid it shows only READY and none of the cooldowns actually running. Flasks and food are sent as hour-long cooldowns too and can't be unticked, so it fills faster. Only unticking Show ready cooldowns helps, and nothing points to it.",
+   "tags": [
+    "Wrong timers",
+    "All clients",
+    "UI.lua:178",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-03",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 3,
+   "title": "Retail: paladins and Marksmanship hunters never count as Battle Rez or lust",
+   "text": "Intercession (the paladin's 10-minute battle rez, in the same spell group as Rebirth) and Harrier's Cry (the Marksmanship hunter's lust) aren't on Retail's list. A group whose only rez is a paladin gets No providers in group, Request Rez finds nobody, and their casts are never tracked or shared. Checked against the 12.1.5 game data.",
+   "tags": [
+    "Missing spells",
+    "Retail",
+    "Data_Retail.lua:57",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-04",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 4,
+   "title": "Joining, rejoining or a /reload shows every Battle Rez and lust as READY",
+   "text": "Someone who joins mid-run, is re-invited, or types /reload sees every other player's lust and Battle Rez as READY, and Request Rez can name a druid whose Rebirth was used minutes ago. It corrects itself only when that spell is cast again, or when a boss fight ends and each owner re-sends what is still cooling. On Era, TBC and MoP the combat log adds only the casts seen after you arrived. (The panel's late-joiner idea is the fix.)",
+   "tags": [
+    "Out of sync",
+    "All clients",
+    "Events.lua:116",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-05",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 5,
+   "title": "Unticking a spell, or raising the minimum, stops your own casts reaching the group",
+   "text": "Unticking a spell under Default Spells, or picking a higher Minimum cooldown to track, looks like tidying your own list, but it also stops your casts of it being sent. Groupmates see it READY while it's cooling, CooldownTimeline3 doesn't get it, and no ready-now goes out: a druid who unticks Rebirth still shows READY after using it, and the Rez button can pick them. Your own list still looks right, so you never notice.",
+   "tags": [
+    "Out of sync",
+    "Retail and Forever (Era, TBC and MoP partly covered by the combat log)",
+    "CooldownCollaborator.lua:250",
+    "Held up, both reviewers"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-06",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 6,
+   "title": "Offline players show as READY providers, and the Rez button can call them",
+   "text": "A raid member who has disconnected still shows on the Essentials bar as a READY Battle Rez or lust provider. When the leader presses Rez, the addon can name that offline player in raid warning, and the rez never comes.",
+   "tags": [
+    "Wrong timers",
+    "All clients",
+    "Roster.lua:104",
+    "Held up, both reviewers"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-07",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 7,
+   "title": "Flask and food status only goes out when your buffs change",
+   "text": "Your flask and food status is sent once after login and then only when a buff appears or drops. Log in solo and join a group later, and the group never hears it; anyone who joins late or reloads sees buffed players as missing until their buffs next change. A send refused during a Retail boss fight is dropped, not retried.",
+   "tags": [
+    "Out of sync",
+    "All clients",
+    "Consumables.lua:223",
+    "Held up, both reviewers"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-08",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 8,
+   "title": "Flask and food timers restart at full length after every login or /reload",
+   "text": "A flask or food buff is timed from when the addon first sees it, not from when you used it. After a /reload, a flask with ten minutes left shows its full hour again, and that time is sent to everyone, overwriting their panels and CooldownTimeline3. Re-drinking a flask before it runs out doesn't restart it, so it counts down to READY while the flask is still up.",
+   "tags": [
+    "Wrong timers",
+    "All clients",
+    "Consumables.lua:184",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-09",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 9,
+   "title": "A ready-now blocked during a boss is never sent again",
+   "text": "If you use a talent-shortened cooldown before a boss is pulled and it comes back during the fight, your ready-now is refused while the fight lasts, dropped after about 30 seconds, and not sent again when the boss ends. Everyone else keeps seeing that spell count down to its full base length. A cooldown used inside the fight isn't affected.",
+   "tags": [
+    "Out of sync",
+    "Retail (Forever not confirmed)",
+    "Comms.lua:90",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-10",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 10,
+   "title": "A groupmate on 1.0.1 to 1.0.3 can undo ready-now announcements",
+   "text": "If someone in the group still runs CooldownCollaborator 1.0.1 to 1.0.3, an early ready-now can snap back to counting down to the spell's full base length, on every newer user's bars and on CooldownTimeline3. It happens only for casts their client was holding when a boss fight ended, and lasts until the base length runs out.",
+   "tags": [
+    "Out of sync",
+    "Retail, with an old copy in the group",
+    "Comms.lua:135",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-11",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 11,
+   "title": "A hand-made addon message can fake a cooldown on someone's rez or lust",
+   "text": "Anyone who types a hand-made addon message, from inside your group or by whisper from your realm, can make a chosen player's Battle Rez, lust or any tracked spell show as cooling for as long as they like. That player's own casts don't fix it, so Request Rez skips them. It clears on their ready-now, when they leave the group, or on your /reload. It only changes what's shown; made-up names also add timers to CooldownTimeline3.",
+   "tags": [
+    "Can be abused",
+    "All clients",
+    "Comms.lua:120",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-12",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 12,
+   "title": "CooldownTimeline3 still shows groupmates' spells you unticked here",
+   "text": "Unticking a spell in Default Spells, or raising the minimum, hides it from this addon's list, but groupmates' casts of it still land on CooldownTimeline3's lanes (yours don't), so the two disagree.",
+   "tags": [
+    "Out of sync",
+    "All clients",
+    "CooldownCollaborator.lua:306",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-13",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 13,
+   "title": "CDTL3 loses Challenging Roar (Era) and Earth Elemental Totem (TBC) group timers",
+   "text": "If CooldownTimeline3's Track raid cooldowns is on (it's off by default) and this addon is running, CDTL3 hands group cooldowns over to this addon. Groupmates' Challenging Roar on Era and Earth Elemental Totem on TBC then vanish from CDTL3, because this addon left them out as optional. Spells unticked in CDTL3's Spells that count list come back too.",
+   "tags": [
+    "Missing spells",
+    "Classic Era, TBC",
+    "Bridge.lua:26",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-14",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 14,
+   "title": "MoP: Stampeding Roar cast in Cat or Bear Form isn't tracked or sent",
+   "text": "In Cat or Bear Form, Stampeding Roar uses its own spell ID, which the list doesn't have, so the druid's own window never shows it, nothing is sent and there's no ready-now. Groupmates still see it through the combat log, which also matches by name.",
+   "tags": [
+    "Missing spells",
+    "MoP Classic",
+    "Data_Mists.lua:54",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-15",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Wrong for the whole group",
+   "order": 15,
+   "title": "Retail: groupmates' specs never show in /cdc roster",
+   "text": "/cdc roster says spec refinement queued but only ever shows your own spec. The addon still sends inspect requests for the whole group on every roster change, and moves on after any inspect result, including ones your own Inspect window or other addons asked for.",
+   "tags": [
+    "Looks wrong",
+    "Retail",
+    "Roster.lua:203",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-16",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Request Rez",
+   "order": 16,
+   "title": "Request Rez goes nowhere in Dungeon Finder, Raid Finder and battlegrounds",
+   "text": "In those groups the leader's Rez request goes to /party or /raid, which are home-group channels, so the game refuses it and the rezzer never sees it (in a raid only the raid warning may get through). The addon's own sync already switches to instance chat there; the Rez request doesn't.",
+   "tags": [
+    "Rez call lost",
+    "Retail and MoP; battlegrounds on TBC and Era too",
+    "CooldownCollaborator.lua:385",
+    "Held up, both reviewers"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-17",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Request Rez",
+   "order": 17,
+   "title": "Request Rez accepts a dead monster as the target",
+   "text": "If the leader still has a dead monster or enemy player targeted and presses Rez, the addon posts '<druid>, please Rebirth <monster>!' to raid chat and raid warning. It checks only that the target is dead. A dead friendly player from outside the group is fine, since battle rez works on them.",
+   "tags": [
+    "Wrong call",
+    "All clients",
+    "CooldownCollaborator.lua:356",
+    "Held up, narrowed, both reviewers"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-18",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 18,
+   "title": "The windows stay up after you leave the group",
+   "text": "The main panel, Essentials bar and Lane view open when you join a group, but nothing closes them when you leave; they stay until a /reload or until you switch them off. You saw this in the 18 Nov walk. The fix is small: hide them when you're not in a group.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Essentials.lua:234, Lanes.lua:156, UI.lua:222",
+    "From your walk"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-19",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 19,
+   "title": "Main panel reopens itself after you close it in a group",
+   "text": "In a group, closing the main panel with /cdc or the minimap button lasts only until the next cast, sync or roster change, which in a raid is seconds. There's no close button and no setting to keep it hidden, so a player who only wants the Essentials bar or Lane view can't get rid of it.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "UI.lua:222",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-20",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 20,
+   "title": "Lane view: ready icons pile down out of the window",
+   "text": "Ready providers all sit at the same spot at the right end of the lane, so each one is pushed a row lower. At the start of every raid everyone is ready, so with three or more providers the icons run off the bottom of the Lane view and over the Battle Rez lane, or hang below the window.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Lanes.lua:139",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-21",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 21,
+   "title": "Lane view hides the ready providers once six are on cooldown",
+   "text": "Each lane shows six icons and keeps the ones with the longest time left, so once six providers are cooling at the same time, the ready ones aren't shown. Mostly big Era, TBC or Forever raids with many druids, where Rebirth takes 20 to 30 minutes to come back.",
+   "tags": [
+    "Wrong timers",
+    "All clients (mostly Era, TBC and Forever raids)",
+    "Lanes.lua:100",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-22",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 22,
+   "title": "Lane view icons are covered by a coloured square",
+   "text": "The border meant to frame each lane icon is a filled square at 60% drawn on top of it. Ready icons look like green blobs and cooling ones like class-coloured blobs, with the spell icon only faintly visible.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Lanes.lua:150",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-23",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 23,
+   "title": "Removing a custom spell that has a built-in's ID deletes the built-in until /reload",
+   "text": "The Custom Spells tab is the obvious way to give a built-in spell your talented cooldown. Adding it replaces the built-in, and pressing Remove then deletes the spell entirely: your casts and the group's stop being tracked or sent until a /reload, and a rez or lust spell loses its Essentials icon.",
+   "tags": [
+    "Loses settings",
+    "All clients",
+    "CooldownCollaborator.lua:233",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-24",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 24,
+   "title": "Flask and food line counts you twice in a raid",
+   "text": "In a raid the Flask N/N Food N/N line counts you twice, so both numbers are one too high (a 20-player raid shows out of 21). The red or green colour is still right.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Consumables.lua:284",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-25",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 25,
+   "title": "At a panel scale other than 1.0 the panel drifts toward a corner",
+   "text": "If Panel scale isn't 1.0 and you haven't dragged the panel on that character yet, it jumps toward a screen corner on each /reload or login. Once you drag it the game remembers the spot for that character, but each alt drifts the same way until you drag it there too.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "UI.lua:236",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-26",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 26,
+   "title": "The Essentials bar and Lane view can't be locked",
+   "text": "/cdc lock and the settings box lock only the main panel, and no command or setting covers the other two. Pressing and dragging either one mid-fight still moves it, though a plain click doesn't.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "CooldownCollaborator.lua:622",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-27",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 27,
+   "title": "A /cdc consumable entry can never be removed",
+   "text": "Once you register a buff with /cdc consumable there's no command or settings control to remove it, and the settings window doesn't list consumables. A wrong spell ID stays tracked for good on your own panel. Other players don't see it.",
+   "tags": [
+    "Loses settings",
+    "All clients",
+    "Consumables.lua:108",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-28",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 28,
+   "title": "A flask you add yourself never counts unless its name ends in 'flask'",
+   "text": "The help line and README show /cdc consumable <spellID> <seconds> <name> and don't say the name must end in a separate lowercase word flask or food to count. So '... Haste Flask' is tracked but never counted in Flask N/N. The flasks and food the addon already knows count either way.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Consumables.lua:77",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-29",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 29,
+   "title": "Settings' Lock panel position tick goes stale after /cdc lock or unlock",
+   "text": "The settings window is built once and reused, so after /cdc lock or /cdc unlock it shows the old tick. Your first click on the box then seems to do nothing, and after that it's right again.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Options.lua:258",
+    "Held up, narrowed"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-30",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 30,
+   "title": "'No custom spells added yet.' stays under the first custom spell",
+   "text": "On the Custom Spells tab the empty-list message stays after you add a spell and sits under the new row. Each empty refresh adds another copy.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Options.lua:146",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-31",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 31,
+   "title": "'Shift-click a spell link to auto-fill' doesn't work",
+   "text": "The Custom Spells tab says to shift-click a spell link to fill the box, but nothing sends the link there, so it goes to chat (if open) or nowhere and the box stays empty.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "Options.lua:444",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-32",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 32,
+   "title": "On a fresh install the Essentials bar sits on top of the main panel",
+   "text": "The default spots put the Essentials bar 50 pixels into the right side of the main panel, over its timer column. Both open by themselves the first time you join a group, so new players see them overlap until they drag one away.",
+   "tags": [
+    "Looks wrong",
+    "All clients",
+    "CooldownCollaborator.lua:143",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ },
+ {
+  "id": "2026-11-18-cc-red-team-33",
+  "data": {
+   "review": "2026-11-18-cc-red-team",
+   "reviewTitle": "Red team, 18 Nov",
+   "reviewNote": "Two reviewers read the code looking for bugs, one on group sync and one on the windows and settings, then a second reviewer tried to disprove each finding. All 32 held up and 14 came out smaller; six were found by both reviewers. One more card is from your walk. Everything here is also in released 1.1.1. Go means worth fixing; nothing changes until you say.",
+   "added": "2026-11-19T07:00:00Z",
+   "group": "Windows and settings",
+   "order": 33,
+   "title": "Dragging the minimap button goes wrong when the minimap is resized",
+   "text": "With Edit Mode's minimap size not at 100% (or a minimap addon rescaling it), dragging the button around the minimap doesn't follow the cursor: it jumps or sticks to one side. CooldownTimeline3's minimap button uses the same code.",
+   "tags": [
+    "Looks wrong",
+    "Retail with a resized minimap; any client with a minimap addon",
+    "Minimap.lua:74",
+    "Held up"
+   ],
+   "status": "",
+   "note": ""
+  }
+ }
+]

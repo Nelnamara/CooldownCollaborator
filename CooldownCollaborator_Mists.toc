@@ -3,22 +3,42 @@
 ## Notes: Group and raid cooldown coordinator - tracks all members' major defensive and utility CDs, auto-switches between party and raid layout.
 ## IconTexture: Interface\AddOns\CooldownCollaborator\Media\icon.tga
 ## Author: Nelnamara
-## Version: 1.1.1
+## Version: 2.0.0
 ## OptionalDeps: CooldownTimeline3
 ## SavedVariables: CooldownCollaboratorDB
 ## X-Website: https://github.com/Nelnamara/CooldownCollaborator
 ## X-License: All Rights Reserved
 
 CooldownCollaborator.lua
+Locales\Locales.lua
+Locales\enUS.lua
+Locales\deDE.lua
+Locales\esES.lua
+Locales\esMX.lua
+Locales\frFR.lua
+Locales\itIT.lua
+Locales\koKR.lua
+Locales\ptBR.lua
+Locales\ruRU.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
 Data.lua
 Data_Mists.lua
 Events.lua
 Comms.lua
 Bridge.lua
 UI.lua
+Tooltip.lua
+Alerts.lua
 Roster.lua
 Essentials.lua
 Lanes.lua
+DeadList.lua
+Strips.lua
+Burst.lua
+Plan.lua
 Consumables.lua
 Minimap.lua
 Options.lua
+Tour.lua
+Setups.lua

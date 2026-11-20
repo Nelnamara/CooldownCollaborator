@@ -4,6 +4,8 @@
 -- The orbit follows the minimap's live size (the Forever minimap is larger than the old one,
 -- and Edit Mode can rescale it): the button's center sits just past the rim, so it rides the
 -- border instead of floating inside the map. Same rule as CooldownTimeline3's button.
+local L = CC.L
+
 local function AngleToOffset(angle)
     local radius = (Minimap:GetWidth() / 2) + 4
     return radius * math.cos(math.rad(angle)), radius * math.sin(math.rad(angle))
@@ -45,40 +47,40 @@ function CC:BuildMinimapButton()
     Minimap:HookScript("OnSizeChanged", function() Place(btn) end)
 
     -- Tooltip
-    btn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    btn:SetScript("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget, "ANCHOR_LEFT")
         GameTooltip:AddLine("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
-        GameTooltip:AddLine("Left-click: Toggle panel", 1, 1, 1)
-        GameTooltip:AddLine("Right-click: Open settings", 1, 1, 1)
-        GameTooltip:AddLine("Drag: Reposition button", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(L["Left-click: Toggle panel"], 1, 1, 1)
+        GameTooltip:AddLine(L["Right-click: Open settings"], 1, 1, 1)
+        GameTooltip:AddLine(L["Drag: Reposition button"], 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Click
-    btn:SetScript("OnClick", function(self, button)
+    btn:SetScript("OnClick", function(_, button)
         if button == "RightButton" then
             CC:OpenOptions()
         else
-            if CC.frame then
-                CC.frame:SetShown(not CC.frame:IsShown())
-            end
+            CC:TogglePanel()
         end
     end)
 
     -- Drag to reposition around minimap edge
-    btn:SetScript("OnDragStart", function(self)
-        self:SetScript("OnUpdate", function(self)
+    btn:SetScript("OnDragStart", function(widget)
+        widget:SetScript("OnUpdate", function(dragged)
+            -- the cursor is in screen pixels and the centre in the minimap's own scale:
+            -- divide by the minimap's effective scale, as LibDBIcon does
             local mx, my = Minimap:GetCenter()
             local px, py = GetCursorPosition()
-            local s = UIParent:GetEffectiveScale()
+            local s = Minimap:GetEffectiveScale()
             local angle = math.deg(math.atan2(py / s - my, px / s - mx))
             CC.db.minimapAngle = angle
-            Place(self)
+            Place(dragged)
         end)
     end)
-    btn:SetScript("OnDragStop", function(self)
-        self:SetScript("OnUpdate", nil)
+    btn:SetScript("OnDragStop", function(widget)
+        widget:SetScript("OnUpdate", nil)
     end)
 
     if db.minimapHide then btn:Hide() end

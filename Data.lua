@@ -8,6 +8,18 @@
 --                  Each rank casts with its own ID; all of them record under
 --                  the base ID, and only base IDs go on the wire, so players
 --                  with different ranks agree.
+--       variants = other IDs the same spell casts with (MoP Stampeding Roar
+--                  in Bear or Cat Form, Classic Reincarnation's rez). They
+--                  record under, and are sent as, the base ID like ranks, but
+--                  are never in the spellbook, so KnownRank doesn't read them.
+--       level    = provider spells: the level the spell is learned at.
+--       spec     = a provider only one specialization has (its ChrSpecialization
+--                  ID): a groupmate counts once we know their spec (Roster.lua).
+--       itemCooldown = the cooldown sits on an item (no ready-now watch).
+--       kind     = what it is for: rez, lust, external, raid, personal, mana or
+--                  utility (the tooltip's line, the views' groupings).
+--       effect   = externals and raid defensives: the effect's length in
+--                  seconds (SpellDuration), for the panel's effect bar.
 --   CC.Providers[capability][CLASS] = { baseID, ... }  (Roster.lua)
 --   CC.BuiltinConsumables[spellID] = { ..., consumable = true, category }
 --   CC.ConsumableMatch = "id" (Retail, Forever) or "name" (Era, TBC, MoP)
@@ -32,11 +44,12 @@ CC.ClassColors = {
     DEMONHUNTER = { 0.64, 0.19, 0.79 },
     EVOKER      = { 0.20, 0.58, 0.50 },
     UNKNOWN     = { 0.50, 0.50, 0.50 },
+    ITEMS       = { 1.00, 0.82, 0.00 },   -- no class: items such as the Goblin Sapper Charge
 }
 
 -- Built at Init from the client's list (before custom spells and consumables
 -- are merged in):
---   CC.RankToBase[spellID] = baseID   every rank of every tracked spell
+--   CC.RankToBase[spellID] = baseID   every rank and variant of every tracked spell
 --   CC.SpellByName[name]   = baseID   the English name and the client's own
 --                                      (combat-log casts match by name too)
 CC.RankToBase  = {}
@@ -47,8 +60,10 @@ function CC:BuildSpellIndex()
     for baseID, data in pairs(self.SpellData) do
         if not data.consumable then
             self.RankToBase[baseID] = baseID
-            for _, id in ipairs(data.ranks or {}) do
-                self.RankToBase[id] = baseID
+            for _, ids in ipairs({ data.ranks or {}, data.variants or {} }) do
+                for _, id in ipairs(ids) do
+                    self.RankToBase[id] = baseID
+                end
             end
             self.SpellByName[data.name] = baseID
             local ok, localName = pcall(self.Compat.GetSpellInfo, baseID)
@@ -59,7 +74,7 @@ function CC:BuildSpellIndex()
     end
 end
 
--- The base ID a cast records under (a rank's ID, or the ID itself).
+-- The base ID a cast records under (a rank's or variant's ID, or the ID itself).
 function CC:BaseSpellID(spellID)
     return self.RankToBase[spellID] or spellID
 end

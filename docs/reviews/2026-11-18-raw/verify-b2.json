@@ -1,0 +1,101 @@
+[
+ {
+  "id": "B13",
+  "verdict": "held",
+  "why": "CooldownCollaborator.lua:385-390 sends only RAID + RAID_WARNING or PARTY, while Comms.lua:18-20 (CC:GroupChannel) switches to INSTANCE_CHAT in an instance group; RequestRez never calls it. CanRequestRez (:342-349) is true for the leader that Dungeon Finder, Raid Finder and battleground groups all assign, so the path is reachable. In the real game Blizzard's own chat box switches /p and /raid to instance chat in these groups (ChatEdit_UpdateHeader's smart switching), because the server answers a raw PARTY or RAID send there with a 'not in a party/raid' error; I'm fairly sure of that (about 80%), and less sure whether the raid warning gets through.",
+  "what": "",
+  "clients": "Retail and MoP Classic (Dungeon Finder, Raid Finder, battlegrounds); also battlegrounds on TBC Anniversary and Classic Era",
+  "where": "CooldownCollaborator.lua:385",
+  "severity": "medium"
+ },
+ {
+  "id": "B14",
+  "verdict": "held",
+  "why": "Roster.lua:104-115 adds every unit with a name and class, with no UnitIsConnected test (the only ones are Roster.lua:156 for inspect and Consumables.lua:269 for the flask strip). GetCapabilityStatus (Roster.lua:274-282) marks a provider with no observed cast ready, and RequestRez skips only the dead (CooldownCollaborator.lua:367-369). Probe probe-v2/offline.lua (Retail and Era): an offline druid sorted first is listed READY and the call-out goes to raid and raid warning as 'Aoff, please Rebirth Dead!'.",
+  "what": "",
+  "clients": "All clients",
+  "where": "Roster.lua:104",
+  "severity": "medium"
+ },
+ {
+  "id": "B15",
+  "verdict": "narrowed",
+  "why": "The only target check is CooldownCollaborator.lua:356 (exists and dead); there is no UnitIsPlayer or UnitIsFriend test, and FullName works for NPCs (:85-90). Probe probe-v2/offline.lua: a dead 'Ragnaros' target posts 'Aoff, please Rebirth Ragnaros!' to raid and raid warning. But a dead friendly player outside the group is a valid Rebirth or Raise Ally target in the real game, so that half of the finding is not a bug; only dead monsters and dead enemy players are wrong.",
+  "what": "If the leader still has a dead monster or a dead enemy player targeted and presses Rez, the addon posts '<druid>, please Rebirth <monster>!' to raid chat and raid warning. It checks only that the target is dead. A rez call for a dead friendly player from outside the group is fine, since battle rez works on them.",
+  "clients": "All clients",
+  "where": "CooldownCollaborator.lua:356",
+  "severity": "low"
+ },
+ {
+  "id": "B16",
+  "verdict": "held",
+  "why": "Consumables.lua:182-187 records a flask or food only on the rising edge, and consumableActive starts empty each session (:23), so the first poll after a login or /reload stamps 'now' (CooldownCollaborator.lua:260-261) and SendCooldownSync sends secondsAgo 0 (Comms.lua:55). Receivers have the same built-in ID and take the later time (CooldownCollaborator.lua:303-305), and BridgeStart passes it to CDTL3 (Bridge.lua:45-63). A refreshed flask keeps present true, so it never re-records; the readable aura on Era/TBC/MoP (Consumables.lua:136-138) is used only for presence.",
+  "what": "",
+  "clients": "All clients",
+  "where": "Consumables.lua:184",
+  "severity": "low"
+ },
+ {
+  "id": "B17",
+  "verdict": "narrowed",
+  "why": "RemoveConsumableBuff (Consumables.lua:108-117) has no caller, the slash handler only adds (CooldownCollaborator.lua:651-661), and Options.lua shows customSpells only (:152) and skips consumables on the Default Spells tab (:64). But the group never sees the wrong entry: other players' addons drop a spell ID they don't know (CooldownCollaborator.lua:294-295), so only your own panel and CDTL3 show it. An undocumented way round exists: re-adding the ID with a duration under the minimum (for example 1 s) makes RecordCooldown skip it (:250).",
+  "what": "Once you register a buff with /cdc consumable, there's no command or settings control to remove it, and the settings window doesn't list consumables. A wrong spell ID stays tracked for good and shows on your own panel every time that buff lands on you. Other players don't see it: their addon ignores spell IDs it doesn't know.",
+  "clients": "All clients",
+  "where": "Consumables.lua:108",
+  "severity": "low"
+ },
+ {
+  "id": "B18",
+  "verdict": "narrowed",
+  "why": "Real: the usage line (CooldownCollaborator.lua:658) and README.md:81 say only '<name>', and the category needs a separate lowercase trailing 'flask' or 'food' (Consumables.lua:77-79). But the finding's example ID 1230876 is a built-in flask (Data_Retail.lua:79), and built-ins count through Consumables.lua:174-191 with CC.BuiltinConsumables' own category, so re-adding it still counts. The Data_Retail.lua:71-72 comment is stale (the four Midnight flasks are at :79-82), and the keyword is in the README changelog (README.md:127), so this only affects a flask or food that isn't built in.",
+  "what": "The help line and the README's command list show '/cdc consumable <spellID> <seconds> <name>' and don't say the name must end in a separate lowercase word 'flask' or 'food' to count. So a flask or food you add yourself, typed as '... Haste Flask', is tracked but never counted in 'Flask N/N' or 'Food N/N'. The flasks and food the addon already knows count either way.",
+  "clients": "All clients",
+  "where": "CooldownCollaborator.lua:658",
+  "severity": "low"
+ },
+ {
+  "id": "B19",
+  "verdict": "narrowed",
+  "why": "Real: the window is built once (Options.lua:190-194), cbLock:SetChecked runs only then (:258), and /cdc lock or unlock changes CC.db.locked with no refresh (CooldownCollaborator.lua:622-629); there is no OnShow hook. But a WoW check button flips its tick before OnClick runs, so the click saves the new tick (Options.lua:259-261): the first click sets the value the panel already has, and after that the box and panel agree. So the click doesn't do the opposite; it just seems to do nothing once.",
+  "what": "The settings window is built once and reused. After /cdc lock or /cdc unlock, reopening it shows the old tick on 'Lock panel position'. Your first click on the box then seems to do nothing (it sets what the panel already is), and after that the box is right again.",
+  "clients": "All clients",
+  "where": "Options.lua:258",
+  "severity": "low"
+ },
+ {
+  "id": "B20",
+  "verdict": "held",
+  "why": "RefreshSpellList clears only child frames (Options.lua:146) and never regions, unlike RefreshDefaultSpellList (:59-60). The empty message is a FontString on content at TOPLEFT 0,0 (:181-183), where the first row also starts (:157), with its icon at LEFT 0 (:161). Each empty refresh (opening the Custom Spells tab, :535, or removing the last spell, CooldownCollaborator.lua:237) adds another copy.",
+  "what": "",
+  "clients": "All clients",
+  "where": "Options.lua:146",
+  "severity": "low"
+ },
+ {
+  "id": "B21",
+  "verdict": "held",
+  "why": "The hint is at Options.lua:444, and the only link handling is OnTextChanged reading text already in the box (:480-490). No file hooks ChatEdit_InsertLink or ChatFrameUtil.InsertLink (grep finds none). In the real game a shift-clicked spell goes through ChatEdit_InsertLink, which inserts into the active chat box or a few named Blizzard boxes (macro text, auction search and the like), never into an addon's focused EditBox; addons that support it hook that function. I'm fairly sure of this (about 80%).",
+  "what": "",
+  "clients": "All clients",
+  "where": "Options.lua:444",
+  "severity": "low"
+ },
+ {
+  "id": "B22",
+  "verdict": "held",
+  "why": "Checked: the main panel is 320 wide (UI.lua:3, :33) centred at 0, 200 (CooldownCollaborator.lua:129-130), x -160 to 160; Essentials is 220 wide (Essentials.lua:10, :42) centred at 220, 200 (CooldownCollaborator.lua:143-144), x 110 to 330, both at scale 1 and both centred on y 200. They overlap by 50 px, right over the main panel's right-aligned timer column. Both show on a roster update in a group (CooldownCollaborator.lua:576-579 runs RefreshRows then ScanRoster; UI.lua:223-225, Essentials.lua:234-235), and these defaults are unchanged since commit 932fc7b.",
+  "what": "",
+  "clients": "All clients",
+  "where": "CooldownCollaborator.lua:143",
+  "severity": "low"
+ },
+ {
+  "id": "B23",
+  "verdict": "held",
+  "why": "Minimap.lua:72-75 divides the cursor by UIParent's effective scale but takes Minimap:GetCenter() in the minimap's own units (LibDBIcon divides by Minimap:GetEffectiveScale()). They agree only while the minimap's scale relative to UIParent is 1; otherwise the reference point slides toward or away from the screen's bottom-left and the angle sticks to one arc. CDTL3's button has the same code (cdtl3-dev/CDTL3.lua:1112-1116), so it isn't a deliberate choice. Retail's Edit Mode minimap Size works by scaling the minimap's container, I'm fairly sure (about 75%); Forever's bigger minimap is a real size change (commit 810bab2, the 182-wide test), not a scale, so Forever is fine by default.",
+  "what": "",
+  "clients": "Retail when Edit Mode's minimap Size isn't 100%; any client where a minimap addon rescales the minimap",
+  "where": "Minimap.lua:74",
+  "severity": "low"
+ }
+]
