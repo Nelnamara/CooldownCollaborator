@@ -97,7 +97,7 @@ CooldownCollaborator works with my other addon, **CooldownTimeline3** (CDTL3), o
 - `/cdc rez` calls a Battle Rez on your dead target. With nobody targeted it calls the top of the dead list
 - `/cdc lastpull` shows the last pull's log
 - `/cdc post` posts who is ready to the raid
-- `/cdc support` opens a box with text to copy into a bug report
+- `/cdc report` opens a box with what to paste into a new issue on GitHub
 - `/cdc consumable <spellID> <seconds> <name>` registers a Cauldron or Feast style buff, and `/cdc consumable remove <spellID>` removes it
 - `/cdc verbose` turns on detailed logging, for tracking down problems
 - `/cdc debug` prints every tracked cooldown and the group state

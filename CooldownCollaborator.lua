@@ -1213,8 +1213,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         CC:PrintLastPull()
     elseif cmd == "post" then
         CC:PostReady()
-    elseif cmd == "support" then
-        CC:ShowCopyBox(L["Support: copy this into your report"], CC:SupportText())
+    elseif cmd == "report" then
+        CC:ShowReport()
     elseif cmd == "nexthit" then
         -- /cdc nexthit <seconds or M:SS> | off: the Lane view's look-ahead (Lanes.lua)
         CC:NextHitCommand(msg:match("^%s*%S+%s*(.-)%s*$") or "")

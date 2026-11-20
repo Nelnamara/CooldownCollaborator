@@ -319,7 +319,7 @@ try("setup", function()
 	CC:DescribeSetup(s)
 	CC:ShowImportBox()
 end)
-try("support", CC.SupportText, CC)
+try("report", CC.ShowReport, CC)
 
 local slash = SlashCmdList["COOLDOWNCOLLABORATOR"]
 for _, cmd in ipairs({ "lock", "unlock", "reset", "essentials", "essentials", "lanes", "lanes", "consumable", "nexthit",
@@ -334,7 +334,7 @@ if CC.optionsFrame and CC.optionsFrame.__scripts and CC.optionsFrame.__scripts.O
 	try("options onshow", CC.optionsFrame.__scripts.OnShow, CC.optionsFrame)
 end
 try("spell lists", function() CC.db.spellGroupBy = "kind"; CC:RefreshDefaultSpellList(); CC.db.spellGroupBy = "class"; CC:RefreshDefaultSpellList() end)
-try("profile status", function() if CC.RefreshProfileStatus then CC:RefreshProfileStatus() end end)
+try("profile controls", function() CC:RefreshProfileControls() end)
 Advance(2)
 
 -- what the player saw must carry the marker, or be data
@@ -351,6 +351,7 @@ local function isData(s)
 	return not t:find("%a%a")
 end
 local seen, badCount, badList = {}, 0, {}
+seen[CC:ReportText()] = true   -- the report body is for the developer: plain English on purpose (debug begin / end)
 local function audit(list, where)
 	for _, s in ipairs(list) do
 		if type(s) == "string" and not seen[s] then

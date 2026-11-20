@@ -663,16 +663,41 @@ do
 	check("  the setting turns it off", not asked)
 	db.resetOnNewRun = true
 
-	-- support
+	-- /cdc report
+	CC:ApplyShowPreset("everything")
 	CC.sendErrors = {}
 	CC:NoteSendError(8)
-	local text = CC:SupportText()
-	check("support: version, client, group, heard from, unticked spells and send errors",
-		text:find(CC.version, 1, true) and text:find("Client:", 1, true) and text:find("Group: party", 1, true)
-		and text:find("Heard from", 1, true) and text:find("Unticked spells", 1, true)
-		and text:find("Recent send errors (1)", 1, true), text)
+	local text = CC:ReportText()
+	local clientName = ({ retail = "Retail", mop = "MoP Classic", tbc = "TBC Anniversary", era = "Classic Era", forever = "WoW: Forever" })[FLAVOR]
+	check("report: version and client, group, who answered, what is tracked, refused messages",
+		text:find("CooldownCollaborator " .. CC.version .. " on " .. clientName, 1, true)
+		and text:find("In a party of %d+%.") and text:find("Heard from", 1, true)
+		and text:find("Tracking: Everything, no spells changed", 1, true)
+		and text:find("Messages the game refused lately: 8 at", 1, true), text)
+	local realKind, realPeers = CC.GroupKind, CC.peers
+	CC.GroupKind = function() return nil end
+	CC.peers = {}
+	local rb = CC.SpellByName["Rebirth"]
+	CC:ApplyShowPreset("healer")
+	db.disabledSpells[rb] = true
+	CC.sendErrors = {}
+	text = CC:ReportText()
+	check("  solo, nobody heard, a role with one spell unticked, nothing refused",
+		text:find("Not in a group.", 1, true) and text:find("Heard from nobody.", 1, true)
+		and text:find("Tracking: Healer, minus 1 spells you changed", 1, true)
+		and text:find("Messages the game refused lately: none", 1, true), text)
+	CC.GroupKind, CC.peers = realKind, realPeers
+	CC:ApplyShowPreset("everything")
+	local box = CC:ShowReport()
+	check("  /cdc report's box is titled Report a problem and says where to paste it", box:IsShown()
+		and box.title.__text == "Report a problem" and box.note.__text:find("github.com/Nelnamara/CooldownCollaborator/issues", 1, true) ~= nil
+		and box.edit.__text == CC:ReportText())
+	box:Hide()
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("report")
+	check("  the slash word opens it", CC.copyBox:IsShown())
+	CC.copyBox:Hide()
 	SlashCmdList["COOLDOWNCOLLABORATOR"]("support")
-	check("  /cdc support opens the copy box", CC.copyBox and CC.copyBox:IsShown())
+	check("  and /cdc support is gone", not CC.copyBox:IsShown())
 end
 
 ---------------------------------------------------------------- the public feed

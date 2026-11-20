@@ -2186,9 +2186,6 @@ function CC:OpenOptions()
     y = y - 30
     NewButton(pr, 4, y, 110, L["Last pull"], function() CC:PrintLastPull() end)
     NewButton(pr, 118, y, 110, L["Post ready"], function() CC:PostReady() end)
-    NewButton(pr, 232, y, 110, L["Support box"], function()
-        CC:ShowCopyBox(L["Support: copy this into your report"], CC:SupportText())
-    end)
     y = y - 34
     NewNote(pr, 4, y, CAW - 40, L["Post ready lists these spells and who has them in raid or party chat (none ticked: rez and lust):"])
     y = y - 30

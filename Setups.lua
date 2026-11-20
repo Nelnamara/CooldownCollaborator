@@ -5,7 +5,7 @@
 --   P33  the last pull's cooldown log (/cdc lastpull)
 --   P38  /cdc post: what's ready for the spells you pick, to the group's chat
 --   P45  a new key or dungeon: the cooldowns the game resets go back to ready
---   P19  /cdc support: a box with what to paste into a bug report
+--   P19  /cdc report: a box with what to paste into a new issue
 --   P34  CC.API, a small public feed for other addons (docs/API.md)
 -- A setup is { disabled = { spellID, ... }, custom = { [id] = { name, duration, icon } },
 -- alerts = { [id] = { sound, flash, midscreen, warn } }, places = { [windowKey] = { x, y } } }.
@@ -467,7 +467,7 @@ function CC:ShowCopyBox(title, text, onAccept, acceptLabel)
     local f = self.copyBox
     if not f then
         f = CreateFrame("Frame", "CCCopyBox", UIParent, CC.BackdropTemplate)
-        f:SetSize(440, 260)
+        f:SetSize(440, 296)
         f:SetPoint("CENTER")
         f:SetFrameStrata("DIALOG")
         f:SetBackdrop({
@@ -838,38 +838,63 @@ function CC:OnKeyStart()
 end
 
 -------------------------------------------------------------------------------
--- /cdc support (P19)
+-- /cdc report (P19): a copy box with what to paste into a new issue
 -------------------------------------------------------------------------------
 
 CC.sendErrors = CC.sendErrors or {}
 
-function CC:SupportText()
-    -- debug begin: the support report is read by the developer, so it stays in English
-    local lines = {
-        "CooldownCollaborator " .. self.version,
-        string.format("Client: %s (interface %s), retailAPI %s", tostring(self:ClientTag()), tostring(self.tocversion), tostring(self.retailAPI)),
-        "Group: " .. (self:GroupKind() or "none") .. ", " .. tostring(GetNumGroupMembers()) .. " players",
-    }
-    local heard = {}
+local CLIENT_NAME = { retail = "Retail", mists = "MoP Classic", tbc = "TBC Anniversary", era = "Classic Era", forever = "WoW: Forever" }
+local ROLE_NAME = { everything = "Everything", simple = "Basics", healer = "Healer", tank = "Tank", dps = "DPS", custom = "My own" }
+
+-- The role and how many spells were ticked or unticked against it, in English words.
+function CC:ReportTracking()
+    local role = self.db.showPreset or "everything"
+    local preset = CC.PRESETS and CC.PRESETS[role]
+    local plus, minus = 0, 0
+    for id, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable then
+            -- what the role alone would show (a spell with no kind stays as it was, so it never counts)
+            local wanted = true
+            if preset and preset.kinds and data.kind and not preset.kinds[data.kind] then wanted = false end
+            local on = not (self.db.disabledSpells and self.db.disabledSpells[id])
+            if data.kind or not preset then
+                if on and not wanted then plus = plus + 1 elseif wanted and not on then minus = minus + 1 end
+            end
+        end
+    end
+    local text = ROLE_NAME[role] or tostring(role)
+    if plus == 0 and minus == 0 then return text .. ", no spells changed" end
+    local parts = {}
+    if plus > 0 then parts[#parts + 1] = "plus " .. plus end
+    if minus > 0 then parts[#parts + 1] = "minus " .. minus end
+    return text .. ", " .. table.concat(parts, " and ") .. " spells you changed"
+end
+
+-- The report body: plain sentences for the developer, so it stays in English.
+function CC:ReportText()
+    -- debug begin: read by the developer, not the player
+    local lines = { string.format("CooldownCollaborator %s on %s", self.version, CLIENT_NAME[self:ClientTag()] or tostring(self:ClientTag())) }
+    local kind = self:GroupKind()
+    lines[#lines + 1] = kind and string.format("In a %s of %d.", kind, GetNumGroupMembers()) or "Not in a group."
+    local heard, me = {}, self:FullName("player")
     for name, p in pairs(self.peers or {}) do
-        heard[#heard + 1] = string.format("%s %s%s", self:ShortName(name), tostring(p.version or "?"), p.client and (" " .. p.client) or "")
+        if name ~= me then heard[#heard + 1] = string.format("%s %s", self:ShortName(name), tostring(p.version or "?")) end
     end
     table.sort(heard)
-    lines[#lines + 1] = "Heard from (" .. #heard .. "): " .. (#heard > 0 and table.concat(heard, ", ") or "nobody")
-    local off = {}
-    for id, v in pairs(self.db.disabledSpells or {}) do
-        local d = v and CC.SpellData[id]
-        if d then off[#off + 1] = d.name end
-    end
-    table.sort(off)
-    lines[#lines + 1] = "Unticked spells (" .. #off .. "): " .. (#off > 0 and table.concat(off, ", ") or "none")
-    lines[#lines + 1] = "Show: " .. tostring(self.db.showPreset) .. ", windows " .. tostring(self.db.showWindows)
-        .. ", lighter " .. tostring(self.db.lighterMode) .. ", guild sharing " .. tostring(self.db.guildSync)
+    lines[#lines + 1] = #heard > 0 and ("Heard from: " .. table.concat(heard, ", ")) or "Heard from nobody."
+    lines[#lines + 1] = "Tracking: " .. self:ReportTracking()
     local errs = {}
     for i = math.max(1, #self.sendErrors - 9), #self.sendErrors do errs[#errs + 1] = self.sendErrors[i] end
-    lines[#lines + 1] = "Recent send errors (" .. #errs .. "): " .. (#errs > 0 and table.concat(errs, ", ") or "none")
+    lines[#lines + 1] = "Messages the game refused lately: " .. (#errs > 0 and table.concat(errs, ", ") or "none")
     -- debug end
     return table.concat(lines, "\n")
+end
+
+-- The copy box with the report; /cdc report opens it.
+function CC:ShowReport()
+    local box = self:ShowCopyBox(L["Report a problem"], self:ReportText())
+    box.note:SetText(L["Copy this (Ctrl+C) and paste it into a new issue at https://github.com/Nelnamara/CooldownCollaborator/issues, with what you were doing."])
+    return box
 end
 
 -- Comms.lua calls this when the game refuses a send.
