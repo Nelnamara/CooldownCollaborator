@@ -165,7 +165,7 @@ local function PlaceRow(f, icons, entries, y, own)
             w:SetPoint("TOP", f, "TOPLEFT", x, -(TOP + y))
             CC:SetRingIcon(w, { spellID = e.spellID, owner = e.name, class = e.class, ring = "none",
                 state = CC:OwnerState(e), guessed = e.guessed and e.remaining <= 0 })
-            if own then Swipe(w.cooldown, e.spellID) else w.cooldown:Clear() end
+            if own and not CC.sampling then Swipe(w.cooldown, e.spellID) else w.cooldown:Clear() end
         else
             w:Hide()
         end
@@ -175,17 +175,21 @@ end
 function CC:RefreshBurstLine()
     local f = self.burstFrame
     if not f then return end
-    if not self.db.burstEnabled or not IsInGroup() then
+    if not self.sampling and (not self.db.burstEnabled or not IsInGroup()) then
         f:Hide()
         return
     end
     local me = self:FullName("player")
     local _, class = UnitClass("player")
     local own = {}
-    for _, id in ipairs(self:BurstSpells()) do
-        local remaining = self:GetLocalReadiness(id)
-        if remaining == nil then remaining = self:GetRemaining(me, id) or 0 end
-        own[#own + 1] = { spellID = id, name = me, class = class, remaining = remaining }
+    if self.sampling then
+        own = self:SampleBurstOwn()   -- a made-up "you" (Tour.lua), not the real spellbook
+    else
+        for _, id in ipairs(self:BurstSpells()) do
+            local remaining = self:GetLocalReadiness(id)
+            if remaining == nil then remaining = self:GetRemaining(me, id) or 0 end
+            own[#own + 1] = { spellID = id, name = me, class = class, remaining = remaining }
+        end
     end
     table.sort(own, function(a, b)
         if a.remaining ~= b.remaining then return a.remaining < b.remaining end

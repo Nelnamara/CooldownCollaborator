@@ -433,6 +433,9 @@ L["Post ready lists these spells and who has them in raid or party chat (none ti
 L["Click below to open the full settings window.\nYou can also right-click the minimap button or type /cdc settings."] = true
 L["Open CooldownCollaborator Settings"] = true
 
+-- Tour.lua
+L["That is a sample, so nothing was sent."] = true
+
 -- Setups.lua
 L["%d default spell ticked or unticked (%d unticked afterwards)"] = true
 L["%d default spells ticked or unticked (%d unticked afterwards)"] = true

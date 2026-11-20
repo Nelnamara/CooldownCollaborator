@@ -471,7 +471,7 @@ end
 
 function CC:RefreshLanes()
     if not self.laneFrame then return end
-    if not self.db.laneEnabled then
+    if not (self.db.laneEnabled or self.sampling) then
         self.laneFrame:Hide()
         return
     end
@@ -495,7 +495,7 @@ function CC:RefreshLanes()
     end
     self:LayoutLanes(heights)
 
-    if IsInGroup() and self.db.laneEnabled then
+    if (IsInGroup() and self.db.laneEnabled) or self.sampling then
         self.laneFrame:SetShown(self:WindowsWanted())
     end
 end

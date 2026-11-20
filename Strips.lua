@@ -176,7 +176,7 @@ end
 function CC:RefreshExternalsStrip()
     local f = self.externalsFrame
     if not f then return end
-    if not self.db.externalsEnabled or not IsInGroup() then
+    if not self.sampling and (not self.db.externalsEnabled or not IsInGroup()) then
         f:Hide()
         return
     end
@@ -290,7 +290,7 @@ end
 function CC:RefreshManaStrip()
     local f = self.manaFrame
     if not f then return end
-    if not self.db.manaEnabled or not IsInGroup() then
+    if not self.sampling and (not self.db.manaEnabled or not IsInGroup()) then
         f:Hide()
         return
     end

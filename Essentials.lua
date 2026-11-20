@@ -1103,7 +1103,7 @@ end
 -- The buff counts the saved list asks for (P17, P47): one strip for flask and
 -- food alone, else a line each.
 function CC:BuffCountLines()
-    local status = IsInGroup() and self:GetGroupBuffStatus()
+    local status = (IsInGroup() or self.sampling) and self:GetGroupBuffStatus()
     if not status or status.total <= 0 then return {} end
     local aim = tonumber(self.db.essentialsBuffAim) or 0
     aim = (aim > 0) and math.min(aim, status.total) or status.total
@@ -1295,7 +1295,7 @@ end
 
 function CC:RefreshEssentials()
     if not self.essentialsFrame then return end
-    if not self.db.essentialsEnabled then
+    if not (self.db.essentialsEnabled or self.sampling) then
         self.essentialsFrame:Hide()
         return
     end
@@ -1330,7 +1330,7 @@ function CC:RefreshEssentials()
     if self.essentialsFlash then self:StepEssentialsFlash() end
     if self.buffMissingFrame and self.buffMissingFrame:IsShown() then self:FillBuffMissing() end
 
-    if IsInGroup() and self.db.essentialsEnabled then
+    if (IsInGroup() and self.db.essentialsEnabled) or self.sampling then
         self.essentialsFrame:SetShown(self:WindowsWanted())
     end
 end

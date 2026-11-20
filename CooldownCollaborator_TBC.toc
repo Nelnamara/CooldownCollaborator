@@ -40,4 +40,5 @@ Plan.lua
 Consumables.lua
 Minimap.lua
 Options.lua
+Tour.lua
 Setups.lua

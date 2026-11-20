@@ -1395,13 +1395,13 @@ end
 
 function CC:RefreshRows()
     if not self.frame then return end
-    -- a window that is hidden and stays hidden isn't rebuilt
-    if IsInGroup() then
+    -- a window that is hidden and stays hidden isn't rebuilt (a sample, Tour.lua, shows it whatever the group)
+    if IsInGroup() or self.sampling then
         if not (self:WindowsWanted() or self.panelForced) then
             self.frame:Hide()
             return
         end
-        if self.db.panelClosed and not self.frame:IsShown() then return end
+        if self.db.panelClosed and not self.sampling and not self.frame:IsShown() then return end
     end
     self.runsText:SetText(self:RunsCountText())
     self.lustText:SetText(self:NextLustText())
@@ -1435,10 +1435,10 @@ function CC:RefreshRows()
 
     -- In a group it opens by itself, unless the player closed it (R19); with "only in combat" or
     -- "only on boss fights" it shows and hides with them (P30)
-    if IsInGroup() then
+    if IsInGroup() or self.sampling then
         if not (self:WindowsWanted() or self.panelForced) then
             self.frame:Hide()
-        elseif not self.db.panelClosed then
+        elseif self.sampling or not self.db.panelClosed then
             self.frame:Show()
         end
     end

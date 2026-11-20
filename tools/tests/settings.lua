@@ -1033,6 +1033,101 @@ do
 	check("joined windows code raises no Lua error", #ERRORS == e1, ERRORS[e1 + 1])
 end
 
+---------------------------------------------------------------- sample windows (Tour.lua)
+do
+	local e6 = #ERRORS
+	GROUP = {}
+	STUB_IN_RAID = false
+	FireEvent("GROUP_ROSTER_UPDATE")
+	Advance(1)
+	for _, w in ipairs(CC.WINDOWS) do
+		if w.onKey then db[w.onKey] = false end
+	end
+	db.panelClosed = true
+	CC:RefreshAllViews()
+	local stateBefore, nState = CC.state, 0
+	for _ in pairs(CC.state) do nState = nState + 1 end
+	local sent0, chat0 = #SENT, #CHATSENT
+	local has = {
+		main = function() local d = CC:BuildPanelData(); return #d.running + #d.folded > 0 end,
+		essentials = function() for _, m in ipairs(CC:EssentialsModel()) do if m.kind == "provider" then return true end end end,
+		lanes = function() for _, k in ipairs(CC.CAPABILITY_ORDER) do if #CC:GetCapabilityStatus(k) > 0 then return true end end end,
+		dead = function() return #CC:DeadList() == 2 end,
+		externals = function() return #CC:ExternalTiles() > 0 end,
+		mana = function() return #CC:ManaTiles() > 0 end,
+		burst = function() return #CC:SampleBurstOwn() > 0 and #CC:BurstGroup() > 0 end,
+	}
+	for _, w in ipairs(CC.WINDOWS) do
+		local frame = CC[w.frame]
+		check("sample " .. w.key .. ": shows solo with its window off", CC:ShowSample(w.key) == true and frame:IsShown(), w.key)
+		check("  it holds made-up players and real spells for this client", CC:WithSample(has[w.key]) == true, w.key)
+		check("  the group's data is the group's again", CC.state == stateBefore and CC.sampling == nil and CC:IsSampleName("Sylwen-Sample"))
+		CC:HideSample()
+		check("  ends: the window is back to hidden, no sample left", not frame:IsShown() and CC.sample == nil and not CC:IsSampleName("Sylwen-Sample"))
+	end
+	local nAfter = 0
+	for name in pairs(CC.state) do nAfter = nAfter + 1; if name:find("-Sample", 1, true) then nAfter = -999 end end
+	check("samples leave no rows in the group's data, and send nothing", nAfter == nState and #SENT == sent0 and #CHATSENT == chat0, nAfter)
+	-- the real refresh methods are back, not wrappers
+	CC:ShowSample("main"); local wrapped = CC.RefreshRows; CC:HideSample()
+	check("  the refresh methods are put back", CC.RefreshRows ~= wrapped)
+
+	-- twenty seconds
+	CC:ShowSample("main")
+	Advance(19)
+	check("a sample lasts 20 seconds: still there at 19", CC.sample ~= nil and CC.frame:IsShown())
+	Advance(2)
+	check("  and gone at 21", CC.sample == nil and not CC.frame:IsShown())
+	-- one at a time
+	CC:ShowSample("main"); CC:ShowSample("lanes")
+	check("showing another replaces it", CC.sample.key == "lanes" and not CC.frame:IsShown() and CC.laneFrame:IsShown())
+	CC:HideSample()
+
+	-- a real group event ends it, and a real cast heard from the group does too
+	CC:ShowSample("essentials")
+	GROUP = { { unit = "party1", name = "Tania", realm = "Realm", class = "PRIEST", guid = "Player-1-0000009" } }
+	FireEvent("GROUP_ROSTER_UPDATE")
+	check("a roster change in a real group ends it", CC.sample == nil)
+	GROUP = {}
+	FireEvent("GROUP_ROSTER_UPDATE")
+	CC:ShowSample("main")
+	CC:SetRemoteCooldown("Tania-Realm", next(CC.SpellData), GetTime(), "PRIEST", "comm")
+	check("  so does a cooldown heard from a group member", CC.sample == nil)
+	CC.state["Tania-Realm"] = nil
+	CC:ShowSample("main")
+	FireEvent("PLAYER_REGEN_DISABLED")
+	check("  and so does combat starting", CC.sample == nil)
+	FireEvent("PLAYER_REGEN_ENABLED")
+
+	-- nothing is sent from a sample
+	PRINTS = {}
+	CC:ShowSample("dead")
+	local dead1 = CC:WithSample(function() return CC:DeadList()[1].name end)
+	CC:CallRez(dead1)
+	CC:RequestRez()
+	check("Call on a made-up dead player sends nothing", #CHATSENT == chat0 and #SENT == sent0 and #PRINTS >= 1, PRINTS[1])
+	CC:HideSample()
+	CC:ShowSample("mana")
+	CC:AskForMana()
+	check("  nor does Ask on the Mana window", #CHATSENT == chat0)
+	CC:HideSample()
+	CC:ShowSample("main")
+	local sampleOwner = CC:WithSample(function() local d = CC:BuildPanelData(); return (d.folded[1] or d.running[1]).owners and d.folded[1].owners[1].name or d.running[1].name end)
+	CC:AskForCooldown({ name = sampleOwner, spellID = next(CC.SpellData), remaining = 0 })
+	check("  nor does a click on a made-up player's cooldown", #CHATSENT == chat0)
+	local lines = CC:CooldownTooltipLines(sampleOwner, (CC:WithSample(function() local d = CC:BuildPanelData(); return (d.folded[1] or d.running[1]).spellID end)))
+	check("  and its tooltip reads from the sample", #lines > 0)
+	CC:HideSample()
+
+	-- an error inside a sampled refresh still puts the group's data back
+	CC:ShowSample("main")
+	local ok = pcall(CC.WithSample, CC, function() error("boom") end)
+	check("an error while drawing a sample puts the group's data back", not ok and CC.sampling == nil and CC.state == stateBefore)
+	CC:HideSample()
+	check("sample code raises no Lua error", #ERRORS == e6, ERRORS[e6 + 1])
+	db.panelClosed = false
+end
+
 check("no Lua errors", #ERRORS == 0, ERRORS[1])
 OUT(string.format("RESULT settings %s %s: checks %d, fails %d, lua errors %d",
 	HARNESS_TOCFILE, FLAVOR, checks, fails, #ERRORS))

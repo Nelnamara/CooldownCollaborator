@@ -39,6 +39,11 @@ end
 
 -- The lines under the game's spell tooltip: { text, r, g, b, wrap }, top down.
 function CC:CooldownTooltipLines(ownerName, spellID)
+    -- a made-up player's tooltip (Tour.lua) is read from the sample, not from the group
+    if self.sample and not self.sampling then
+        local first = type(ownerName) == "table" and ownerName[1] or ownerName
+        if self:IsSampleName(first) then return self:WithSample(self.CooldownTooltipLines, self, ownerName, spellID) end
+    end
     local lines = {}
     local function add(text, c, wrap)
         lines[#lines + 1] = { text = text, r = c[1], g = c[2], b = c[3], wrap = wrap and true or false }

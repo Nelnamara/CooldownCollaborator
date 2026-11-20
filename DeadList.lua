@@ -225,7 +225,7 @@ end
 function CC:RefreshDeadList()
     local f = self.deadFrame
     if not f then return end
-    if not self.db.deadListEnabled or not IsInGroup() then
+    if not self.sampling and (not self.db.deadListEnabled or not IsInGroup()) then
         self.deadOpen, self.deathInCombat = false, nil
         f:Hide()
         return
@@ -240,7 +240,7 @@ function CC:RefreshDeadList()
         self.deathInCombat = nil
         self.deadOpen = true
     end
-    if not self.deadOpen then
+    if not (self.deadOpen or self.sampling) then
         f:Hide()
         return
     end
