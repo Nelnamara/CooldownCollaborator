@@ -206,6 +206,35 @@ do
 	CC:SetAlertEnabled(rez, false)
 end
 
+---------------------------------------------------------------- the speaker
+do
+	local e3 = #ERRORS
+	db.spellGroupBy = "class"
+	CC:RefreshDefaultSpellList()
+	local tid = next(CC.SpellData)
+	for id, d in pairs(CC.SpellData) do if not d.custom and not d.consumable then tid = id break end end
+	CC:SetAlertEnabled(tid, false)
+	CC:RefreshDefaultSpellList()
+	local icons = {}
+	for _, b in ipairs(BUTTONS) do if b.icon then icons[#icons + 1] = b.icon end end
+	local last = icons[#icons]
+	check("speaker: a spell with no alert shows the speaker, grey", last and last.__tex and last.__tex:find("speaker%-off%.tga$")
+		and last.__vertex and last.__vertex[1] == last.__vertex[2])
+	local f = io.open and io.open("Media/speaker-on.tga", "rb")
+	if f then
+		local d = f:read("*a"); f:close()
+		check("  the textures are 32 by 32 uncompressed 32-bit TGAs", #d == 18 + 32 * 32 * 4 and d:byte(3) == 2 and d:byte(17) == 32)
+	end
+	CC:SetAlertEnabled(tid, true)
+	local anyOn = false
+	for _, b in ipairs(BUTTONS) do
+		if b.icon and b.icon.__tex and b.icon.__tex:find("speaker%-on%.tga$") and b.icon.__vertex[1] == 1 and b.icon.__vertex[3] == 0 then anyOn = true end
+	end
+	check("  setting an alert turns its speaker on and gold", anyOn)
+	CC:SetAlertEnabled(tid, false)
+	check("  and off again", #ERRORS == e3, ERRORS[e3 + 1])
+end
+
 ---------------------------------------------------------------- rezzers to skip
 do
 	local realStatus = CC.GetCapabilityStatus

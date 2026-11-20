@@ -399,9 +399,17 @@ end
 
 local bells = {}   -- [spellID] = the bell buttons showing it
 
+-- The speaker: off and grey when the spell has no ready alert, with sound waves and gold when it has one.
+local SPEAKER_OFF = "Interface\\AddOns\\CooldownCollaborator\\Media\\speaker-off.tga"
+local SPEAKER_ON  = "Interface\\AddOns\\CooldownCollaborator\\Media\\speaker-on.tga"
+local function PaintSpeaker(icon, on)
+    icon:SetTexture(on and SPEAKER_ON or SPEAKER_OFF)
+    if on then icon:SetVertexColor(1, 0.82, 0) else icon:SetVertexColor(0.55, 0.55, 0.55) end
+end
+
 function CC:UpdateAlertBell(spellID)
     for _, b in ipairs(bells[spellID] or {}) do
-        if b.icon then b.icon:SetDesaturated(self:GetAlert(spellID) == nil) end
+        if b.icon then PaintSpeaker(b.icon, self:GetAlert(spellID) ~= nil) end
     end
 end
 
@@ -411,10 +419,8 @@ local function NewBell(row, spellID, anchor, dx)
     b:SetPoint("RIGHT", anchor, "RIGHT", dx, 0)
     local icon = b:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints()
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Bell_01")
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     b.icon = icon
-    icon:SetDesaturated(CC:GetAlert(spellID) == nil)
+    PaintSpeaker(icon, CC:GetAlert(spellID) ~= nil)
     b:SetScript("OnClick", function(widget) CC:OpenAlertOptions(spellID, widget) end)
     b:SetScript("OnEnter", function(widget)
         GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
