@@ -147,6 +147,7 @@ CC.Init = function(self)
 	error("test: start-up error after Init")
 end
 local startErrors = expectErrors(Login)
+CC.db.tourDone = true   -- joining a group would start the first-run tour on its own; its own harness (settings.lua) covers it
 CC.Init = realInit
 check(string.format("reload in a raid of %d lust + %d Battle Rez providers: Init itself raises no Lua error", reloadLust, reloadRez),
 	allMatch(startErrors, 1, "test: start-up error"),
