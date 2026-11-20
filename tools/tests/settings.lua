@@ -206,6 +206,64 @@ do
 	CC:SetAlertEnabled(rez, false)
 end
 
+---------------------------------------------------------------- your role, the kinds, a reopened window
+do
+	local e5 = #ERRORS
+	CC:ApplyShowPreset("everything")
+	local cards = CC.roleCards
+	local names = {}
+	for _, c in ipairs(cards) do names[#names + 1] = c.key end
+	check("role cards: Everything, Basics, Healer, Tank, DPS and My own", table.concat(names, ",") == "everything,simple,healer,tank,dps,custom"
+		and CC.PRESETS.simple.label == "Basics" and CC.PRESETS.simple.desc == "Battle rez, lust and raid cooldowns")
+	local function picked() local p = {} for _, c in ipairs(cards) do if c.picked then p[#p + 1] = c.key end end return table.concat(p, ",") end
+	check("  the picked one has the gold edge", picked() == "everything")
+	cards[3]:GetScript("OnClick")(cards[3])
+	check("  clicking a card picks that role", db.showPreset == "healer" and picked() == "healer")
+	check("  My own cannot be clicked", cards[6]:GetScript("OnClick") == nil)
+	local kinds = CC:KindsPresent()
+	check("kinds: folded by default, one tick for each kind this client has spells of",
+		#kinds >= 3 and #CC.kindChecks == #kinds and CC.kindChecks[1].cb:IsShown() == false)
+	local absent = true
+	for _, k in ipairs({ "rez", "lust", "raid", "external", "mana", "personal", "utility" }) do
+		local has = false
+		for _, d in pairs(CC.SpellData) do if d.kind == k and not d.custom and not d.consumable then has = true end end
+		local ticked = false
+		for _, kc in ipairs(CC.kindChecks) do if kc.kind == k then ticked = true end end
+		if has ~= ticked then absent = false end
+	end
+	check("  a kind with no spells on this client has no tick", absent)
+	CC.kindsToggle:GetScript("OnClick")(CC.kindsToggle)
+	check("  the small button opens them", CC.kindChecks[1].cb:IsShown() == true and CC.kindsToggle.__text:find("Kinds of spells", 1, true) ~= nil)
+	local kind = kinds[#kinds]
+	local ticks = CC.kindChecks[#CC.kindChecks]
+	CC:ApplyShowPreset("everything")
+	check("  a tick is on while every spell of its kind is", ticks.kind == kind and CC:KindIsShown(kind))
+	CC:SetKindShown(kind, false)
+	local allOff, others = true, false
+	for id, d in pairs(CC.SpellData) do
+		if not d.custom and not d.consumable then
+			if d.kind == kind and not db.disabledSpells[id] then allOff = false end
+			if d.kind ~= kind and not db.disabledSpells[id] then others = true end
+		end
+	end
+	check("  unticking switches every spell of the kind off and makes the role My own",
+		allOff and others and db.showPreset == "custom" and picked() == "custom" and not CC:KindIsShown(kind))
+	CC:SetKindShown(kind, true)
+	check("  ticking switches them back on", CC:KindIsShown(kind) and db.showPreset == "custom")
+	CC.kindsToggle:GetScript("OnClick")(CC.kindsToggle)
+	CC:ApplyShowPreset("everything")
+	check("  and Your role works with no Lua error", #ERRORS == e5, ERRORS[e5 + 1])
+	-- reopening the window shows what is set now
+	db.guildSync = true
+	db.alpha, db.showReady = 0.4, false
+	CC.optionsFrame:GetScript("OnShow")(CC.optionsFrame)
+	check("a reopened window shows what is set now (the guild tick, the opacity slider)",
+		CC.guildCheck:GetChecked() == true and CC.optionsFrame.page ~= nil, tostring(CC.guildCheck:GetChecked()))
+	db.guildSync, db.alpha, db.showReady = false, 0.9, true
+	CC.optionsFrame:GetScript("OnShow")(CC.optionsFrame)
+	check("  and again when it changes back", CC.guildCheck:GetChecked() == false)
+end
+
 ---------------------------------------------------------------- the speaker
 do
 	local e3 = #ERRORS

@@ -123,12 +123,18 @@ end
 
 CC.PRESET_ORDER = { "everything", "simple", "healer", "tank", "dps" }
 CC.PRESETS = {
-    everything = { label = L["Everything"] },
-    simple     = { label = L["Simple"],  kinds = { rez = true, lust = true, raid = true } },
-    healer     = { label = L["Healer"],  kinds = { rez = true, lust = true, raid = true, external = true, mana = true } },
-    tank       = { label = L["Tank"],    kinds = { rez = true, lust = true, raid = true, external = true, utility = true } },
-    dps        = { label = L["DPS"],     kinds = { rez = true, lust = true, raid = true, utility = true } },
+    everything = { label = L["Everything"], desc = L["Every spell in the list"] },
+    simple     = { label = L["Basics"],  desc = L["Battle rez, lust and raid cooldowns"],
+                   kinds = { rez = true, lust = true, raid = true } },
+    healer     = { label = L["Healer"],  desc = L["Basics, plus externals and mana"],
+                   kinds = { rez = true, lust = true, raid = true, external = true, mana = true } },
+    tank       = { label = L["Tank"],    desc = L["Basics, plus externals and utility"],
+                   kinds = { rez = true, lust = true, raid = true, external = true, utility = true } },
+    dps        = { label = L["DPS"],     desc = L["Basics, plus utility"],
+                   kinds = { rez = true, lust = true, raid = true, utility = true } },
 }
+-- "My own" is not a preset to pick: it shows when the ticks were changed by hand (showPreset "custom").
+CC.CUSTOM_ROLE = { label = L["My own"], desc = L["Shows when you've ticked spells yourself"] }
 
 local KIND_ORDER = { "rez", "lust", "raid", "external", "mana", "personal", "utility" }
 local KIND_LABEL = {
@@ -152,7 +158,46 @@ function CC:ApplyShowPreset(name)
     end
     self:RefreshView("RefreshRows")
     self:RefreshDefaultSpellList()
+    if self.RefreshPresetButtons then self:RefreshPresetButtons() end
     return true
+end
+
+-- The kinds this client has default spells of, in the order the ticks show them.
+function CC:KindsPresent()
+    local has, list = {}, {}
+    for _, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable and data.kind then has[data.kind] = true end
+    end
+    for _, k in ipairs(KIND_ORDER) do
+        if has[k] then list[#list + 1] = k end
+    end
+    return list
+end
+
+-- A kind is ticked when every default spell of it is on.
+function CC:KindIsShown(kind)
+    local any = false
+    for id, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable and data.kind == kind then
+            any = true
+            if self.db.disabledSpells and self.db.disabledSpells[id] then return false end
+        end
+    end
+    return any
+end
+
+-- Switch every default spell of a kind on or off; the role becomes My own.
+function CC:SetKindShown(kind, on)
+    self.db.disabledSpells = self.db.disabledSpells or {}
+    for id, data in pairs(CC.SpellData) do
+        if not data.custom and not data.consumable and data.kind == kind then
+            self.db.disabledSpells[id] = (not on) and true or nil
+        end
+    end
+    self.db.showPreset = "custom"
+    self:RefreshView("RefreshRows")
+    self:RefreshDefaultSpellList()
+    if self.RefreshPresetButtons then self:RefreshPresetButtons() end
 end
 
 -- ── Ready alerts per spell (P1) ──────────────────────────────────────────────
@@ -1056,6 +1101,7 @@ function CC:OpenOptions()
         b:SetText(text)
         b:SetSize(FitWidth(b, w), 22)
         b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        b.px = x
         b:SetScript("OnClick", onClick)
         return b
     end
@@ -1077,6 +1123,7 @@ function CC:OpenOptions()
                 cx, cy = x, cy - 26
                 b:ClearAllPoints()
                 b:SetPoint("TOPLEFT", parent, "TOPLEFT", cx, cy)
+                b.px = cx
             end
             cx = cx + b:GetWidth() + 4
             b.value = opt.value
@@ -1326,7 +1373,7 @@ function CC:OpenOptions()
     CC:RefreshBridgeOption()
     y = y - 30
 
-    NewCheck(d, 4, y, L["Share with my guild (adds a Guild tab to the panel)"],
+    CC.guildCheck = NewCheck(d, 4, y, L["Share with my guild (adds a Guild tab to the panel)"],
         function() return CC.db.guildSync == true end, function(v) CC:SetGuildSync(v) end,
         L["Your cooldowns and who runs the addon go out on the guild channel, and the panel gets a Guild tab. Off by default."])
     y = y - 30
@@ -1555,23 +1602,87 @@ function CC:OpenOptions()
     local spellPage = NewPage(false)
     pages[4] = spellPage
 
-    -- Show preset (P2)
-    local presetLbl = spellPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    presetLbl:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, -8)
-    presetLbl:SetText(L["Show:"])
-    local presetOptions = {}
-    for _, key in ipairs(CC.PRESET_ORDER) do
-        presetOptions[#presetOptions + 1] = { label = CC.PRESETS[key].label, value = key }
-    end
-    local redrawPresets = NewChoice(spellPage, 50, -4, presetOptions, 86,
-        function() return CC.db.showPreset or "everything" end,
-        function(v) CC:ApplyShowPreset(v) end)
-    function CC:RefreshPresetButtons() redrawPresets() end
-    NewNote(spellPage, 4, -30, CAW - 16,
-        L["Simple: rez, lust and the big raid cooldowns. Ticking a spell yourself below changes it from there."])
+    -- Your role (P2): cards that pick the spells by kind, and the kinds one by one underneath
+    local roleHdr = spellPage:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    roleHdr:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, -6)
+    roleHdr:SetText(L["Your role"])
+    NewNote(spellPage, 4, -24, CAW - 16, L["Picks the spells this window tracks. Tick or untick any spell below afterwards."])
 
-    -- sub-tabs and grouping
-    local SUB_Y = -58
+    local ROLE_W, ROLE_H = 168, 46
+    local roleCards = {}
+    CC.roleCards = roleCards
+    for i, key in ipairs({ "everything", "simple", "healer", "tank", "dps", "custom" }) do
+        local info = key == "custom" and CC.CUSTOM_ROLE or CC.PRESETS[key]
+        local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
+        local card = CreateFrame("Button", nil, spellPage, CC.BackdropTemplate)
+        card:SetSize(ROLE_W - 4, ROLE_H - 4)
+        card:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4 + col * ROLE_W, -44 - row * ROLE_H)
+        card:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        card:SetBackdropColor(0.08, 0.08, 0.14, 0.9)
+        local nm = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        nm:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -6)
+        nm:SetText(info.label)
+        local ds = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        ds:SetPoint("TOPLEFT", nm, "BOTTOMLEFT", 0, -2)
+        ds:SetWidth(ROLE_W - 22)
+        ds:SetJustifyH("LEFT")
+        ds:SetText(info.desc)
+        card.key = key
+        if key ~= "custom" then   -- My own only lights up: it is what hand-ticking leaves
+            local hl = card:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.08)
+            card:SetScript("OnClick", function() CC:ApplyShowPreset(key) end)
+        end
+        roleCards[#roleCards + 1] = card
+    end
+    local function RedrawRoles()
+        local cur = CC.db.showPreset or "everything"
+        for _, card in ipairs(roleCards) do
+            card.picked = card.key == cur
+            if card.picked then card:SetBackdropBorderColor(1, 0.82, 0, 1) else card:SetBackdropBorderColor(0.35, 0.35, 0.5, 1) end
+        end
+    end
+
+    -- Kinds of spells: folded, closed until the small button opens it
+    local KINDS_Y = -44 - 2 * ROLE_H - 2
+    local kindChecks, kindsOpen = {}, false
+    local kindsBtn
+    local LayoutSpellPage   -- below
+    for i, kind in ipairs(CC:KindsPresent()) do
+        local col, rowN = (i - 1) % 2, math.floor((i - 1) / 2)
+        local cb, lb = NewCheck(spellPage, 14 + col * 240, KINDS_Y - 28 - rowN * 22, KIND_LABEL[kind],
+            function() return CC:KindIsShown(kind) end, function(v) CC:SetKindShown(kind, v) end,
+            L["Switches every default spell of this kind on or off. The role becomes My own."])
+        cb:SetSize(20, 20)
+        cb:Hide(); lb:Hide()
+        kindChecks[#kindChecks + 1] = { cb = cb, lb = lb, kind = kind }
+    end
+    local function ShowKinds(open)
+        kindsOpen = open
+        for _, k in ipairs(kindChecks) do k.cb:SetShown(open); k.lb:SetShown(open) end
+        kindsBtn:SetText((open and "- " or "+ ") .. L["Kinds of spells"])
+        kindsBtn:SetWidth(FitWidth(kindsBtn, 120))
+        if LayoutSpellPage then LayoutSpellPage() end
+    end
+    kindsBtn = NewButton(spellPage, 4, KINDS_Y, 120, "+ " .. L["Kinds of spells"], function() ShowKinds(not kindsOpen) end)
+    CC.kindsToggle = kindsBtn
+    CC.kindChecks = kindChecks
+    kindsBtn:SetHeight(20)
+
+    function CC:RefreshPresetButtons()
+        RedrawRoles()
+        for _, k in ipairs(kindChecks) do k.cb:SetChecked(CC:KindIsShown(k.kind)) end
+    end
+    Track(function() CC:RefreshPresetButtons() end)
+
+    -- sub-tabs and grouping (placed by LayoutSpellPage, under the kinds when they are open)
+    local SUB_Y = KINDS_Y - 28
     local tabDefault = NewButton(spellPage, 4, SUB_Y, 110, L["Default Spells"], function() end)
     local tabCustom  = NewButton(spellPage, 118, SUB_Y, 110, L["Custom Spells"], function() end)
     local groupLbl = spellPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1724,6 +1835,23 @@ function CC:OpenOptions()
         for _, gb in ipairs(groupButtons) do gb:Hide() end
         groupLbl:Hide()
         CC:RefreshSpellList()
+    end
+    LayoutSpellPage = function()
+        local subY = SUB_Y - (kindsOpen and (math.ceil(#kindChecks / 2) * 22 + 6) or 0)
+        tabDefault:ClearAllPoints(); tabDefault:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, subY)
+        tabCustom:ClearAllPoints();  tabCustom:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 118, subY)
+        groupLbl:ClearAllPoints();   groupLbl:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 270, subY - 5)
+        for _, gb in ipairs(groupButtons) do
+            gb:ClearAllPoints()
+            gb:SetPoint("TOPLEFT", spellPage, "TOPLEFT", gb.px, subY)
+        end
+        local listY = subY - 28
+        local listH = CAH - (-listY) - 4
+        defPanel:ClearAllPoints();  defPanel:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, listY)
+        custPanel:ClearAllPoints(); custPanel:SetPoint("TOPLEFT", spellPage, "TOPLEFT", 4, listY)
+        defPanel:SetSize(CAW - 24, listH)
+        custPanel:SetSize(CAW - 8, listH)
+        listScroll2:SetSize(CAW - 24, listH - 130)
     end
     tabDefault:SetScript("OnClick", ShowDefault)
     tabCustom:SetScript("OnClick",  ShowCustom)
@@ -2084,6 +2212,7 @@ function CC:OpenOptions()
     pr:SetHeight(-y + 10)
 
     -- Getting Started opens first
+    CC:RefreshPresetButtons()
     ShowDefault()
     CC:RefreshDefaultSpellList()
     CC:RefreshSpellList()
