@@ -137,3 +137,7 @@ One walk of everything, a review pass, and the release on his boop.
 
 Built on review-build (19 to 20 Nov, on the Mac): the plain fixes, the Settings controls, the joined windows and
 Getting Started with the tour, in four lanes; then one full suite and a re-walk on his Forever install.
+Walks on his Forever install: round 1 (`2026-11-19-cc-settings`) failed the first tour, Getting Started picks, the
+four other windows' places and /cdc report; round 2 (`2026-11-19-cc-settings-2`) passed all four solo lines (/cdc
+report opened; why it didn't in round 1 is not known). Party lines (joined block, surname fix, roster, Rebirth rank,
+dead list, Guild tab, lastpull and post) wait for a second player.
