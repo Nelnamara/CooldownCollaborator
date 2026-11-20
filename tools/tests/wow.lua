@@ -213,6 +213,7 @@ Methods.GetValue = function(s) return s.__value end
 -- six pixels a character, one 14 px line
 Methods.GetStringWidth = function(s) return #tostring(s.__text or "") * 6 end
 Methods.GetStringHeight = function() return 14 end
+Methods.GetTextWidth = Methods.GetStringWidth   -- Button:GetTextWidth exists on every client
 Methods.GetTexture = function(s) return s.__tex end
 Methods.GetFontString = function(s) return child(s, "__fs", "FontString") end
 Methods.GetRegions = function() end

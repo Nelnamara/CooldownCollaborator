@@ -815,30 +815,50 @@ function CC:OpenOptions()
         return cb, lbl
     end
 
+    -- A button sized to its words: today's width where a caller passes one is the least it gets.
+    local BUTTON_PAD = 24
+    local function FitWidth(b, minW)
+        local tw = b.GetTextWidth and b:GetTextWidth() or 0
+        if not tw or tw == 0 then
+            local fs = b.GetFontString and b:GetFontString()
+            tw = fs and fs:GetStringWidth() or 0
+        end
+        return math.max(minW or 0, math.ceil(tw) + BUTTON_PAD)
+    end
+
     local function NewButton(parent, x, y, w, text, onClick)
         local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-        b:SetSize(w, 22)
-        b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         b:SetText(text)
+        b:SetSize(FitWidth(b, w), 22)
+        b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         b:SetScript("OnClick", onClick)
         return b
     end
 
-    -- A row of buttons, the chosen one greyed. Returns a function that redraws it.
+    -- A row of buttons, the chosen one greyed; a button that would pass the page's width starts a new
+    -- line. Returns a function that redraws it, the buttons and the row's real height.
     local function NewChoice(parent, x, y, options, width, get, pick)
         local buttons = {}
         local function Redraw()
             for _, b in ipairs(buttons) do b:SetEnabled(b.value ~= get()) end
         end
+        local limit = (parent:GetWidth() or 0) - 8
+        local cx, cy = x, y
         for i, opt in ipairs(options) do
-            local b = NewButton(parent, x + (i - 1) * (width + 4), y, width, opt.label, function()
+            local b = NewButton(parent, cx, cy, width, opt.label, function()
                 pick(opt.value); Redraw()
             end)
+            if cx > x and limit > 0 and cx + b:GetWidth() > limit then
+                cx, cy = x, cy - 26
+                b:ClearAllPoints()
+                b:SetPoint("TOPLEFT", parent, "TOPLEFT", cx, cy)
+            end
+            cx = cx + b:GetWidth() + 4
             b.value = opt.value
             buttons[i] = b
         end
         Redraw()
-        return Redraw, buttons
+        return Redraw, buttons, (y - cy) + 22
     end
 
     local function NewHeader(parent, y, text)
@@ -1089,20 +1109,20 @@ function CC:OpenOptions()
     y = y - 30
 
     NewHeader(d, y, L["Accept setups from:"]); y = y - 24
-    NewChoice(d, 4, y, {
+    local _, _, rowH = NewChoice(d, 4, y, {
         { label = L["Guild master and officers"], value = "officers" },
         { label = L["Any rank"], value = "any" },
         { label = L["Nobody"], value = "nobody" },
     }, 150, function() return CC.db.setupFrom or "officers" end, function(v) CC.db.setupFrom = v end)
-    y = y - 30
+    y = y - rowH - 8
 
     local lbl = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     lbl:SetPoint("TOPLEFT", d, "TOPLEFT", 4, y - 4)
     lbl:SetText(L["Panel style:"])
-    NewChoice(d, 100, y, { { label = L["Text rows"], value = "text" }, { label = L["Icon row"], value = "icons" } }, 100,
+    _, _, rowH = NewChoice(d, 100, y, { { label = L["Text rows"], value = "text" }, { label = L["Icon row"], value = "icons" } }, 100,
         function() return CC.db.panelStyle or "text" end,
         function(v) CC.db.panelStyle = v; CC:RefreshRows() end)
-    y = y - 32
+    y = y - rowH - 10
 
     -- Min duration buttons
     local mdLbl = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -1111,9 +1131,9 @@ function CC:OpenOptions()
     y = y - 22
     local durOptions = {}
     for _, val in ipairs(MIN_DURATIONS) do durOptions[#durOptions + 1] = { label = val .. "s", value = val } end
-    NewChoice(d, 4, y, durOptions, 50, function() return CC.db.minDuration end,
+    _, _, rowH = NewChoice(d, 4, y, durOptions, 50, function() return CC.db.minDuration end,
         function(v) CC.db.minDuration = v; CC:RefreshRows() end)
-    y = y - 32
+    y = y - rowH - 10
 
     local function NewSlider(label, lo, hi, step, lowText, highText, get, set, format)
         local sl = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -1150,13 +1170,13 @@ function CC:OpenOptions()
 
     y = y - 6
     NewHeader(d, y, L["When the windows show"]); y = y - 24
-    NewChoice(d, 4, y, {
+    _, _, rowH = NewChoice(d, 4, y, {
         { label = L["Always"], value = "always" },
         { label = L["Only in combat"], value = "combat" },
         { label = L["Only on boss fights"], value = "boss" },
     }, 150, function() return CC.db.showWindows or "always" end,
         function(v) CC.db.showWindows = v; CC:RefreshAllViews() end)
-    y = y - 28
+    y = y - rowH - 6
     NewNote(d, 4, y, CAW - 40, L["The main panel, the Essentials bar and the Lane view. Closing a window yourself still keeps it shut."])
     y = y - 30
 

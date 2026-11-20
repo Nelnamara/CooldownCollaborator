@@ -96,6 +96,15 @@ check("  off removes it", CC:GetAlert(rez) == nil)
 
 ---------------------------------------------------------------- the window
 local e0 = #ERRORS
+local BUTTONS = {}   -- every button the window builds, to check its words fit
+do
+	local realCreate = CreateFrame
+	function CreateFrame(otype, ...)
+		local f = realCreate(otype, ...)
+		if otype == "Button" then BUTTONS[#BUTTONS + 1] = f end
+		return f
+	end
+end
 CC:OpenOptions()
 check("Settings opens on Getting Started with a card per window and the CooldownTimeline3 card",
 	#ERRORS == e0 and CC.optionsFrame.page == 1 and CC.startPage ~= nil and CC.startPage:IsShown()
@@ -113,6 +122,17 @@ check("the alert box, kind grouping and the skip list build with no Lua error", 
 CC:SetRezSkip("Someone", nil)
 CC:SetAlertEnabled(rez, false)
 check("  a CooldownTimeline3 button asks for it only when loaded", CC:OpenCDTL3GroupSettings() == false)
+
+do
+	local tight = {}
+	for _, b in ipairs(BUTTONS) do
+		local t = b.__text
+		if type(t) == "string" and t ~= "" and b:GetWidth() > 0 and #t * 6 + 12 > b:GetWidth() then
+			tight[#tight + 1] = t .. " (" .. b:GetWidth() .. ")"
+		end
+	end
+	check("no button's words are wider than the button", #BUTTONS > 20 and #tight == 0, table.concat(tight, ", "))
+end
 
 ---------------------------------------------------------------- rezzers to skip
 do
