@@ -126,7 +126,7 @@ Every rank of a spell counts on Classic Era, TBC Anniversary and WoW: Forever. E
 
 ## Changelog
 
-### Next version (number to be chosen)
+### v2.0.0
 - New main panel, dead list, externals strip, mana strip, burst line, Essentials Bar and Lane View looks (see Features)
 - Ready alerts (thirty sounds, a speaker on each spell), raid plans, rotation order, teams, Your role cards, Ace-style profiles with a Default, officer setups, guild sharing
 - Getting Started says what each window is for and shows it with sample players; a first-run tour; the panel, Essentials Bar and Lane View start joined

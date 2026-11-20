@@ -51,7 +51,7 @@ OUT(string.format("[%s %s]", HARNESS_TOCFILE, FLAVOR))
 local tocText = ReadTOC(HARNESS_TOCFILE) or ""
 local function tag(name) return tocText:match("## " .. name .. ":%s*([^\r\n]-)%s*[\r\n]") end
 check("TOC: one Interface number, this client's", tag("Interface") == tostring(HARNESS_TOC), tag("Interface"))
-check("TOC: Version 1.1.1", tag("Version") == "1.1.1", tag("Version"))
+check("TOC: Version 2.0.0", tag("Version") == "2.0.0", tag("Version"))
 check("TOC: SavedVariables CooldownCollaboratorDB", tag("SavedVariables") == "CooldownCollaboratorDB", tag("SavedVariables"))
 check("TOC: CurseForge project 1577127 in the plain, _Camelot and _Mainline TOCs only",
 	(tag("X%-Curse%-Project%-ID") == "1577127") == (CURSE_TOCS[HARNESS_TOCFILE] == true), tag("X%-Curse%-Project%-ID"))
@@ -91,7 +91,7 @@ local dataFiles = {}
 for _, f in ipairs(files) do if f:match("^Data_") then dataFiles[#dataFiles + 1] = f end end
 check("TOC lists only this client's spell data file", #dataFiles == 1 and dataFiles[1] == E.data, table.concat(dataFiles, ","))
 check("every file the TOC lists loaded", #LOADED_FILES == #files, #LOADED_FILES .. "/" .. #files)
-check("CC.version 1.1.1", CC.version == "1.1.1", CC.version)
+check("CC.version 2.0.0", CC.version == "2.0.0", CC.version)
 check("client detection: retailAPI, isForever, isRetail",
 	CC.retailAPI == RETAILAPI and CC.isForever == (FLAVOR == "forever") and CC.isRetail == (FLAVOR == "retail"))
 check("stub: no GetSpecialization on Era, TBC and Forever", (GetSpecialization ~= nil) == (FLAVOR == "retail" or FLAVOR == "mop"))

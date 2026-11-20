@@ -6,7 +6,7 @@
 CooldownCollaborator = {}
 CC = CooldownCollaborator
 
-CC.version     = "1.1.1"
+CC.version     = "2.0.0"
 CC.PREFIX      = "CDCOLLAB"   -- cooldowns (Comms.lua, docs/MESSAGE_FORMAT_2.md)
 CC.BUFF_PREFIX = "CDCBUFF"    -- flask and food status
 

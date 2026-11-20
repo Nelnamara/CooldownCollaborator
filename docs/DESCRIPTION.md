@@ -110,7 +110,7 @@ Found a bug, or want a spell added? Open an issue at https://github.com/Nelnamar
 
 ## Changelog
 
-### Next version
+### 2.0.0
 - New main panel: running cooldowns first, ready ones folded per spell, two columns from 10 players, greyed dead and offline players, spell tooltips, click a row to ask, team tabs, rotation numbers and an icon style
 - New windows and strips: a dead list with a Call button each, an externals strip, a mana strip anyone can Ask from, and a burst line
 - The Essentials Bar shows the first few providers then "+N", with Battle Rez charges, Soulstones and world buffs. A big raid no longer breaks it
