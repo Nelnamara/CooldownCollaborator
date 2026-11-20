@@ -81,8 +81,8 @@ CooldownCollaborator works with my other addon, **CooldownTimeline3** (CDTL3), o
 
 1. Install CooldownCollaborator. On Retail and WoW: Forever, get your group to install it too.
 2. Join a party or raid. The panel shows up on its own. Type `/cdc` to show or hide it.
-3. Drag the panel where you want it, then type `/cdc lock`.
-4. Type `/cdc settings`. The Getting Started tab walks you through it. Pick a show preset, choose which spells to track, and change the size and opacity.
+3. Drag the windows where you want them (the top of the three joined ones moves all three), then type `/cdc lock`.
+4. Type `/cdc settings`. Getting Started shows what each window is for, and Take the tour walks through all seven. Pick your role under Spells, choose which spells to track, and change the size and opacity.
 5. Want the icons on CooldownTimeline3? Just install it. There's nothing else to do, since the box in the settings is on by default.
 
 ## Slash commands
@@ -99,7 +99,7 @@ CooldownCollaborator works with my other addon, **CooldownTimeline3** (CDTL3), o
 - `/cdc lastpull` shows the last pull's log
 - `/cdc post` posts who is ready to the raid
 - `/cdc report` opens a box with what to paste into a new issue on GitHub
-- `/cdc tour` takes the tour of the windows that are on
+- `/cdc tour` takes the tour of all seven windows
 - `/cdc consumable <spellID> <seconds> <name>` registers a Cauldron or Feast style buff, and `/cdc consumable remove <spellID>` removes it
 - `/cdc verbose` turns on detailed logging, for tracking down problems
 - `/cdc debug` prints every tracked cooldown and the group state
