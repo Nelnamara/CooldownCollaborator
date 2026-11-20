@@ -58,8 +58,8 @@ do
 		disabledSpells = { [11111] = true },
 		customSpells = {},
 		profiles = {
-			Heal = { disabled = { 11111 }, custom = {}, alerts = {}, places = {} },
-			Tank = { disabled = { 22222 }, custom = {}, alerts = {}, places = {} },
+			Heal = { disabledSpells = { [11111] = true }, places = {} },
+			Tank = { disabledSpells = { [22222] = true }, places = {} },
 		},
 		charProfile = { ["Bee-Realm"] = "Tank", ["Tester-Realm"] = "Heal" },
 	})
@@ -73,16 +73,16 @@ do
 		db.disabledSpells[22222] == true and db.disabledSpells[11111] == nil)
 	c.FireEvent("PLAYER_LOGOUT")
 	check("  logout leaves the other character's profile as it was and saves this one's",
-		db.profiles.Heal.disabled[1] == 11111 and db.profiles.Tank.disabled[1] == 22222)
+		db.profiles.Heal.disabledSpells[11111] == true and db.profiles.Tank.disabledSpells[22222] == true)
 	-- a session that never reached login writes into no profile
 	local d = Fresh(function(env) env.PLAYER.name = "Bee" end, {
 		disabledSpells = { [11111] = true }, customSpells = {},
-		profiles = { Tank = { disabled = { 22222 }, custom = {}, alerts = {}, places = {} } },
+		profiles = { Tank = { disabledSpells = { [22222] = true }, places = {} } },
 		charProfile = { ["Bee-Realm"] = "Tank" },
 	})
 	d.FireEvent("ADDON_LOADED", "CooldownCollaborator")
 	d.FireEvent("PLAYER_LOGOUT")
-	check("  a logout before the profile went in writes no profile", d.CC.db.profiles.Tank.disabled[1] == 22222)
+	check("  a logout before the profile went in writes no profile", d.CC.db.profiles.Tank.disabledSpells[22222] == true)
 end
 
 ---------------------------------------------------------------- F2: boss end, 1.x lines unless everyone is known to run format 2

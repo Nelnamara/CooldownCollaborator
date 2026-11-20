@@ -222,9 +222,8 @@ local DEFAULTS = {
     spellGroupBy     = "class",       -- Default Spells tab: "class" or "kind"
     showWindows      = "always",      -- "always", "combat" or "boss": when the three main windows show (P30)
     lighterMode      = false,         -- slower refresh for the panel, Essentials bar and Lane view (P31)
-    profiles         = {},            -- [name] = a setup (Setups.lua)
-    charProfile      = {},            -- [Name-Realm] = the profile that character follows
-    defaultProfile   = false,         -- the profile characters follow until they pick
+    profiles         = {},            -- [name] = a profile's settings (Setups.lua); "Default" always exists
+    charProfile      = {},            -- [Name-Realm] = the profile that character follows (none: Default)
     charPlaces       = {},            -- [Name-Realm] = window places that character keeps over its profile's
     layouts          = {},            -- ["party" or "raid"] = window places for that group type (P21)
     setupNever       = {},            -- [Name-Realm] = true: no officer setups from them

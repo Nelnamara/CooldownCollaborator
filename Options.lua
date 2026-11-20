@@ -277,6 +277,7 @@ local function OpenDropdown(owner)
     local items = owner:Items()
     local picked = owner.get()
     local n = #items
+    if n == 0 then return end
     local visible = math.min(n, DROP_MAX)
     local scrolls = n > DROP_MAX
     local textW = 0
@@ -952,6 +953,14 @@ function CC:RemoveTeam(name)
     return true
 end
 
+-- The Settings window, if built, shows what is set now.
+function CC:RefreshOptions()
+    if self.optionsFrame and self.optionsFrame.RefreshAll then self.optionsFrame.RefreshAll() end
+    if self.RefreshDefaultSpellList then self:RefreshDefaultSpellList() end
+    if self.RefreshSpellList then self:RefreshSpellList() end
+    if self.RefreshProfileControls then self:RefreshProfileControls() end
+end
+
 function CC:OpenOptions()
     if self.optionsFrame then
         self.optionsFrame:SetShown(not self.optionsFrame:IsShown())
@@ -994,11 +1003,27 @@ function CC:OpenOptions()
 
     -- ── Widgets ───────────────────────────────────────────────────────────
 
+    -- Every control that shows a saved setting registers how to read it again, so reopening the
+    -- window or switching profile shows what is set now (CC:RefreshOptions).
+    local refreshers = {}
+    local refreshing = false
+    local function Track(fn) refreshers[#refreshers + 1] = fn; return fn end
+    function f.RefreshAll()
+        refreshing = true
+        for _, fn in ipairs(refreshers) do xpcall(fn, geterrorhandler()) end
+        refreshing = false
+        if CC.RefreshBridgeOption then CC:RefreshBridgeOption() end
+        if CC.RefreshTeamTicks then CC:RefreshTeamTicks() end
+        if CC.RefreshRezSkipList then CC:RefreshRezSkipList() end
+        if CC.startPage and CC.startPage.refresh then CC.startPage.refresh() end
+    end
+
     local function NewCheck(parent, x, y, text, get, set, tip)
         local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
         cb:SetSize(22, 22)
         cb:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
         cb:SetChecked(get())
+        Track(function() cb:SetChecked(get()) end)
         cb:SetScript("OnClick", function(widget) set(widget:GetChecked() and true or false) end)
         local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         lbl:SetPoint("LEFT", cb, "RIGHT", 2, 0)
@@ -1058,6 +1083,7 @@ function CC:OpenOptions()
             buttons[i] = b
         end
         Redraw()
+        Track(Redraw)
         return Redraw, buttons, (y - cy) + 22
     end
 
@@ -1277,11 +1303,8 @@ function CC:OpenOptions()
         function(v) CC:SetWindowsLocked(v) end)
     CC.lockCheck = cbLock
     -- /cdc lock and /cdc unlock may have changed it while this window was closed
-    f:SetScript("OnShow", function()
-        cbLock:SetChecked(CC:AreWindowsLocked())
-        if CC.RefreshTeamTicks then CC:RefreshTeamTicks() end   -- who is in the group now
-        if f.page == 1 then startPage.refresh() end
-    end)
+    -- (the window shows what is set now: /cdc lock, a profile switch or guild sharing may have changed it)
+    f:SetScript("OnShow", function() f.RefreshAll() end)
     y = y - 26
 
     NewCheck(d, 4, y, L["Hide minimap button"], function() return CC.db.minimapHide end, function(v)
@@ -1353,9 +1376,11 @@ function CC:OpenOptions()
         val:SetPoint("LEFT", slider, "RIGHT", 6, 0)
         val:SetText(format(get()))
         slider:SetScript("OnValueChanged", function(_, v)
+            if refreshing then val:SetText(format(v)) return end
             set(v)
             val:SetText(format(v))
         end)
+        Track(function() slider:SetValue(get()) end)
         y = y - 30
         return slider
     end
@@ -1428,9 +1453,10 @@ function CC:OpenOptions()
         Say(aim)
         slider:SetScript("OnValueChanged", function(_, v)
             v = math.floor(v + 0.5)
-            CC.db.essentialsBuffAim = v
+            if not refreshing then CC.db.essentialsBuffAim = v end
             Say(v)
         end)
+        Track(function() slider:SetValue(tonumber(CC.db.essentialsBuffAim) or 0) end)
         y = y - 34
     end
 
@@ -1935,52 +1961,77 @@ function CC:OpenOptions()
     y = -2
 
     NewHeader(pr, y, L["Profiles"]); y = y - 24
-    local profLbl = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    profLbl:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y - 3)
-    profLbl:SetText(L["Profile:"])
-    local profName = NewEdit(pr, 60, y, 140, "")
-    local profStatus = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    function CC:RefreshProfileStatus()
-        local names = self:ProfileNames()
-        profStatus:SetText(string.format(L["This character follows: %s.   Saved: %s."],
-            self:CurrentProfile() or L["none"], #names > 0 and table.concat(names, ", ") or L["none"])
-            .. (self.db.defaultProfile and ("   " .. string.format(L["New characters follow: %s"], tostring(self.db.defaultProfile))) or ""))
-    end
-    NewButton(pr, 206, y + 1, 74, L["Save as"], function()
-        if CC:SaveProfile(profName:GetText()) then
-            CC.db.charProfile[CC:FullName("player")] = Trim(profName:GetText())
+    NewNote(pr, 4, y, CAW - 40,
+        L["You can change the active profile so each character has different settings, or share one profile between characters."])
+    y = y - 38
+    NewButton(pr, 4, y, 120, L["Reset Profile"], function() CC:ResetProfile() end)
+    y = y - 30
+
+    local function ProfileItems(skipCurrent, skipDefault)
+        local items, current = {}, CC:CurrentProfile()
+        for _, name in ipairs(CC:ProfileNames()) do
+            if not (skipCurrent and name == current) and not (skipDefault and name == "Default") then
+                items[#items + 1] = { value = name, label = name == "Default" and L["Default"] or name }
+            end
         end
-        CC:RefreshProfileStatus()
+        return items
+    end
+    local profileDrops = {}
+    local function ProfileRow(label, make)
+        local lbl = pr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        lbl:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y - 4)
+        lbl:SetText(label)
+        local control = make(150, y)
+        y = y - 30
+        return control
+    end
+    profileDrops.current = ProfileRow(L["Current profile:"], function(x, yy)
+        return NewDropdown(pr, x, yy, 180,
+            function() return ProfileItems(false, false) end,
+            function() return CC:CurrentProfile() end,
+            function(name) CC:UseProfile(name) end)
     end)
-    NewButton(pr, 284, y + 1, 56, L["Use"], function()
-        CC:UseProfile(Trim(profName:GetText())); CC:RefreshProfileStatus()
+    local newName = ProfileRow(L["New:"], function(x, yy)
+        local e = NewEdit(pr, x + 4, yy - 1, 170, "")
+        e:SetMaxLetters(40)
+        e:SetScript("OnEnterPressed", function(widget)
+            if CC:NewProfile(widget:GetText()) then widget:SetText("") end
+            widget:ClearFocus()
+        end)
+        local hint = pr:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        hint:SetPoint("LEFT", e, "RIGHT", 8, 0)
+        hint:SetText(L["Type a name, then press Enter."])
+        return e
     end)
-    NewButton(pr, 344, y + 1, 64, L["Delete"], function()
-        CC:DeleteProfile(Trim(profName:GetText())); CC:RefreshProfileStatus()
+    profileDrops.copy = ProfileRow(L["Copy from:"], function(x, yy)
+        return NewDropdown(pr, x, yy, 180,
+            function() return ProfileItems(true, false) end,
+            function() return nil end,
+            function(name) CC:CopyProfile(name) end, L["Pick a profile"])
     end)
-    y = y - 26
-    profStatus:SetPoint("TOPLEFT", pr, "TOPLEFT", 4, y)
-    profStatus:SetWidth(CAW - 40)
-    profStatus:SetJustifyH("LEFT")
-    y = y - 32
-    NewCheck(pr, 4, y, L["New characters follow the profile named above"],
-        function() return CC.db.defaultProfile and CC.db.defaultProfile == Trim(profName:GetText()) or false end,
-        function(v)
-            CC.db.defaultProfile = (v and CC.db.profiles[Trim(profName:GetText())]) and Trim(profName:GetText()) or false
-            CC:RefreshProfileStatus()
-        end, L["Characters that haven't picked a profile follow this one."])
-    y = y - 26
+    profileDrops.delete = ProfileRow(L["Delete a profile:"], function(x, yy)
+        return NewDropdown(pr, x, yy, 180,
+            function() return ProfileItems(true, true) end,
+            function() return nil end,
+            function(name) CC:DeleteProfile(name) end, L["Pick a profile"])
+    end)
+    CC.profileDrops = profileDrops
+    CC.profileNewBox = newName
+    function CC:RefreshProfileControls()
+        for _, dd in pairs(profileDrops) do dd:Refresh() end
+    end
+    Track(function() CC:RefreshProfileControls() end)
+    y = y - 4
     NewCheck(pr, 4, y, L["This character keeps its own window places"],
         function() return CC:KeepsOwnPlaces() end, function(v) CC:SetKeepOwnPlaces(v) end,
         L["Whatever profile it follows, this character's windows stay where they are now."])
     y = y - 30
-    CC:RefreshProfileStatus()
 
     NewHeader(pr, y, L["Export and import"]); y = y - 24
     NewNote(pr, 4, y, CAW - 40, L["A setup is your tracked and custom spells, ready alerts and window places, as text."])
     y = y - 30
     NewButton(pr, 4, y, 100, L["Export setup"], function()
-        CC:ShowCopyBox(L["Your setup: copy this"], CC:ExportSetup(Trim(profName:GetText())))
+        CC:ShowCopyBox(L["Your setup: copy this"], CC:ExportSetup(CC:CurrentProfile()))
     end)
     NewButton(pr, 108, y, 100, L["Import setup"], function() CC:ShowImportBox() end)
     NewButton(pr, 212, y, 150, L["Undo last setup"], function()

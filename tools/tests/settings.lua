@@ -384,23 +384,80 @@ do
 	check("  and the same setup then changes nothing", CC:DescribeSetup(setup)[1]:find("Nothing changes", 1, true) ~= nil)
 	check("  undo puts back what was there", CC:UndoSetup() and db.disabledSpells[rb] == nil and db.customSpells["777002"] == nil
 		and CC:GetAlert(rb) == nil and db.laneX == 0 and CC:UndoSetup() == false)
-	-- profiles
+	-- profiles (Ace style: Default always there, New / Copy from / Reset / Delete)
 	CC:ApplySetup(setup, { noUndo = true })
-	check("profile: saved", CC:SaveProfile("Raid") and CC:ProfileNames()[1] == "Raid")
-	CC:UseProfile("Raid")
-	check("  it is the one this character follows", CC:CurrentProfile() == "Raid")
-	db.disabledSpells = {}; db.laneX = 5
+	check("profiles: Default always exists and this character follows it",
+		CC:ProfileNames()[1] == "Default" and CC:CurrentProfile() == "Default" and #CC:ProfileNames() == 1)
+	db.alpha, db.minDuration, db.showWindows, db.lighterMode, db.panelStyle = 0.5, 120, "combat", true, "icons"
+	db.guildSync, db.setupFrom = true, "any"
+	check("  New makes a profile with default settings and switches to it", CC:NewProfile("Raid") == true
+		and CC:CurrentProfile() == "Raid" and db.alpha == CC.DEFAULTS.alpha and db.minDuration == CC.DEFAULTS.minDuration
+		and db.showWindows == "always" and db.lighterMode == false and db.panelStyle == "text"
+		and next(db.disabledSpells) == nil and next(db.alerts) == nil and next(db.customSpells) == nil
+		and CC.SpellData[777002] == nil and db.laneX == CC.DEFAULTS.laneX)
+	check("  the one left is kept as it was", db.profiles.Default.alpha == 0.5 and db.profiles.Default.minDuration == 120
+		and db.profiles.Default.custom == nil and db.profiles.Default.customSpells["777002"] ~= nil
+		and db.profiles.Default.places.lanes[1] == 123)
+	check("  guild sharing and accept setups from stay shared by every profile", db.guildSync == true and db.setupFrom == "any")
+	check("  a name already there, or an empty one, makes nothing",
+		CC:NewProfile("Raid") == false and CC:NewProfile("   ") == false and #CC:ProfileNames() == 2)
+	db.alpha = 0.7; db.laneX = 11
+	check("  switching applies a profile's settings", CC:UseProfile("Default") and db.alpha == 0.5 and db.minDuration == 120
+		and db.showWindows == "combat" and db.lighterMode == true and CC.SpellData[777002] ~= nil
+		and db.disabledSpells[rb] == true and db.laneX == 123 and CC:GetAlert(rb) and CC:GetAlert(rb).warn == 7)
+	check("  and the profile left behind keeps its own", db.profiles.Raid.alpha == 0.7 and db.profiles.Raid.places.lanes[1] == 11)
+	check("  Copy from puts another profile's settings into this one",
+		CC:CopyProfile("Raid") and db.alpha == 0.7 and CC.SpellData[777002] == nil and CC:CurrentProfile() == "Default"
+		and CC:CopyProfile("Default") == false and CC:CopyProfile("Nope") == false)
+	db.alpha = 0.3
+	check("  Reset Profile sends the one in use back to the defaults", CC:ResetProfile() and db.alpha == CC.DEFAULTS.alpha
+		and db.minDuration == 60 and CC:CurrentProfile() == "Default" and db.profiles.Raid.alpha == 0.7)
+	check("  the profile in use is never deleted, nor is Default",
+		CC:DeleteProfile("Default") == false and CC:UseProfile("Raid") and CC:DeleteProfile("Raid") == false
+		and CC:DeleteProfile("Default") == false)
+	CC:UseProfile("Default")
+	db.charProfile["Other-Realm"] = "Raid"
+	check("  deleting one lets go of everyone who followed it", CC:DeleteProfile("Raid") and CC:DeleteProfile("Raid") == false
+		and db.charProfile["Other-Realm"] == nil and #CC:ProfileNames() == 1)
+	-- login, window places
+	db.alpha, db.laneX = 0.4, 5
 	CC:ApplyCharacterProfile()
-	check("  login puts it in place", db.disabledSpells[rb] == true and db.laneX == 123)
+	check("  login puts the profile in place", db.alpha == CC.DEFAULTS.alpha and db.laneX == CC.DEFAULTS.laneX)
 	CC:SetKeepOwnPlaces(true)
 	db.laneX = 77
+	CC:NewProfile("Healing")
 	CC:SaveCurrentProfile()
 	CC:ApplyCharacterProfile()
-	check("  a character keeping its own places keeps them over the profile's", db.laneX == 77 and db.profiles.Raid.places.lanes[1] == 123)
+	check("  a character keeping its own places keeps them over any profile's", db.laneX == 77 and CC:CurrentProfile() == "Healing")
 	CC:SetKeepOwnPlaces(false)
-	db.defaultProfile = "Raid"; db.charProfile = {}
-	check("  alts follow the default profile", CC:CurrentProfile() == "Raid")
-	check("  deleting it lets go of everyone", CC:DeleteProfile("Raid") and CC:CurrentProfile() == nil and db.defaultProfile == false)
+	db.laneX = 0
+	-- the Profiles page
+	local e4 = #ERRORS
+	CC:OpenOptions()
+	local cur = CC.profileDrops.current
+	cur:GetScript("OnClick")(cur)
+	check("  the Current profile dropdown lists them, the current one shown",
+		CC.dropdown:IsShown() and CC.dropdown.n == 2 and cur.__text == "Healing", cur.__text)
+	local pick
+	for i = 1, CC.dropdown.n do if CC.dropdown.rows[i].value == "Default" then pick = CC.dropdown.rows[i] end end
+	pick:GetScript("OnClick")(pick)
+	check("  picking Default switches to it", CC:CurrentProfile() == "Default" and cur.__text == "Default" and not CC.dropdown:IsShown())
+	local box = CC.profileNewBox
+	box:SetText("Tanking")
+	box:GetScript("OnEnterPressed")(box)
+	check("  New: Enter makes it, switches to it and empties the box", CC:CurrentProfile() == "Tanking" and box:GetText() == "")
+	local del = CC.profileDrops.delete
+	del:GetScript("OnClick")(del)
+	check("  Delete lists neither the current profile nor Default", CC.dropdown.n == 1 and CC.dropdown.rows[1].value == "Healing")
+	CC.dropdown.rows[1]:GetScript("OnClick")(CC.dropdown.rows[1])
+	local cp = CC.profileDrops.copy
+	cp:GetScript("OnClick")(cp)
+	check("  Copy from lists the others; Healing is gone", CC.dropdown.n == 1 and CC.dropdown.rows[1].value == "Default")
+	CC.dropdown.catcher:GetScript("OnClick")(CC.dropdown.catcher)
+	check("  the Profiles page works with no Lua error", #ERRORS == e4, ERRORS[e4 + 1])
+	CC:UseProfile("Default")
+	CC:DeleteProfile("Tanking")
+	db.guildSync, db.setupFrom = false, "officers"
 	CC:ApplyShowPreset("everything")
 	CC:ApplySetup({ disabled = {}, custom = {}, alerts = {}, places = {} }, { noUndo = true })
 	CC:ResetWindow(window("lanes"))

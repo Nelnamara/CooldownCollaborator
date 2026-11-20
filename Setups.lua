@@ -255,53 +255,130 @@ function CC:ImportSetup(text)
 end
 
 -------------------------------------------------------------------------------
--- Profiles: db.profiles[name] = a setup; db.charProfile[character] = its name;
--- db.defaultProfile = the one characters follow when they haven't picked
+-- Profiles, as in every Ace addon: db.profiles[name] = the settings below plus `places`;
+-- db.charProfile[Name-Realm] = the profile that character follows. A profile named Default always
+-- exists and every character follows it until it picks another. The live settings stay where the
+-- rest of the addon reads them (CC.db); the profile in use is written back at logout and when you
+-- switch, and put in place at login and on a switch.
+-- Not in a profile (they are about your account or guild, or are wire and bookkeeping state): guild
+-- sharing, who setups are accepted from, "Never" marks, the undo, the profiles themselves,
+-- /cdc consumable entries, the minimap button, the panel's open tab and the party and raid pull log.
 -------------------------------------------------------------------------------
 
+local DEFAULT_PROFILE = "Default"
+
+CC.PROFILE_KEYS = {
+    -- what is tracked, custom spells, ready alerts
+    "disabledSpells", "customSpells", "alerts", "showPreset", "spellGroupBy",
+    -- the panel
+    "showReady", "panelStyle", "alpha", "scale", "minDuration",
+    -- when the windows show, lighter mode, locks, which windows are on
+    "showWindows", "lighterMode", "locked", "essentialsLocked", "laneLocked", "deadListLocked",
+    "externalsLocked", "manaLocked", "burstLocked", "essentialsEnabled", "laneEnabled", "deadListEnabled",
+    "externalsEnabled", "manaEnabled", "burstEnabled", "essentialsScale", "laneScale", "showOnCDTL3",
+    -- Bars & Lists
+    "essentialsBuffCounts", "essentialsBuffAim", "essentialsDefensives", "burstSpells", "rezSkip",
+    -- Plans, rotation order, teams
+    "plans", "activePlan", "planLead", "planBarX", "planBarY", "teams", "rotations",
+    -- window places for a party and a raid, pulls and posting, key starts
+    "layouts", "lastPullOffer", "postSpells", "resetOnNewRun",
+}
+
+local function CopyValue(v)
+    if type(v) == "table" then return CopyTable(v) end
+    return v
+end
+
+-- The settings a profile holds, as they are now. Places are left out when this character keeps its own.
+function CC:SnapshotProfile(skipPlaces)
+    local snap = { places = skipPlaces and {} or self:SnapshotPlaces() }
+    for _, k in ipairs(CC.PROFILE_KEYS) do
+        if self.db[k] ~= nil then snap[k] = CopyValue(self.db[k]) end
+    end
+    return snap
+end
+
+-- What a new or reset profile holds: the addon's own defaults, windows where they start.
+function CC:DefaultProfile()
+    local snap = { places = {} }
+    for _, k in ipairs(CC.PROFILE_KEYS) do
+        if CC.DEFAULTS[k] ~= nil then snap[k] = CopyValue(CC.DEFAULTS[k]) end
+    end
+    for _, w in ipairs(CC.WINDOWS or {}) do
+        local x, y = CC.DEFAULTS[w.xKey], CC.DEFAULTS[w.yKey]
+        if x and y then snap.places[w.key] = { x, y } end
+    end
+    return snap
+end
+
+-- Make the live settings what a profile holds (a setting it lacks goes back to its default).
+function CC:ApplyProfile(snap)
+    local db = self.db
+    local defaults = self:DefaultProfile()
+    -- custom spells first: the ones the profile doesn't have leave the spell list
+    local want = type(snap.customSpells) == "table" and snap.customSpells or {}
+    for idStr in pairs(db.customSpells or {}) do
+        if not want[idStr] then self:RemoveCustomSpell(idStr) end
+    end
+    local showOnCDTL3 = db.showOnCDTL3
+    for _, k in ipairs(CC.PROFILE_KEYS) do
+        local v = snap[k]
+        if v == nil then v = defaults[k] end
+        db[k] = CopyValue(v)
+    end
+    self:LoadCustomSpells()
+    local own = db.charPlaces and db.charPlaces[self:FullName("player")]
+    self:ApplyPlaces(own or snap.places or defaults.places)
+    if self.frame then
+        self.frame:SetScale(db.scale or 1.0)
+        self.frame:SetAlpha(db.alpha or 0.9)
+    end
+    if db.showOnCDTL3 ~= showOnCDTL3 and self.SetShowOnCDTL3 then self:SetShowOnCDTL3(db.showOnCDTL3) end
+    for _, update in ipairs({ "UpdateLock", "UpdateEssentialsLock", "UpdateLaneLock" }) do
+        if self[update] then self:RefreshView(update) end
+    end
+    for _, w in ipairs(CC.WINDOWS or {}) do
+        if w.refresh then self:RefreshView(w.refresh) end
+    end
+    self:RefreshView("RefreshRows")
+    self:RefreshAllViews()
+    if self.RefreshOptions then self:RefreshOptions() end
+end
+
+local function Clean(name)
+    return type(name) == "string" and (name:gsub("^%s+", ""):gsub("%s+$", "")) or ""
+end
+
+-- The default profile exists from the first login. It starts as what is set now (a character that
+-- follows another profile leaves the live settings to that one, so Default starts as the defaults).
+function CC:EnsureDefaultProfile()
+    self.db.profiles = self.db.profiles or {}
+    if not self.db.profiles[DEFAULT_PROFILE] then
+        local me = self:FullName("player")
+        local follows = self.db.charProfile and self.db.charProfile[me]
+        local mine = not follows or follows == DEFAULT_PROFILE or not self.db.profiles[follows]
+        self.db.profiles[DEFAULT_PROFILE] = mine and self:SnapshotProfile() or self:DefaultProfile()
+    end
+end
+
+-- Default first, then the rest in order.
 function CC:ProfileNames()
+    self:EnsureDefaultProfile()
     local names = {}
-    for name in pairs(self.db.profiles or {}) do names[#names + 1] = name end
+    for name in pairs(self.db.profiles) do
+        if name ~= DEFAULT_PROFILE then names[#names + 1] = name end
+    end
     table.sort(names)
+    table.insert(names, 1, DEFAULT_PROFILE)
     return names
 end
 
-function CC:SaveProfile(name)
-    name = type(name) == "string" and name:gsub("^%s+", ""):gsub("%s+$", "") or ""
-    if name == "" then return false end
-    self.db.profiles = self.db.profiles or {}
-    local old = self.db.profiles[name]
-    local keep = self:KeepsOwnPlaces()
-    local snap = self:SnapshotSetup(keep)
-    if keep and old then snap.places = old.places or {} end
-    self.db.profiles[name] = snap
-    return true
-end
-
-function CC:UseProfile(name)
-    local p = self.db.profiles and self.db.profiles[name]
-    if not p then return false end
-    self.db.charProfile = self.db.charProfile or {}
-    self.db.charProfile[self:FullName("player")] = name
-    self:ApplySetup(p)
-    return true
-end
-
-function CC:DeleteProfile(name)
-    if not (self.db.profiles and self.db.profiles[name]) then return false end
-    self.db.profiles[name] = nil
-    for who, pn in pairs(self.db.charProfile or {}) do
-        if pn == name then self.db.charProfile[who] = nil end
-    end
-    if self.db.defaultProfile == name then self.db.defaultProfile = false end
-    return true
-end
-
+-- The profile this character follows: the one it picked, else Default.
 function CC:CurrentProfile()
-    local me = self:FullName("player")
-    local name = self.db.charProfile and self.db.charProfile[me] or self.db.defaultProfile
-    if name and self.db.profiles and self.db.profiles[name] then return name end
-    return nil
+    self:EnsureDefaultProfile()
+    local name = self.db.charProfile and self.db.charProfile[self:FullName("player")]
+    if name and self.db.profiles[name] then return name end
+    return DEFAULT_PROFILE
 end
 
 -- This character keeps its own window places whatever profile it follows.
@@ -315,25 +392,71 @@ function CC:SetKeepOwnPlaces(on)
     self.db.charPlaces[self:FullName("player")] = on and self:SnapshotPlaces() or nil
 end
 
--- At login: the profile this character follows is put in place (no undo kept: it is the normal way in).
-function CC:ApplyCharacterProfile()
+-- The profile in use keeps what was changed since (never before this character's own profile went in:
+-- the live settings may be another character's).
+function CC:SaveCurrentProfile()
+    if not self.profileApplied then return end
     local name = self:CurrentProfile()
-    if name then self:ApplySetup(self.db.profiles[name], { noUndo = true }) end
+    local keep = self:KeepsOwnPlaces()
+    local snap = self:SnapshotProfile(keep)
+    if keep then snap.places = self.db.profiles[name].places or {} end   -- the profile's own places stay
+    self.db.profiles[name] = snap
+    if keep then self.db.charPlaces[self:FullName("player")] = self:SnapshotPlaces() end
+end
+
+-- At login: the profile this character follows is put in place.
+function CC:ApplyCharacterProfile()
+    self:EnsureDefaultProfile()
+    self:ApplyProfile(self.db.profiles[self:CurrentProfile()])
     self.profileApplied = true
 end
 
--- At logout the profile in use keeps what was changed since.
-function CC:SaveCurrentProfile()
-    -- never before this character's own profile went in: the live settings may be another character's
-    if not self.profileApplied then return end
-    local name = self:CurrentProfile()
-    if name then
-        local keep = self:KeepsOwnPlaces()
-        local snap = self:SnapshotSetup(keep)
-        if keep then snap.places = self.db.profiles[name].places or {} end   -- the profile's own places stay
-        self.db.profiles[name] = snap
+-- Change to another profile (the one in use is kept first).
+function CC:UseProfile(name)
+    if not (self.db.profiles and self.db.profiles[name]) then return false end
+    if name == self:CurrentProfile() then return true end
+    self:SaveCurrentProfile()
+    self.db.charProfile = self.db.charProfile or {}
+    self.db.charProfile[self:FullName("player")] = name
+    self:ApplyProfile(self.db.profiles[name])
+    return true
+end
+
+-- A new profile with the default settings, and this character switches to it.
+-- Returns false (and says why as a second value) for an empty name or one already there.
+function CC:NewProfile(name)
+    name = Clean(name)
+    self:EnsureDefaultProfile()
+    if name == "" then return false, "empty" end
+    if self.db.profiles[name] then return false, "exists" end
+    self:SaveCurrentProfile()
+    self.db.profiles[name] = self:DefaultProfile()
+    return self:UseProfile(name)
+end
+
+-- The settings of another profile go into the one in use.
+function CC:CopyProfile(from)
+    local src = self.db.profiles and self.db.profiles[from]
+    if not src or from == self:CurrentProfile() then return false end
+    self:ApplyProfile(src)
+    return true
+end
+
+-- The profile in use goes back to the addon's defaults.
+function CC:ResetProfile()
+    self:ApplyProfile(self:DefaultProfile())
+    return true
+end
+
+-- Never the one in use and never Default.
+function CC:DeleteProfile(name)
+    if not (self.db.profiles and self.db.profiles[name]) then return false end
+    if name == DEFAULT_PROFILE or name == self:CurrentProfile() then return false end
+    self.db.profiles[name] = nil
+    for who, pn in pairs(self.db.charProfile or {}) do
+        if pn == name then self.db.charProfile[who] = nil end
     end
-    if self:KeepsOwnPlaces() then self.db.charPlaces[self:FullName("player")] = self:SnapshotPlaces() end
+    return true
 end
 
 -------------------------------------------------------------------------------
