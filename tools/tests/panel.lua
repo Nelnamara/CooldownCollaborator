@@ -334,6 +334,30 @@ local lines = CC:CooldownTooltipLines(full("M2"), G)
 check("  a never-seen owner: ready as far as we know, and why",
 	lines[2] and lines[2].text == "M2 \194\183 ready as far as we know" and lines[3].text == "Ready as far as we know."
 	and lines[4].text == "Doesn't run CooldownCollaborator and hasn't been seen casting.", lines[2] and lines[2].text)
+-- a ranked spell: our own tooltip shows the rank in our spellbook, another player's the top rank
+local RS
+for id, d in pairs(CC.SpellData) do
+	if d.ranks and #d.ranks >= 3 and not d.consumable and (not RS or id < RS) then RS = id end
+end
+if RS then
+	local ranks = CC.SpellData[RS].ranks
+	KNOWN[ranks[2]] = true
+	tip.spell = nil
+	CC:ShowCooldownTooltip(er.line, CC:FullName("player"), RS)
+	check("hover on our own ranked spell: the rank in our spellbook, not the top rank", tip.spell == ranks[2], tostring(tip.spell))
+	tip.spell = nil
+	CC:ShowCooldownTooltip(er.line, { CC:FullName("player") }, RS)
+	check("  a one-name list for ourselves too", tip.spell == ranks[2], tostring(tip.spell))
+	tip.spell = nil
+	CC:ShowCooldownTooltip(er.line, full("M1"), RS)
+	check("  another player: today's top rank (the data rows hold no per-rank learn levels)", tip.spell == ranks[#ranks], tostring(tip.spell))
+	KNOWN[ranks[2]] = nil
+	tip.spell = nil
+	CC:ShowCooldownTooltip(er.line, CC:FullName("player"), RS)
+	check("  nothing known: falls back to the top rank", tip.spell == ranks[#ranks], tostring(tip.spell))
+else
+	check("hover on a ranked spell: this client has no ranks, nothing changes", CC.SpellData[E] ~= nil)
+end
 for _, k in ipairs({ "AddLine", "SetSpellByID", "NumLines" }) do rawset(GameTooltip, k, nil) end
 check("every kind has its line", (function()
 	for id, d in pairs(CC.SpellData) do

@@ -115,9 +115,14 @@ function CC:ShowCooldownTooltip(anchorFrame, ownerName, spellID, extraLine)
     local data = CC.SpellData[spellID]
     if not anchorFrame or not data then return end
     GameTooltip:SetOwner(anchorFrame, "ANCHOR_RIGHT")
-    -- the game's own tooltip (a ranked spell's top rank); a spell the game can't
-    -- show (a custom ID it doesn't know) gets its name instead
+    -- the game's own tooltip: for ourselves the rank in our spellbook (CC:KnownRank); for another
+    -- player a ranked spell's top rank (the data rows carry no per-rank learn levels, so their rank
+    -- can't be told); a spell the game can't show (a custom ID it doesn't know) gets its name instead
     local id = data.ranks and data.ranks[#data.ranks] or spellID
+    local single = type(ownerName) == "table" and #ownerName == 1 and ownerName[1] or ownerName
+    if data.ranks and single == self:FullName("player") then
+        id = self:KnownRank(spellID) or id
+    end
     local ok = pcall(GameTooltip.SetSpellByID, GameTooltip, id)
     if not ok or (GameTooltip:NumLines() or 0) == 0 then
         GameTooltip:SetText(data.name, 1, 1, 1)
