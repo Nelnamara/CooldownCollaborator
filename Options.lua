@@ -168,6 +168,200 @@ CC.ALERT_SOUNDS = {
     { id = Sound("AUCTION_WINDOW_OPEN", 5274),      label = L["Auction bell"] },
 }
 
+-- Blizzard sounds CooldownTimeline3 checked: file data IDs that exist in every client (its Media.lua).
+-- Left out: its Raid Warning (567397) and Alarm Clock 2 (567399), which are the first and third sounds above.
+-- A saved alert holds "file:<id>" for these, a SoundKit number for the four above, "lsm:<name>" for
+-- another addon's sound and, from older saves, true (the first sound) or a file path.
+local BLIZZARD_SOUNDS = {
+    { 567488, L["PvP warning"] },       { 567439, L["Quest complete"] },     { 567400, L["Quest accepted"] },
+    { 567516, L["Quest progress"] },    { 569593, L["Level up"] },           { 568016, L["Reputation rank up"] },
+    { 568587, L["Queue joined"] },      { 568011, L["Queue pop"] },          { 567436, L["Alarm clock 1"] },
+    { 567458, L["Alarm clock 3"] },     { 567484, L["Text ping"] },          { 567421, L["Whisper"] },
+    { 567451, L["Group invite"] },      { 567416, L["Map ping"] },           { 567518, L["Friend online"] },
+    { 567402, L["Battle.net toast"] },  { 915759, L["Store toast"] },        { 567497, L["Flight point discovered"] },
+    { 567428, L["Coin"] },              { 566558, L["Night elf bell"] },     { 568154, L["Shay's bell"] },
+    { 569763, L["Holy cast"] },         { 5259954, L["Sparkle chime"] },     { 6226466, L["Gold cast"] },
+    { 4906957, L["Trading Post celebration"] }, { 4910746, L["Trading Post coins"] },
+}
+
+-- LibSharedMedia, only when another addon has loaded it.
+local function SharedMedia()
+    if LibStub then
+        local ok, lib = pcall(LibStub, "LibSharedMedia-3.0", true)
+        if ok and type(lib) == "table" then return lib end
+    end
+    return nil
+end
+
+-- Every sound the dropdown offers, in order: the four, Blizzard's, then another addon's. { value, label }
+function CC:AlertSoundList()
+    local list, fileIDs = {}, {}
+    for _, s in ipairs(CC.ALERT_SOUNDS) do list[#list + 1] = { value = s.id, label = s.label } end
+    for _, s in ipairs(BLIZZARD_SOUNDS) do
+        list[#list + 1] = { value = "file:" .. s[1], label = s[2] }
+        fileIDs[s[1]] = true
+    end
+    local lsm = SharedMedia()
+    if lsm and lsm.List then
+        local ok, names = pcall(lsm.List, lsm, "sound")
+        for _, name in ipairs(ok and type(names) == "table" and names or {}) do
+            local okF, path = pcall(lsm.Fetch, lsm, "sound", name, true)
+            if name ~= "None" and okF and path and not fileIDs[path] then
+                list[#list + 1] = { value = "lsm:" .. name, label = name }
+            end
+        end
+    end
+    return list
+end
+
+-- A saved sound as the list names it (true is the first one); the others stay as they are.
+function CC:AlertSoundValue(sound)
+    if sound == true then return CC.ALERT_SOUNDS[1].id end
+    return sound
+end
+
+-- ── A dropdown from the addon's own frames ───────────────────────────────────
+-- A button showing the picked value and an arrow; a click opens one list under it (it scrolls when
+-- long); picking, Escape or a click elsewhere closes it. No UIDropDownMenu or Menu API, so it is the
+-- same on every client. items: a list of { value, label } or a function returning one.
+
+local DROP_ROW, DROP_MAX = 18, 10
+
+local function CloseDropdown()
+    local f = CC.dropdown
+    if f then f:Hide(); f.catcher:Hide() end
+end
+
+local function BuildDropdownList()
+    local f = CreateFrame("Frame", "CCDropdownList", UIParent, CC.BackdropTemplate)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetClampedToScreen(true)
+    f:EnableMouse(true)
+    f:SetBackdrop({
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 10,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    f:SetBackdropColor(0.04, 0.04, 0.07, 1)
+    f:SetBackdropBorderColor(0.5, 0.5, 0.65, 1)
+    -- a click anywhere else closes it
+    local catcher = CreateFrame("Button", nil, UIParent)
+    catcher:SetAllPoints(UIParent)
+    catcher:SetFrameStrata("FULLSCREEN_DIALOG")
+    catcher:RegisterForClicks("AnyUp")
+    catcher:SetScript("OnClick", CloseDropdown)
+    catcher:Hide()
+    f.catcher = catcher
+    f:SetFrameLevel(catcher:GetFrameLevel() + 2)
+    f:HookScript("OnShow", function() catcher:Show() end)
+    f:HookScript("OnHide", function() catcher:Hide() end)
+    -- Escape closes the list and nothing else (a window named in UISpecialFrames would close with it)
+    f:EnableKeyboard(true)
+    f:SetScript("OnKeyDown", function(widget, key)
+        if widget.SetPropagateKeyboardInput then widget:SetPropagateKeyboardInput(key ~= "ESCAPE") end
+        if key == "ESCAPE" then CloseDropdown() end
+    end)
+    f.scroll = CreateFrame("ScrollFrame", "CCDropdownScroll", f, "UIPanelScrollFrameTemplate")
+    f.scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
+    f.content = CreateFrame("Frame", nil, f.scroll)
+    f.scroll:SetScrollChild(f.content)
+    f.rows = {}
+    f:Hide()
+    return f
+end
+
+local function OpenDropdown(owner)
+    local f = CC.dropdown
+    if not f then f = BuildDropdownList(); CC.dropdown = f end
+    local items = owner:Items()
+    local picked = owner.get()
+    local n = #items
+    local visible = math.min(n, DROP_MAX)
+    local scrolls = n > DROP_MAX
+    local textW = 0
+    for i, it in ipairs(items) do
+        local row = f.rows[i]
+        if not row then
+            row = CreateFrame("Button", nil, f.content)
+            row:SetHeight(DROP_ROW)
+            local hl = row:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.15)
+            row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.text:SetPoint("LEFT", row, "LEFT", 6, 0)
+            row.text:SetJustifyH("LEFT")
+            row:SetScript("OnClick", function(widget)
+                local o = f.owner
+                CloseDropdown()
+                if o then o.pick(widget.value); o:Refresh() end
+            end)
+            f.rows[i] = row
+        end
+        row.value = it.value
+        row.text:SetText(it.label)
+        local picked_ = picked ~= nil and it.value == picked
+        row.text:SetTextColor(picked_ and 1 or 0.9, picked_ and 0.82 or 0.9, picked_ and 0 or 0.9)
+        textW = math.max(textW, row.text:GetStringWidth() or 0)
+    end
+    for i = n + 1, #f.rows do f.rows[i]:Hide() end
+    local rowW = math.max(owner:GetWidth(), math.ceil(textW) + 16)
+    f.content:SetSize(rowW, n * DROP_ROW)
+    f.scroll:SetSize(rowW, visible * DROP_ROW)
+    for i = 1, n do
+        local row = f.rows[i]
+        row:SetWidth(rowW)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", f.content, "TOPLEFT", 0, -(i - 1) * DROP_ROW)
+        row:Show()
+    end
+    f:SetSize(rowW + 8 + (scrolls and 22 or 0), visible * DROP_ROW + 8)
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, 2)
+    f.owner = owner
+    f.n = n
+    f.catcher:Show()
+    f:Show()
+    f:Raise()
+    -- the picked one in view
+    local at = 0
+    for i, it in ipairs(items) do if picked ~= nil and it.value == picked then at = i end end
+    f.scroll:SetVerticalScroll(scrolls and math.max(0, math.min((at - 1) * DROP_ROW, (n - visible) * DROP_ROW)) or 0)
+end
+
+-- Returns the button; button:Refresh() redraws its text; button:SetEnabled(false) greys it.
+local function NewDropdown(parent, x, y, w, items, get, pick, fallback)
+    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    b:SetSize(w, 22)
+    b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    local arrow = b:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(16, 16)
+    arrow:SetPoint("RIGHT", b, "RIGHT", -4, -1)
+    arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+    arrow:SetTexCoord(0.2, 0.8, 0.2, 0.8)
+    local fs = b:GetFontString()
+    if fs then
+        fs:ClearAllPoints()
+        fs:SetPoint("LEFT", b, "LEFT", 10, 0)
+        fs:SetPoint("RIGHT", b, "RIGHT", -22, 0)
+        fs:SetJustifyH("LEFT")
+    end
+    b.get, b.pick = get, pick
+    function b:Items() return type(items) == "function" and items() or items end
+    function b:Refresh()
+        local v, label = self.get(), nil
+        for _, it in ipairs(self:Items()) do
+            if v ~= nil and it.value == v then label = it.label break end
+        end
+        self:SetText(label or fallback or "")
+    end
+    b:SetScript("OnClick", function(widget)
+        if CC.dropdown and CC.dropdown:IsShown() then CloseDropdown() else OpenDropdown(widget) end
+    end)
+    b:Refresh()
+    return b
+end
+
 function CC:GetAlert(spellID)
     local a = self.db.alerts
     local cfg = a and a[spellID]
@@ -281,24 +475,23 @@ function CC:OpenAlertOptions(spellID, anchor)
             if cfg then cfg.sound = on and (cfg.lastSound or true) or false end
             f:Refresh()
         end)
-        f.soundBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        f.soundBtn:SetSize(104, 20)
-        f.soundBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 40, -96)
-        f.soundBtn:SetScript("OnClick", function()
-            local cfg = CC:GetAlert(Sid())
-            if not cfg or not cfg.sound then return end
-            local nextIndex = ((CC:AlertSoundIndex(cfg) or 0) % #CC.ALERT_SOUNDS) + 1
-            cfg.sound = CC.ALERT_SOUNDS[nextIndex].id
-            f:Refresh()
-        end)
+        f.soundBtn = NewDropdown(f, 40, -96, 140,
+            function() return CC:AlertSoundList() end,
+            function()
+                local cfg = CC:GetAlert(Sid())
+                return cfg and cfg.sound and CC:AlertSoundValue(cfg.sound) or nil
+            end,
+            function(value)
+                local cfg = CC:GetAlert(Sid())
+                if cfg and cfg.sound then cfg.sound = value end
+            end, L["Custom sound"])
         f.testBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        f.testBtn:SetSize(50, 20)
-        f.testBtn:SetPoint("LEFT", f.soundBtn, "RIGHT", 4, 0)
         f.testBtn:SetText(L["Test"])
+        f.testBtn:SetSize(50, 22)
+        f.testBtn:SetPoint("LEFT", f.soundBtn, "RIGHT", 4, 0)
         f.testBtn:SetScript("OnClick", function()
             local cfg = CC:GetAlert(Sid())
-            local idx = cfg and cfg.sound and CC:AlertSoundIndex(cfg)
-            if idx then pcall(PlaySound, CC.ALERT_SOUNDS[idx].id, "Master") end
+            if cfg and cfg.sound then CC:PlayAlertSound(cfg.sound) end
         end)
         f.flash = Check(-124, L["Flash its row"], function(on)
             CC:SetAlertField(Sid(), "flash", on)
@@ -324,12 +517,13 @@ function CC:OpenAlertOptions(spellID, anchor)
         function f:Refresh()
             local cfg = CC:GetAlert(self.spellID) or {}
             local on = CC:GetAlert(self.spellID) ~= nil
-            local idx = on and cfg.sound and CC:AlertSoundIndex(cfg) or nil
+            local hasSound = on and cfg.sound and true or false
             self.enable:SetChecked(on)
-            self.sound:SetChecked(on and cfg.sound and true or false)
-            self.soundBtn:SetText(idx and CC.ALERT_SOUNDS[idx].label or ((on and cfg.sound) and L["Custom sound"] or L["No sound"]))
-            self.soundBtn:SetEnabled(on and cfg.sound and true or false)
-            self.testBtn:SetEnabled(idx ~= nil)
+            self.sound:SetChecked(hasSound)
+            self.soundBtn:Refresh()
+            if not hasSound then self.soundBtn:SetText(L["No sound"]) end
+            self.soundBtn:SetEnabled(hasSound)
+            self.testBtn:SetEnabled(hasSound)
             self.flash:SetChecked(on and cfg.flash ~= false)
             self.mid:SetChecked(on and cfg.midscreen == true)
             self.warn:SetText(tostring(tonumber(cfg.warn) or 0))

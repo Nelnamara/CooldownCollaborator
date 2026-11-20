@@ -189,6 +189,8 @@ Methods.SetPoint = function(s, ...) s.__points[#s.__points + 1] = { ... } end
 Methods.ClearAllPoints = function(s) s.__points = {} end
 Methods.GetCenter = function() return 0, 0 end
 Methods.GetEffectiveScale = function() return 1 end
+Methods.SetFrameLevel = function(s, l) s.__level = l end
+Methods.GetFrameLevel = function(s) return s.__level end
 Methods.SetAlpha = function(s, a) s.__alpha = a end
 Methods.GetAlpha = function(s) return s.__alpha end
 Methods.SetText = function(s, t)

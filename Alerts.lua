@@ -20,19 +20,34 @@ local CHECK_EVERY    = 0.2
 
 local last = {}   -- ["Name-Realm\tspellID"] = the seconds left at the last check
 
+-- Play a saved alert sound: a SoundKit number, true (the first sound), "file:<id>" (a Blizzard file),
+-- "lsm:<name>" (a LibSharedMedia sound, if that addon is loaded) or a file path from an older save.
+function CC:PlayAlertSound(sound)
+    if sound == true then sound = DEFAULT_SOUND end
+    if type(sound) == "number" then
+        pcall(PlaySound, sound, "Master")
+    elseif type(sound) == "string" then
+        local fileID = sound:match("^file:(%d+)$")
+        local lsmName = sound:match("^lsm:(.+)$")
+        if fileID then
+            pcall(PlaySoundFile, tonumber(fileID), "Master")
+        elseif lsmName then
+            local ok, lsm = pcall(function() return LibStub and LibStub("LibSharedMedia-3.0", true) end)
+            local okF, path = false, nil
+            if ok and lsm then okF, path = pcall(lsm.Fetch, lsm, "sound", lsmName, true) end
+            if okF and path then pcall(PlaySoundFile, path, "Master") end
+        else
+            pcall(PlaySoundFile, sound, "Master")
+        end
+    end
+end
+
 function CC:FireReadyAlert(owner, spellID, secondsLeft)
     local alerts = self.db and self.db.alerts
     local cfg = alerts and alerts[spellID]
     local data = CC.SpellData[spellID]
     if type(cfg) ~= "table" or not data or not owner then return end
-    if cfg.sound then
-        local sound = cfg.sound == true and DEFAULT_SOUND or cfg.sound
-        if type(sound) == "number" then
-            pcall(PlaySound, sound, "Master")
-        elseif type(sound) == "string" then
-            pcall(PlaySoundFile, sound, "Master")
-        end
-    end
+    if cfg.sound then self:PlayAlertSound(cfg.sound) end
     if cfg.flash ~= false then
         if self.FlashPanelRow then self:FlashPanelRow(owner, spellID) end
         local flashEssentials = self.FlashEssentialsFor

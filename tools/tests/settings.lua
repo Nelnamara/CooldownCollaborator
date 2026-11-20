@@ -134,6 +134,78 @@ do
 	check("no button's words are wider than the button", #BUTTONS > 20 and #tight == 0, table.concat(tight, ", "))
 end
 
+---------------------------------------------------------------- the dropdown and the sound list
+do
+	local e2 = #ERRORS
+	CC:SetAlertEnabled(rez, true)
+	CC:OpenAlertOptions(rez, nil)
+	local af = CC.alertFrame
+	local list = CC:AlertSoundList()
+	check("sound list: the four first, in order, then Blizzard's file sounds",
+		#list > #CC.ALERT_SOUNDS + 10 and list[1].value == CC.ALERT_SOUNDS[1].id and list[4].value == CC.ALERT_SOUNDS[4].id
+		and tostring(list[5].value):match("^file:%d+$") ~= nil)
+	local dupe = false
+	for _, it in ipairs(list) do if it.value == "file:567397" or it.value == "file:567399" then dupe = true end end
+	check("  none repeats one of the four", not dupe)
+	check("  no other addon's sounds without LibSharedMedia", list[#list].value:match("^lsm:") == nil)
+	af.soundBtn:GetScript("OnClick")(af.soundBtn)
+	local dd = CC.dropdown
+	check("dropdown: a click opens the list under the button, one row per sound",
+		dd and dd:IsShown() and dd.catcher:IsShown() and dd.n == #list and dd.rows[1].value == list[1].value and dd.rows[#list].value == list[#list].value)
+	check("  the first sound is shown for an alert saved as true", af.soundBtn.__text == CC.ALERT_SOUNDS[1].label, af.soundBtn.__text)
+	dd.rows[6]:GetScript("OnClick")(dd.rows[6])
+	check("  picking saves it, shows it and closes the list", CC:GetAlert(rez).sound == list[6].value
+		and not dd:IsShown() and not dd.catcher:IsShown() and af.soundBtn.__text == list[6].label)
+	af.soundBtn:GetScript("OnClick")(af.soundBtn)
+	dd:GetScript("OnKeyDown")(dd, "ESCAPE")
+	check("  Escape closes it", not dd:IsShown())
+	af.soundBtn:GetScript("OnClick")(af.soundBtn)
+	dd.catcher:GetScript("OnClick")(dd.catcher)
+	check("  so does a click elsewhere", not dd:IsShown())
+	af.soundBtn:GetScript("OnClick")(af.soundBtn)
+	af.soundBtn:GetScript("OnClick")(af.soundBtn)
+	check("  and a second click on the button", not dd:IsShown())
+	-- saves from before the dropdown keep their sound
+	local function heard(sound)
+		CC:SetAlertField(rez, "sound", sound)
+		SOUNDS = {}
+		CC:FireReadyAlert("Someone-Realm", rez)
+		return SOUNDS[1]
+	end
+	local h = heard(8960)
+	check("old saves: a SoundKit number plays as before", h and h.id == 8960 and h.channel == "Master")
+	h = heard(true)
+	check("  true is still the raid warning", h and h.id == CC.ALERT_SOUNDS[1].id)
+	h = heard("Interface\\AddOns\\Some\\ding.ogg")
+	check("  a file path still plays as a file", h and h.file == "Interface\\AddOns\\Some\\ding.ogg")
+	h = heard("file:567488")
+	check("  a Blizzard file sound plays by its file ID", h and h.file == 567488)
+	CC:SetAlertField(rez, "sound", 8960)
+	af:Refresh()
+	check("  an old number shows its name in the box", af.soundBtn.__text == CC.ALERT_SOUNDS[2].label, af.soundBtn.__text)
+	SOUNDS = {}
+	af.testBtn:GetScript("OnClick")(af.testBtn)
+	check("  Test plays what is picked", SOUNDS[1] and SOUNDS[1].id == 8960)
+	-- another addon's sounds
+	local lsmSounds = { None = "", ["Bell Ding"] = "Interface\\AddOns\\Other\\bell.ogg", ["Blizzard: Queue Pop"] = 568011 }
+	LibStub = setmetatable({}, { __call = function(_, name, silent)
+		if name ~= "LibSharedMedia-3.0" then return nil end
+		return {
+			List = function() return { "Bell Ding", "Blizzard: Queue Pop", "None" } end,
+			Fetch = function(_, kind, key) return lsmSounds[key] end,
+		}
+	end })
+	local withLSM = CC:AlertSoundList()
+	check("LibSharedMedia loaded: its sounds follow Blizzard's, without None or what is already listed",
+		withLSM[#withLSM].value == "lsm:Bell Ding" and #withLSM == #list + 1, #withLSM)
+	h = heard("lsm:Bell Ding")
+	check("  and one plays from its registered path", h and h.file == "Interface\\AddOns\\Other\\bell.ogg")
+	LibStub = nil
+	h = heard("lsm:Bell Ding")
+	check("  with the library gone it is silent, no error", h == nil and #ERRORS == e2, ERRORS[e2 + 1])
+	CC:SetAlertEnabled(rez, false)
+end
+
 ---------------------------------------------------------------- rezzers to skip
 do
 	local realStatus = CC.GetCapabilityStatus
