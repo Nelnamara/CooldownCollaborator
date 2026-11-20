@@ -1222,6 +1222,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         CC:PostReady()
     elseif cmd == "report" then
         CC:ShowReport()
+    elseif cmd == "tour" then
+        CC:StartTour(true)
     elseif cmd == "nexthit" then
         -- /cdc nexthit <seconds or M:SS> | off: the Lane view's look-ahead (Lanes.lua)
         CC:NextHitCommand(msg:match("^%s*%S+%s*(.-)%s*$") or "")

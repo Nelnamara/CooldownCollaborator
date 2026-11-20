@@ -472,6 +472,12 @@ L["Open CooldownCollaborator Settings"] = true
 
 -- Tour.lua
 L["That is a sample, so nothing was sent."] = true
+L["Next"] = true
+L["Open settings"] = true
+L["Lock in place"] = true
+L["%d of %d \194\183 %s"] = true
+L["The tour waits until you are out of combat."] = true
+L["Every window is off. Switch one on in Settings, then take the tour."] = true
 
 -- Setups.lua
 L["%d default spell ticked or unticked (%d unticked afterwards)"] = true

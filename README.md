@@ -93,6 +93,7 @@ CooldownCollaborator works together with the addon **CooldownTimeline3** (CDTL3)
 - **`/cdc lastpull`** — Print the last pull's log
 - **`/cdc post`** — Post who is ready to raid chat
 - **`/cdc report`** — Open a box with what to paste into a new issue on GitHub
+- **`/cdc tour`** — Take the tour again: one step for each window that is on, with Lock in place at the end (it also runs by itself the first time you are in a group)
 - **`/cdc consumable <spellID> <seconds> <flask|food|other> <name>`** — Register a flask, food or Cauldron/Feast-style buff for tracking. `flask` and `food` count in the Flask / Food line; `other` is tracked but not counted. Leave the category out and it is guessed from the name (the word flask or food anywhere in it)
 - **`/cdc consumable remove <spellID>`** — Stop tracking a consumable you added (they are also listed, with Remove buttons, on the Custom Spells tab in settings)
 - **`/cdc verbose`** — Toggle detailed cast/sync logging, for diagnosing tracking issues
@@ -100,7 +101,7 @@ CooldownCollaborator works together with the addon **CooldownTimeline3** (CDTL3)
 
 ### Settings
 
-Open with `/cdc settings`, or right-click the minimap button. Six tabs: **Getting Started** (window pictures, the CooldownTimeline3 link), **Display** (windows on or off, lock and reset, opacity and scale, lighter mode, windows only in combat or at a boss, guild sharing), **Lists** (Essentials bar and burst line choices, rezzers to skip), **Spells** (show presets, Default Spells, Custom Spells), **Plans** (the raid cooldown plan, rotation order, teams) and **Profiles** (named profiles, export and import, officer setups, layouts, last pull). Settings > Spells opens with **Your role** cards.
+Open with `/cdc settings`, or right-click the minimap button. Six tabs: **Getting Started** (pick a window to read what it is for and see it with made-up players, Take the tour, Report a problem, the CooldownTimeline3 link), **Display** (windows on or off, lock and reset, opacity and scale, lighter mode, windows only in combat or at a boss, guild sharing), **Lists** (Essentials bar and burst line choices, rezzers to skip), **Spells** (show presets, Default Spells, Custom Spells), **Plans** (the raid cooldown plan, rotation order, teams) and **Profiles** (named profiles, export and import, officer setups, layouts, last pull). Settings > Spells opens with **Your role** cards.
 
 Any other text after `/cdc` toggles the panel.
 

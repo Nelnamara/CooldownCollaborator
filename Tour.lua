@@ -299,3 +299,252 @@ do
         if event == "PLAYER_REGEN_DISABLED" or IsInGroup() then CC:HideSample() end
     end)
 end
+
+-------------------------------------------------------------------------------
+-- The tour: one step for each window that is on, in the window list's order. The window shows (the real
+-- one in a group when it is showing, else its sample), gets a gold edge, and a bubble next to it says in
+-- one sentence what it is for. The last step offers Lock in place and Open settings. It starts by itself
+-- once per account, the first time you are in a group with the windows showing (db.tourDone, not part of
+-- a profile), and on demand (Take the tour on Getting Started, /cdc tour). Never in combat: a combat
+-- start ends it quietly.
+-------------------------------------------------------------------------------
+
+local TOUR_SAMPLE_SECONDS = 600   -- a step's sample stays until the next step or the end
+local BUBBLE_W, BUBBLE_GAP = 300, 14
+local GOLD = { 1, 0.82, 0 }
+
+local function InCombat()
+    return (CC.inCombat or (InCombatLockdown and InCombatLockdown())) and true or false
+end
+
+local function TourSteps()
+    local steps = {}
+    for _, w in ipairs(CC.WINDOWS) do
+        if CC:WindowIsOn(w) and CC[w.frame] then steps[#steps + 1] = w end
+    end
+    return steps
+end
+
+-- Is the window up for real: in a group and showing?
+local function ShowsForReal(w)
+    local frame = CC[w.frame]
+    return IsInGroup() and frame and frame:IsShown() and true or false
+end
+
+local function FitButton(b, minW)
+    local tw = b.GetTextWidth and b:GetTextWidth() or 0
+    b:SetSize(math.max(minW or 0, math.ceil(tw or 0) + 24), 22)
+end
+
+function CC:BuildTourFrame()
+    if self.tourFrame then return self.tourFrame end
+    local f = CreateFrame("Frame", "CCTourFrame", UIParent, CC.BackdropTemplate)
+    f:SetSize(BUBBLE_W, 120)
+    f:SetFrameStrata("DIALOG")
+    f:SetClampedToScreen(true)
+    f:SetBackdrop({
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    f:SetBackdropColor(0.05, 0.05, 0.08, 0.97)
+    f:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
+    f:EnableMouse(true)
+    -- Escape closes it, as it closes Settings
+    tinsert(UISpecialFrames, "CCTourFrame")
+    f:SetScript("OnHide", function() if CC.tour then CC:EndTour() end end)
+
+    f.head = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.head:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -10)
+    f.head:SetWidth(BUBBLE_W - 44)
+    f.head:SetJustifyH("LEFT")
+    f.body = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.body:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -32)
+    f.body:SetWidth(BUBBLE_W - 24)
+    f.body:SetJustifyH("LEFT")
+
+    f.close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    f.close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+    f.close:SetScript("OnClick", function() CC:EndTour() end)
+
+    f.next = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.next:SetText(L["Next"])
+    FitButton(f.next, 70)
+    f.next:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
+    f.next:SetScript("OnClick", function() CC:TourNext() end)
+
+    f.settings = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.settings:SetText(L["Open settings"])
+    FitButton(f.settings, 96)
+    f.settings:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
+    f.settings:SetScript("OnClick", function()
+        CC:EndTour()
+        if not (CC.optionsFrame and CC.optionsFrame:IsShown()) then CC:OpenOptions() end
+    end)
+    f.lock = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.lock:SetText(L["Lock in place"])
+    FitButton(f.lock, 96)
+    f.lock:SetPoint("RIGHT", f.settings, "LEFT", -6, 0)
+    f.lock:SetScript("OnClick", function()
+        CC:SetWindowsLocked(true)
+        CC:EndTour()
+    end)
+
+    -- the gold edge round the window it is about
+    local edge = CreateFrame("Frame", nil, UIParent)
+    edge:SetFrameStrata("DIALOG")
+    edge.sides = {}
+    for i = 1, 4 do
+        local t = edge:CreateTexture(nil, "OVERLAY")
+        t:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+        edge.sides[i] = t
+    end
+    edge:Hide()
+    f.edge = edge
+
+    f:Hide()
+    self.tourFrame = f
+    return f
+end
+
+local function PlaceEdge(edge, target)
+    local s = edge.sides
+    for _, t in ipairs(s) do t:ClearAllPoints() end
+    s[1]:SetPoint("TOPLEFT", target, "TOPLEFT", -3, 3);         s[1]:SetPoint("TOPRIGHT", target, "TOPRIGHT", 3, 3);         s[1]:SetHeight(2)
+    s[2]:SetPoint("BOTTOMLEFT", target, "BOTTOMLEFT", -3, -3);  s[2]:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 3, -3);  s[2]:SetHeight(2)
+    s[3]:SetPoint("TOPLEFT", target, "TOPLEFT", -3, 3);         s[3]:SetPoint("BOTTOMLEFT", target, "BOTTOMLEFT", -3, -3);   s[3]:SetWidth(2)
+    s[4]:SetPoint("TOPRIGHT", target, "TOPRIGHT", 3, 3);        s[4]:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 3, -3);  s[4]:SetWidth(2)
+    edge:Show()
+end
+
+-- The bubble beside the window, on whichever side has room: right, left, below, above.
+local function PlaceBubble(f, target)
+    local scale = (target:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
+    local l, r, t, b = target:GetLeft(), target:GetRight(), target:GetTop(), target:GetBottom()
+    f:ClearAllPoints()
+    if not (l and r and t and b) then
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        return "center"
+    end
+    l, r, t, b = l * scale, r * scale, t * scale, b * scale
+    local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+    local bh = f:GetHeight()
+    if r + BUBBLE_GAP + BUBBLE_W <= sw then
+        f:SetPoint("TOPLEFT", target, "TOPRIGHT", BUBBLE_GAP, 0)
+        return "right"
+    elseif l - BUBBLE_GAP - BUBBLE_W >= 0 then
+        f:SetPoint("TOPRIGHT", target, "TOPLEFT", -BUBBLE_GAP, 0)
+        return "left"
+    elseif b - BUBBLE_GAP - bh >= 0 then
+        f:SetPoint("TOP", target, "BOTTOM", 0, -BUBBLE_GAP)
+        return "below"
+    end
+    f:SetPoint("BOTTOM", target, "TOP", 0, BUBBLE_GAP)
+    return "above"
+end
+
+function CC:TourStep(i)
+    local tour = self.tour
+    if not tour then return end
+    local w = tour.steps[i]
+    if not w then return self:EndTour() end
+    tour.i = i
+    self:HideSample()
+    local frame = self[w.frame]
+    if not ShowsForReal(w) then self:ShowSample(w.key, TOUR_SAMPLE_SECONDS) end
+
+    local f = self:BuildTourFrame()
+    local total = #tour.steps
+    local help = CC.WINDOW_HELP[w.key]
+    f.head:SetText(string.format(L["%d of %d \194\183 %s"], i, total, w.label))
+    f.body:SetText(help and help.line or "")
+    local last = i == total
+    f.next:SetShown(not last)
+    f.lock:SetShown(last)
+    f.settings:SetShown(last)
+    -- the bubble is as tall as its sentence (13 pixels a line at 7.4 pixels a character is what the font needs, or more)
+    local text = help and help.line or ""
+    local lines = math.max(1, math.ceil(#text * 7.4 / (BUBBLE_W - 24)))
+    f:SetHeight(32 + math.max(f.body:GetStringHeight() or 0, lines * 15) + 12 + 22 + 12)
+    f:Show()
+    f.edge:SetFrameLevel((frame:GetFrameLevel() or 1) + 5)
+    PlaceEdge(f.edge, frame)
+    PlaceBubble(f, frame)
+end
+
+function CC:TourNext()
+    local tour = self.tour
+    if tour then self:TourStep(tour.i + 1) end
+end
+
+function CC:EndTour()
+    local tour = self.tour
+    if not tour then return end
+    self.tour = nil
+    if tour.ticker then tour.ticker:Cancel() end
+    local f = self.tourFrame
+    if f then
+        f:Hide()
+        f.edge:Hide()
+    end
+    self:HideSample()
+end
+
+-- manual: Take the tour or /cdc tour. Returns true when it started.
+function CC:StartTour(manual)
+    if self.tour then return false end
+    if InCombat() then
+        if manual then print("|cFF54a3ffCDC|r " .. L["The tour waits until you are out of combat."]) end
+        return false
+    end
+    local steps = TourSteps()
+    if #steps == 0 then
+        if manual then print("|cFF54a3ffCDC|r " .. L["Every window is off. Switch one on in Settings, then take the tour."]) end
+        return false
+    end
+    -- Settings would sit over the windows; Open settings at the end brings it back
+    if self.optionsFrame and self.optionsFrame:IsShown() then self.optionsFrame:Hide() end
+    self.db.tourDone = true
+    self.tour = { steps = steps, i = 0 }
+    self.tour.ticker = C_Timer.NewTicker(0.5, function()
+        local tour = CC.tour
+        if not tour then return end
+        if InCombat() then CC:EndTour() return end
+        local w = tour.steps[tour.i]
+        local frame = w and CC[w.frame]
+        if not frame then return end
+        -- the sample ended (a real event from the group) and the window is not up: draw it again
+        if not frame:IsShown() and not CC.sample then CC:ShowSample(w.key, TOUR_SAMPLE_SECONDS) end
+        if CC.tourFrame and CC.tourFrame:IsShown() then PlaceBubble(CC.tourFrame, frame) end
+    end)
+    self:TourStep(1)
+    return true
+end
+
+-- By itself, once per account: in a group, out of combat, with at least one of the windows showing.
+function CC:TryAutoTour()
+    if not self.db or self.db.tourDone or self.tour or not IsInGroup() or InCombat() then return end
+    if self.optionsFrame and self.optionsFrame:IsShown() then return end
+    for _, w in ipairs(TourSteps()) do
+        if ShowsForReal(w) then
+            self:StartTour(false)
+            return
+        end
+    end
+end
+
+do
+    local ev = CreateFrame("Frame")
+    ev:RegisterEvent("PLAYER_REGEN_DISABLED")
+    ev:RegisterEvent("GROUP_ROSTER_UPDATE")
+    ev:RegisterEvent("PLAYER_ENTERING_WORLD")
+    ev:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_REGEN_DISABLED" then
+            CC:EndTour()   -- quietly
+        else
+            -- the windows open a moment after the roster does
+            C_Timer.After(2, function() CC:TryAutoTour() end)
+        end
+    end)
+end

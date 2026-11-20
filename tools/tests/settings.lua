@@ -1223,6 +1223,136 @@ do
 	db.panelClosed = false
 end
 
+---------------------------------------------------------------- the tour (Tour.lua)
+do
+	local e7 = #ERRORS
+	GROUP = {}
+	STUB_IN_RAID = false
+	FireEvent("GROUP_ROSTER_UPDATE")
+	Advance(3)
+	CC.db.tourDone = nil
+	local function setOn(keys)
+		for _, w in ipairs(CC.WINDOWS) do
+			local on = keys[w.key] == true
+			if w.onKey then db[w.onKey] = on else db.panelClosed = not on end
+		end
+		CC:RefreshAllViews()
+	end
+	local function tour() return CC.tour end
+	local function head() return CC.tourFrame.head:GetText() end
+	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+
+	-- steps follow which windows are on
+	setOn({ main = true, essentials = true })
+	check("tour: two windows on, two steps", CC:StartTour(true) and #tour().steps == 2 and head() == "1 of 2 \194\183 Main panel", head())
+	CC:EndTour()
+	setOn({ main = true, essentials = true, lanes = true, dead = true })
+	CC:StartTour(true)
+	check("  the four main windows: four steps", #tour().steps == 4)
+	CC:EndTour()
+	setOn({ main = true, essentials = true, lanes = true, dead = true, externals = true, mana = true, burst = true })
+	CC:StartTour(true)
+	check("  all seven on: seven steps, in the window list's order", #tour().steps == 7 and tour().steps[1].key == "main"
+		and tour().steps[2].key == "essentials" and tour().steps[3].key == "lanes" and tour().steps[4].key == "dead"
+		and tour().steps[5].key == "externals" and tour().steps[6].key == "mana" and tour().steps[7].key == "burst")
+	CC:EndTour()
+	setOn({})
+	PRINTS = {}
+	check("  none on: it does not start and says why", CC:StartTour(true) == false and CC.tour == nil and #PRINTS == 1)
+
+	-- each step: the window shows (its sample, solo), the gold edge, the bubble, its one sentence, Next
+	setOn({ main = true, essentials = true, lanes = true, dead = true, externals = true, mana = true, burst = true })
+	CC:StartTour(true)
+	local f = CC.tourFrame
+	local steps = tour().steps
+	for i, w in ipairs(steps) do
+		local frame = CC[w.frame]
+		local help = CC.WINDOW_HELP[w.key]
+		local br = STUB_RECT(f)
+		local wr = STUB_RECT(frame)
+		local onScreen = br and br[1] >= -0.5 and br[3] <= sw + 0.5 and br[2] >= -0.5 and br[4] <= sh + 0.5
+		local apart = br and wr and not (br[1] < wr[3] - 0.5 and wr[1] < br[3] - 0.5 and br[2] < wr[4] - 0.5 and wr[2] < br[4] - 0.5)
+		check("  step " .. i .. ", " .. w.label .. ": window shown by a sample, gold edge, bubble beside it on screen",
+			head() == string.format("%d of 7 \194\183 %s", i, w.label) and f.body:GetText() == help.line and frame:IsShown()
+			and CC.sample and CC.sample.key == w.key and f.edge:IsShown() and f:IsShown() and onScreen and apart,
+			string.format("%s [%s]", head(), br and string.format("%.0f %.0f %.0f %.0f", br[1], br[2], br[3], br[4]) or "none"))
+		check("    Next on every step but the last; Lock in place and Open settings only on the last",
+			f.next:IsShown() == (i < 7) and f.lock:IsShown() == (i == 7) and f.settings:IsShown() == (i == 7))
+		if i < 7 then
+			f.next:GetScript("OnClick")(f.next)
+		end
+	end
+	-- Lock in place
+	CC:SetWindowsLocked(false)
+	f.lock:GetScript("OnClick")(f.lock)
+	check("Lock in place locks every window and ends the tour", CC:AreWindowsLocked() and CC.tour == nil and CC.sample == nil and not f:IsShown() and not f.edge:IsShown())
+	CC:SetWindowsLocked(false)
+
+	-- Open settings
+	CC:StartTour(true)
+	for _ = 1, 6 do CC:TourNext() end
+	if CC.optionsFrame then CC.optionsFrame:Hide() end
+	f.settings:GetScript("OnClick")(f.settings)
+	check("Open settings ends the tour and opens Settings", CC.tour == nil and CC.optionsFrame:IsShown())
+	-- Take the tour on Getting Started closes Settings and starts it
+	local sp = CC.startPage
+	sp.tourBtn:GetScript("OnClick")(sp.tourBtn)
+	check("Take the tour starts it and puts Settings away", CC.tour ~= nil and not CC.optionsFrame:IsShown() and head() == "1 of 7 \194\183 Main panel", head())
+	-- Escape, the close button, a slash
+	local inSpecial = false
+	for _, n in ipairs(UISpecialFrames) do if n == "CCTourFrame" then inSpecial = true end end
+	_G["CCTourFrame"]:Hide()   -- what Escape does to every frame in UISpecialFrames
+	check("Escape ends it", inSpecial and CC.tour == nil and CC.sample == nil and not f.edge:IsShown())
+	CC:StartTour(true)
+	f.close:GetScript("OnClick")(f.close)
+	check("  so does its close button", CC.tour == nil and not f:IsShown())
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("tour")
+	check("  /cdc tour starts it", CC.tour ~= nil)
+	-- never in combat, and combat ends it quietly
+	PRINTS = {}
+	FireEvent("PLAYER_REGEN_DISABLED")
+	check("combat starting mid-tour ends it with nothing said", CC.tour == nil and CC.sample == nil and not f:IsShown() and #PRINTS == 0)
+	check("  it won't start while in combat", CC:StartTour(true) == false and CC.tour == nil)
+	FireEvent("PLAYER_REGEN_ENABLED")
+	CC.inCombat = false
+
+	-- by itself: once, in a group, windows showing, not in combat
+	setOn({ main = true, essentials = true, lanes = true })
+	CC.db.tourDone = nil
+	CC:TryAutoTour()
+	check("on its own: not when solo", CC.tour == nil and CC.db.tourDone == nil)
+	GROUP = { { unit = "party1", name = "Tania", realm = "Realm", class = "PRIEST", guid = "Player-1-0000009" } }
+	CC.inCombat = true
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	check("  not in combat", CC.tour == nil and CC.db.tourDone == nil)
+	CC.inCombat = false
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	check("  in a group with the windows showing, it starts, with the real windows (no sample)",
+		CC.tour ~= nil and CC.db.tourDone == true and CC.sample == nil and CC.frame:IsShown() and head() == "1 of 3 \194\183 Main panel", head())
+	CC:EndTour()
+	GROUP = {}
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	GROUP = { { unit = "party1", name = "Tania", realm = "Realm", class = "PRIEST", guid = "Player-1-0000009" } }
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	check("  and only once", CC.tour == nil)
+	CC.db.tourDone = nil
+	db.showWindows = "combat"
+	CC:RefreshAllViews()
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	check("  not while the windows are hidden", CC.tour == nil and CC.db.tourDone == nil)
+	db.showWindows = "always"
+	GROUP = {}
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	CC.db.tourDone = nil
+	check("a profile switch leaves the flag alone (it is the account's)", (function()
+		for _, k in ipairs(CC.PROFILE_KEYS) do if k == "tourDone" then return false end end
+		return true
+	end)())
+	check("the tour code raises no Lua error", #ERRORS == e7, ERRORS[e7 + 1])
+	setOn({ main = true, essentials = true, lanes = false, dead = true })
+	db.laneEnabled = false
+end
+
 check("no Lua errors", #ERRORS == 0, ERRORS[1])
 OUT(string.format("RESULT settings %s %s: checks %d, fails %d, lua errors %d",
 	HARNESS_TOCFILE, FLAVOR, checks, fails, #ERRORS))
