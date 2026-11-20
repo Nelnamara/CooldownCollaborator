@@ -479,6 +479,20 @@ check("  All shows everyone again", Count(Lines(), "run") == 5)
 CC.db.teams = {}
 Refresh()
 check("  no teams, no tabs", not CC.tabs[1].__shown)
+CC.db.guildSync = false
+CC.db.panelTab = "guild"
+Refresh()
+check("guild sharing off: no Guild tab and the panel is on All", not CC.tabs[1].__shown and CC:PanelTab() == "all")
+CC.db.guildSync = true
+Refresh()
+check("  turned on: the tabs read Group and Guild", CC.tabs[1].__shown and CC.tabs[1].text.__text == "Group"
+	and CC.tabs[2].__shown and CC.tabs[2].text.__text == "Guild", tostring(CC.tabs[2] and CC.tabs[2].text.__text))
+CC:SetGuildSync(false)
+check("  switched off: the tabs go at once", not CC.tabs[1].__shown and not CC.tabs[2].__shown and CC.db.guildSync == false)
+CC.db.guildSync = 1   -- a stray non-boolean value (the checkbox reads it as off)
+Refresh()
+check("  a value that isn't exactly true shows no Guild tab", not CC.tabs[1].__shown and not CC.tabs[2].__shown)
+CC.db.guildSync, CC.db.panelTab = false, "all"
 
 ---------------------------------------------------------------- the icon style
 Reset()

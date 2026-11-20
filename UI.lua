@@ -147,9 +147,15 @@ function CC:TeamNames()
 end
 
 -- The chosen tab: "all", "guild" (guild sharing on) or "team:<name>" (a saved team).
+-- Is the Guild tab wanted? Only while the setting is exactly on (the checkbox and
+-- CC:GuildSyncOn read it the same way, so a stray non-boolean value can't show the tab).
+function CC:GuildTabOn()
+    return self.db.guildSync == true
+end
+
 function CC:PanelTab()
     local tab = self.db.panelTab
-    if tab == "guild" and self.db.guildSync then return "guild" end
+    if tab == "guild" and self:GuildTabOn() then return "guild" end
     local team = type(tab) == "string" and tab:match("^team:(.+)$")
     if team and type((self.db.teams or {})[team]) == "table" then return tab end
     return "all"
@@ -897,10 +903,10 @@ end
 function CC:LayoutTabs(top)
     local list = {}
     local teams = self:TeamNames()
-    if #teams > 0 or self.db.guildSync then
+    if #teams > 0 or self:GuildTabOn() then
         list[1] = { key = "all", label = #teams > 0 and L["All"] or L["Group"] }
         for _, team in ipairs(teams) do list[#list + 1] = { key = "team:" .. team, label = team } end
-        if self.db.guildSync then list[#list + 1] = { key = "guild", label = L["Guild"] } end
+        if self:GuildTabOn() then list[#list + 1] = { key = "guild", label = L["Guild"] } end
     end
     local current = self:PanelTab()
     local x = PADDING

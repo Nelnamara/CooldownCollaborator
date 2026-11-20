@@ -243,6 +243,8 @@ function CC:Init()
     for k, v in pairs(DEFAULTS) do
         if self.db[k] == nil then self.db[k] = v end
     end
+    -- a saved guildSync that isn't exactly true (a stray 0, 1 or "false") is off, as its checkbox shows it
+    if self.db.guildSync ~= true then self.db.guildSync = false end
 
     -- Rank map and name index from this client's own list (Data_<client>.lua)
     self:BuildSpellIndex()
