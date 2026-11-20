@@ -23,6 +23,7 @@ for id, d in pairs(CC.SpellData) do
 	for _, r in ipairs(d.ranks or {}) do SPELLINFO[r] = { d.name, d.icon } end
 end
 Login()
+CC.db.tourDone = true   -- joining a group would start the first-run tour on its own; its own harness (settings.lua) covers it
 check("loads with Tooltip.lua and Alerts.lua: no Lua errors", #ERRORS == 0, ERRORS[1])
 
 -- the client's tracked spells by class, base IDs low to high

@@ -104,6 +104,134 @@ function CC:AtStartPlace(w, x, y)
         and math.abs(x - dx) <= 2 and math.abs(y - dy) <= 2
 end
 
+-- Start places of the dead list, externals, mana and burst windows (settings pass, owner's look board
+-- "Joined together", places). Each is a share of UIParent's width and height, so it holds at any UI scale
+-- and screen shape, turned into the centre offset the saved x / y have always been (a window's centre
+-- from UIParent's centre): left / top are the window's top-left (burst: horizontally centred) as a share
+-- of the screen, w / h the window's size when it opens (its smallest: it grows from its centre as it fills).
+-- Dead list beside the party frames, externals and mana in a column under it, burst just above the action bars.
+CC.START_PLACES = {
+    dead      = { left = 0.13, top = 0.20, w = 240, h = 92 },
+    externals = { left = 0.13, top = 0.39, w = 130, h = 76 },
+    mana      = { left = 0.13, top = 0.48, w = 130, h = 110 },
+    burst     = { centre = true, top = 0.72, w = 312, h = 100 },
+}
+-- where those four started before (CENTER offsets); a save still there moves to the new place
+CC.OLD_PLACES = {
+    dead = { -300, 60 }, externals = { -300, -60 }, mana = { -300, -170 }, burst = { 330, -60 },
+}
+
+local function Round(v) return math.floor(v + 0.5) end
+
+-- the start x, y of one of the four for a screen uw by uh UIParent units
+function CC:StartPlaceFor(key, uw, uh)
+    local sp = CC.START_PLACES[key]
+    if not sp then return nil end
+    local x = sp.centre and 0 or (sp.left * uw + sp.w / 2 - uw / 2)
+    local y = uh / 2 - (sp.top * uh + sp.h / 2)
+    return Round(x), Round(y)
+end
+
+-- DEFAULTS for the four, from this screen (before the saved settings take their defaults)
+function CC:ComputeStartPlaces()
+    local uw = UIParent and UIParent.GetWidth and UIParent:GetWidth() or 0
+    local uh = UIParent and UIParent.GetHeight and UIParent:GetHeight() or 0
+    if not (uw and uh and uw > 0 and uh > 0) then return end
+    for _, w in ipairs(CC.WINDOWS or {}) do
+        local x, y = self:StartPlaceFor(w.key, uw, uh)
+        if x then CC.DEFAULTS[w.xKey], CC.DEFAULTS[w.yKey] = x, y end
+    end
+end
+
+-- The dead list, externals and mana windows are a column at the left (beside the party frames). One
+-- still at its start place keeps its top on its mark (START_PLACES.top) but never closer than COLUMN_GAP to
+-- the bottom of the shown one above it, so a growing dead list or a tall externals strip pushes the ones
+-- below down instead of lying on them; its x / y stay the start place's (Reset and "at the start" are
+-- the same test). One the player moved is loose at its own place. The burst line is not in the column.
+CC.COLUMN_KEYS = { "dead", "externals", "mana" }
+local COLUMN_GAP = 8
+
+local function WatchColumn(f)
+    if f.ccColumnWatched then return end
+    f.ccColumnWatched = true
+    local function again() CC:LayoutColumn() end
+    f:HookScript("OnShow", again)
+    f:HookScript("OnHide", again)
+    f:HookScript("OnSizeChanged", again)
+end
+
+function CC:LayoutColumn()
+    local db = self.db
+    if not db or self.layingOutColumn then return end
+    self.layingOutColumn = true
+    local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
+    local prevBottom
+    for _, key in ipairs(CC.COLUMN_KEYS) do
+        local w = WindowByKey(key)
+        local f = w and self[w.frame]
+        local sp = CC.START_PLACES[key]
+        if f and sp and uw and uh and uw > 0 and uh > 0 then
+            WatchColumn(f)
+            local k = 1 / UIScaleOf(f)
+            if self:AtStartPlace(w, db[w.xKey], db[w.yKey]) then
+                if f:IsShown() then
+                    local top = sp.top * uh
+                    if prevBottom then top = math.max(top, prevBottom + COLUMN_GAP) end
+                    f:ClearAllPoints()
+                    f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", sp.left * uw * k, -top * k)
+                    f:SetClampedToScreen(true)
+                    prevBottom = top + (f:GetHeight() or 0) / k
+                end
+            else
+                f:ClearAllPoints()
+                f:SetPoint("CENTER", UIParent, "CENTER", db[w.xKey] or 0, db[w.yKey] or 0)
+            end
+        end
+    end
+    self.layingOutColumn = nil
+end
+
+-- A saved place of one of the four still at its old start moves to the new one (a places table entry or
+-- the live x / y); a window the player moved stays. Returns true when it moved.
+local function AtOld(key, x, y)
+    local o = CC.OLD_PLACES[key]
+    return o and type(x) == "number" and type(y) == "number" and math.abs(x - o[1]) <= 2 and math.abs(y - o[2]) <= 2
+end
+
+local function MovePlaces(places)
+    if type(places) ~= "table" then return end
+    for _, w in ipairs(CC.WINDOWS or {}) do
+        local p = places[w.key]
+        if type(p) == "table" and AtOld(w.key, tonumber(p[1]), tonumber(p[2])) then
+            p[1], p[2] = CC.DEFAULTS[w.xKey], CC.DEFAULTS[w.yKey]
+        end
+    end
+end
+
+-- Once, at the first load after the new start places: the live places, the layouts, the characters' own
+-- places and every profile's places and layouts.
+function CC:MoveOldPlaces()
+    local db = self.db
+    if db.startPlacesV2 then return end
+    db.startPlacesV2 = true
+    for _, w in ipairs(CC.WINDOWS or {}) do
+        if CC.OLD_PLACES[w.key] and AtOld(w.key, db[w.xKey], db[w.yKey]) then
+            db[w.xKey], db[w.yKey] = CC.DEFAULTS[w.xKey], CC.DEFAULTS[w.yKey]
+        end
+    end
+    local function layouts(t)
+        for _, places in pairs(type(t) == "table" and t or {}) do MovePlaces(places) end
+    end
+    layouts(db.layouts)
+    layouts(db.charPlaces)
+    for _, snap in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+        if type(snap) == "table" then
+            MovePlaces(snap.places)
+            layouts(snap.layouts)
+        end
+    end
+end
+
 -- The joined windows, top down. A save from before joined windows has none: the windows still at their
 -- start places join, a window the player moved stays loose where it was.
 function CC:BlockOrder()
@@ -422,6 +550,7 @@ function CC:ApplyPlaces(places)
         self.db.blockX, self.db.blockY = tonumber(b[1]), tonumber(b[2])
     end
     self:LayoutBlock()
+    self:LayoutColumn()
 end
 
 function CC:SnapshotSetup(skipPlaces)

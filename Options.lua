@@ -169,6 +169,7 @@ function CC:ResetWindow(w)
         f:ClearAllPoints()
         f:SetPoint("CENTER", UIParent, "CENTER", x, y)
     end
+    if self.LayoutColumn then self:LayoutColumn() end
 end
 
 -- One lock for every window: /cdc lock, /cdc unlock and the Settings box come through here.

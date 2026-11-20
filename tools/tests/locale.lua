@@ -36,6 +36,7 @@ for id, d in pairs(CC.SpellData) do
 	for _, r in ipairs(d.ranks or {}) do SPELLINFO[r] = { d.name, d.icon } end
 end
 Login()
+CC.db.tourDone = true   -- joining a group would start the first-run tour on its own; its own harness (settings.lua) covers it
 check("loads and logs in without errors", #ERRORS == 0, ERRORS[1])
 
 local L = CC.L

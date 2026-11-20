@@ -105,6 +105,7 @@ function CC:NewLookWindow(opts)
         if x and y and ux and uy then
             CC.db[opts.xKey], CC.db[opts.yKey] = x - ux, y - uy
         end
+        if CC.LayoutColumn then CC:LayoutColumn() end   -- the dead list, externals and mana column (Setups.lua)
     end)
     if opts.title then f.title = self:AddLookTitle(f, opts.title) end
     self:AddLookClose(f, opts.onClose or function() f:Hide() end)

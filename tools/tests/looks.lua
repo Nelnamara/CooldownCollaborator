@@ -731,6 +731,143 @@ do
 	CC.db.plans[name], CC.db.activePlan = nil, false
 end
 
+---------------------------------------------------------------- where the dead list, externals, mana and burst start
+do
+	local WINS = { { "dead", "deadFrame" }, { "externals", "externalsFrame" }, { "mana", "manaFrame" }, { "burst", "burstFrame" } }
+	local BLOCKF = { "essentialsFrame", "frame", "laneFrame" }
+	local function R(f) return STUB_RECT(f) end
+	local function hit(a, b) return a[1] < b[3] - 0.5 and b[1] < a[3] - 0.5 and a[2] < b[4] - 0.5 and b[2] < a[4] - 0.5 end
+	local function pct(r) return string.format("[%.0f%% across, %.0f%% down, %.0f x %.0f]", r[1] / SCREEN_W * 100, (SCREEN_H - r[4]) / SCREEN_H * 100, r[3] - r[1], r[4] - r[2]) end
+	-- who is on the screen and clear of whom, among the four and the joined block
+	local function clear(what)
+		local items = {}
+		for _, w in ipairs(WINS) do
+			local f = CC[w[2]]
+			if f:IsShown() then items[#items + 1] = { w[1], R(f) } end
+		end
+		for _, name in ipairs(BLOCKF) do
+			if CC[name]:IsShown() then items[#items + 1] = { name, R(CC[name]) } end
+		end
+		for _, it in ipairs(items) do
+			local r = it[2]
+			if r[1] < -0.5 or r[2] < -0.5 or r[3] > SCREEN_W + 0.5 or r[4] > SCREEN_H + 0.5 then return false, what .. ": " .. it[1] .. " off screen " .. pct(r) end
+		end
+		for i = 1, #items do
+			for j = i + 1, #items do
+				if hit(items[i][2], items[j][2]) then return false, what .. ": " .. items[i][1] .. " " .. pct(items[i][2]) .. " on " .. items[j][1] .. " " .. pct(items[j][2]) end
+			end
+		end
+		return true, #items .. " windows"
+	end
+
+	CC:ResetAllWindows()
+	CC.db.laneEnabled, CC.db.essentialsEnabled, CC.db.panelClosed = true, true, false
+	CC.db.deadListEnabled, CC.db.externalsEnabled, CC.db.manaEnabled, CC.db.burstEnabled = true, true, true, true
+	ResetState()
+	SetGroup(5)
+	KNOWN[castID(TRANQ)] = true
+	Advance(0.6)
+	local d, e, m, b = R(CC.deadFrame), R(CC.externalsFrame), R(CC.manaFrame), R(CC.burstFrame)
+	local first = CC.deadFrame:IsShown()
+	CC.inEncounter = true
+	byName.Pa1.dead = true
+	Advance(1)
+	d = R(CC.deadFrame)
+	check("start places: the dead list's top-left is at about 13% across, 20% down (the party frames' side)",
+		CC.deadFrame:IsShown() and near(d[1] / SCREEN_W, 0.13, 0.005) and near((SCREEN_H - d[4]) / SCREEN_H, 0.20, 0.005), pct(d))
+	e, m, b = R(CC.externalsFrame), R(CC.manaFrame), R(CC.burstFrame)
+	check("  externals under it at about 13%, 39%", CC.externalsFrame:IsShown() and near(e[1] / SCREEN_W, 0.13, 0.005) and near((SCREEN_H - e[4]) / SCREEN_H, 0.39, 0.005), pct(e))
+	check("  mana under that at about 13%, 48% (lower when the externals above it are taller)", CC.manaFrame:IsShown() and near(m[1] / SCREEN_W, 0.13, 0.005) and (SCREEN_H - m[4]) / SCREEN_H >= 0.48 - 0.005
+		and m[4] <= e[2] + 0.5 or false, pct(m))
+	check("  burst centred across the screen, its top about 72% down",
+		CC.burstFrame:IsShown() and near((b[1] + b[3]) / 2, SCREEN_W / 2, 1) and near((SCREEN_H - b[4]) / SCREEN_H, 0.72, 0.005), pct(b))
+	byName.Pa1.dead = nil
+	CC.inEncounter = false
+	for _, size in ipairs({ 5, 20, 40 }) do
+		ResetState()
+		SetGroup(size)
+		CC.inEncounter = true
+		byName[size == 5 and "Pa1" or "Pr1"].dead = true
+		if size > 5 then byName.Wa1.dead = true end
+		if size == 40 then byName.Wl1.dead = true end
+		Advance(1)
+		local ok, why = clear(size .. " players")
+		check(string.format("%d players, all four shown with the block (dead list with %d dead): each on the screen, none on another or on the block", size, size == 5 and 1 or (size == 20 and 2 or 3)), ok, why)
+		for _, mm in ipairs(GROUP) do mm.dead = nil end
+		CC.inEncounter = false
+		Advance(1)
+	end
+	-- a dead list that fills (ten rows and "+N more") pushes the column down instead of lying on it
+	SetGroup(40)
+	CC.inEncounter = true
+	for _, mm in ipairs(GROUP) do if mm.name ~= PLAYER.name then mm.dead = true end end
+	Advance(1)
+	local okw, whyw = clear("a wipe of 40")
+	local dr, er = R(CC.deadFrame), R(CC.externalsFrame)
+	check("a wipe of 40 (ten dead rows): the externals strip is moved clear below it", not hit(dr, er) and er[4] <= dr[2], pct(dr) .. " " .. pct(er))
+	for _, mm in ipairs(GROUP) do mm.dead = nil end
+	CC.inEncounter = false
+	Advance(1)
+
+	-- Reset puts each at its start place; a moved one stays where it was dropped
+	local X = { dead = "deadListX", externals = "externalsX", mana = "manaX", burst = "burstX" }
+	local Y = { dead = "deadListY", externals = "externalsY", mana = "manaY", burst = "burstY" }
+	local atNew = true
+	for key in pairs(X) do
+		if not (near(CC.db[X[key]], CC.DEFAULTS[X[key]], 2) and near(CC.db[Y[key]], CC.DEFAULTS[Y[key]], 2)) then atNew = false end
+	end
+	check("their saved places are the new defaults, not the old ones", atNew and CC.DEFAULTS.deadListX ~= -300 and CC.DEFAULTS.burstX ~= 330)
+	CC.db.manaX, CC.db.manaY = -100, -150
+	CC:LayoutColumn()
+	local c = { CC.manaFrame:GetCenter() }
+	check("a window the player moved stays where he put it", near(c[1] - SCREEN_W / 2, -100, 0.5) and near(c[2] - SCREEN_H / 2, -150, 0.5))
+	CC:ResetWindow(CC.WINDOWS[6])
+	local mr = R(CC.manaFrame)
+	check("  Reset brings it back to its place", near(mr[1] / SCREEN_W, 0.13, 0.005))
+
+	-- saves from before: a place still at the old start moves, a moved one stays (live x / y, layouts, profiles)
+	local function oldSave()
+		return {
+			deadListX = -300, deadListY = 60, externalsX = -300, externalsY = -60, manaX = -250, manaY = -170, burstX = 330, burstY = -60,
+		}
+	end
+	local old = oldSave()
+	local db = CC.db
+	db.startPlacesV2 = nil
+	for k, v in pairs(old) do db[k] = v end
+	db.layouts = { raid = { dead = { -300, 60 }, mana = { -120, -90 }, burst = { 330, -60 } } }
+	db.charPlaces = { ["Me-Realm"] = { externals = { -300, -60 } } }
+	db.profiles = { Alt = { places = { burst = { 330, -60 }, dead = { 10, 10 } }, layouts = { party = { externals = { -300, -60 } } } } }
+	CC:MoveOldPlaces()
+	check("an old save: the windows still at the old defaults move to the new places",
+		db.deadListX == CC.DEFAULTS.deadListX and db.deadListY == CC.DEFAULTS.deadListY
+		and db.externalsX == CC.DEFAULTS.externalsX and db.externalsY == CC.DEFAULTS.externalsY
+		and db.burstX == CC.DEFAULTS.burstX and db.burstY == CC.DEFAULTS.burstY)
+	check("  the one the player moved (mana, -250) stays", db.manaX == -250 and db.manaY == -170)
+	check("  the same inside layouts, characters' places and profiles; a moved one in them stays",
+		db.layouts.raid.dead[1] == CC.DEFAULTS.deadListX and db.layouts.raid.dead[2] == CC.DEFAULTS.deadListY
+		and db.layouts.raid.mana[1] == -120 and db.layouts.raid.burst[1] == CC.DEFAULTS.burstX
+		and db.charPlaces["Me-Realm"].externals[1] == CC.DEFAULTS.externalsX
+		and db.profiles.Alt.places.burst[1] == CC.DEFAULTS.burstX and db.profiles.Alt.places.dead[1] == 10
+		and db.profiles.Alt.layouts.party.externals[2] == CC.DEFAULTS.externalsY)
+	db.deadListX = -300
+	CC:MoveOldPlaces()
+	check("  it runs once (a window put back on the old spot later stays)", db.deadListX == -300)
+	for k in pairs(old) do db[k] = nil end
+	db.layouts, db.charPlaces, db.profiles = {}, {}, nil
+	CC:ResetAllWindows()
+	check("a screen of another size gets places in the same shares", (function()
+		local x1, y1 = CC:StartPlaceFor("dead", 1000, 500)
+		local x2, y2 = CC:StartPlaceFor("dead", 2000, 1000)
+		return near(x1 + 500 - 120, 0.13 * 1000, 1) and near(y2, 500 - (0.2 * 1000 + 46), 1) and y1 ~= y2 and x1 ~= x2
+	end)())
+	KNOWN[castID(TRANQ)] = nil
+	CC.db.deadListEnabled, CC.db.externalsEnabled, CC.db.manaEnabled, CC.db.burstEnabled = true, false, false, false
+	CC.db.laneEnabled = true
+	Solo()
+	Advance(1)
+end
+
 check("no Lua errors", #ERRORS == 0, ERRORS[1])
 OUT(string.format("RESULT looks %s %s: checks %d, fails %d, lua errors %d",
 	HARNESS_TOCFILE, FLAVOR, checks, fails, #ERRORS))

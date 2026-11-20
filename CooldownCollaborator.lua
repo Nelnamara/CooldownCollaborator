@@ -191,19 +191,21 @@ local DEFAULTS = {
     showOnCDTL3 = true,   -- feed group cooldowns to CDTL3's lanes (if CDTL3 is loaded)
 
     -- look-lanes (19 Nov): the dead list (DeadList.lua), the externals and mana strips
-    -- (Strips.lua), the burst line (Burst.lua) and the raid plan's runtime (Plan.lua)
+    -- (Strips.lua), the burst line (Burst.lua) and the raid plan's runtime (Plan.lua).
+    -- The four windows' x / y below are the start places for a 1365 x 768 screen; Init recomputes them from
+    -- the real screen (Setups.lua, CC.START_PLACES).
     deadListEnabled  = true,   -- opens when someone dies in combat, closes when nobody is dead
-    deadListX        = -300,
-    deadListY        = 60,
+    deadListX        = -385,
+    deadListY        = 184,
     externalsEnabled = false,
-    externalsX       = -300,
-    externalsY       = -60,
+    externalsX       = -440,
+    externalsY       = 46,
     manaEnabled      = false,
-    manaX            = -300,
-    manaY            = -170,
+    manaX            = -440,
+    manaY            = -40,
     burstEnabled     = false,
-    burstX           = 330,
-    burstY           = -60,
+    burstX           = 0,
+    burstY           = -219,
     burstSpells      = {},     -- [spellID] = true: your counted spells (empty: kind personal or raid, 90 s or more)
     plans            = {},     -- [planName] = { rows = { { timer = text or at = seconds, player, spellID } }, from, at }
     activePlan       = false,  -- the plan whose rows prompt (a plan shared by the leader becomes it)
@@ -243,6 +245,7 @@ local DEFAULTS = {
 CC.DEFAULTS = DEFAULTS
 
 function CC:Init()
+    self:ComputeStartPlaces()   -- the dead list, externals, mana and burst windows start by this screen's size
     if not CooldownCollaboratorDB then
         CooldownCollaboratorDB = CopyTable(DEFAULTS)
     end
@@ -250,6 +253,7 @@ function CC:Init()
     for k, v in pairs(DEFAULTS) do
         if self.db[k] == nil then self.db[k] = v end
     end
+    self:MoveOldPlaces()
     -- a saved guildSync that isn't exactly true (a stray 0, 1 or "false") is off, as its checkbox shows it
     if self.db.guildSync ~= true then self.db.guildSync = false end
 
