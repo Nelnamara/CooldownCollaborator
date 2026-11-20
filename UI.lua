@@ -815,6 +815,7 @@ function CC:BuildUI()
     self.postButton = post
 
     local close = CreateFrame("Button", nil, frame)
+    frame.closeBtn = close
     close:SetSize(13, 13)
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -5, -4)
     local closeBg = close:CreateTexture(nil, "BACKGROUND")
@@ -824,7 +825,9 @@ function CC:BuildUI()
     closeX:SetPoint("CENTER", close, "CENTER", 0, 1)
     closeX:SetText("\195\151")   -- the multiplication sign
     closeX:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-    close:SetScript("OnClick", function() CC:ClosePanel() end)
+    close:SetScript("OnClick", function()
+        if CC:SampleIsOn(CC.frame) then CC:HideSample() else CC:ClosePanel() end
+    end)
     close:SetScript("OnEnter", function(widget)
         GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
         GameTooltip:AddLine(L["Close"])

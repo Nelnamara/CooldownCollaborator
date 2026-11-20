@@ -76,7 +76,10 @@ function CC:AddLookClose(f, onClick)
     x:SetTextColor(0.7, 0.7, 0.7)
     b:SetScript("OnEnter", function() x:SetTextColor(1, 1, 1) end)
     b:SetScript("OnLeave", function() x:SetTextColor(0.7, 0.7, 0.7) end)
-    b:SetScript("OnClick", function() onClick() end)
+    -- a window only showing a sample (Tour.lua) just ends the sample: its real On stays as it was
+    b:SetScript("OnClick", function()
+        if CC:SampleIsOn(f) then CC:HideSample() else onClick() end
+    end)
     f.closeButton = b
     return b
 end

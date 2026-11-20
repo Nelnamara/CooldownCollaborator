@@ -156,6 +156,12 @@ function CC:BuildSample()
     return d
 end
 
+-- True while this window is up only to show a sample: its close button then ends the sample.
+function CC:SampleIsOn(frame)
+    local s = self.sample
+    return s ~= nil and frame ~= nil and self[s.window.frame] == frame
+end
+
 function CC:IsSampleName(name)
     return self.sample ~= nil and name ~= nil and self.sample.data.names[name] == true
 end

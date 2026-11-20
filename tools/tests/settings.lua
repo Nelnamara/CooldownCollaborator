@@ -1167,6 +1167,19 @@ do
 	CC:ShowSample("main"); local wrapped = CC.RefreshRows; CC:HideSample()
 	check("  the refresh methods are put back", CC.RefreshRows ~= wrapped)
 
+	-- the close button on a sample ends the sample and leaves the window's real On as it was
+	for _, key in ipairs({ "main", "externals", "mana", "burst", "lanes", "dead" }) do
+		local w; for _, x in ipairs(CC.WINDOWS) do if x.key == key then w = x end end
+		local f = CC[w.frame]
+		local onBefore = CC:WindowIsOn(w)
+		CC:ShowSample(key)
+		local btn = key == "main" and CC.frame.closeBtn or f.closeButton
+		local click = btn and btn:GetScript("OnClick")
+		if click then click(btn, "LeftButton") end
+		check("sample " .. key .. ": its close button ends the sample, the window's On unchanged",
+			btn ~= nil and CC.sample == nil and CC:WindowIsOn(w) == onBefore and not f:IsShown(), key)
+	end
+
 	-- twenty seconds
 	CC:ShowSample("main")
 	Advance(19)
