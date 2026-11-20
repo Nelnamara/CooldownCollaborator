@@ -901,6 +901,7 @@ do
 	-- a group of n with a spell running for up to six of them (every one of their spells when full), so the
 	-- panel has rows
 	local function group(n, full)
+		CC.db.tourDone = true   -- joining a group would start the first-run tour on its own; this block is not about it
 		GROUP = {}
 		STUB_IN_RAID = n > 5
 		for i = 1, n - 1 do
@@ -1254,24 +1255,57 @@ do
 	local function tour() return CC.tour end
 	local function head() return CC.tourFrame.head:GetText() end
 	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	local L_OFF = "It's off now. Switch it on in Settings \226\128\186 Getting Started."
 
-	-- steps follow which windows are on
+	-- the very first tour, in a fresh client where the tour frame has never been built: it must reach step 1 and run to the end
+	do
+		for i = #UISpecialFrames, 1, -1 do if UISpecialFrames[i] == "CCTourFrame" then table.remove(UISpecialFrames, i) end end
+		CC.tourFrame = nil
+		_G["CCTourFrame"] = nil
+		setOn({ main = true, essentials = true, lanes = true, dead = true, externals = true, mana = true, burst = true })
+		local started = CC:StartTour(true)
+		check("first tour in a fresh client: the build's own hide does not end it", started and CC.tour ~= nil and CC.tourFrame and CC.tourFrame:IsShown()
+			and head() == "1 of 7 \194\183 Main panel", started and head() or "did not start")
+		local seen = 1
+		while CC.tour and seen < 12 do
+			local f1 = CC.tourFrame
+			if not f1.next:IsShown() then break end
+			f1.next:GetScript("OnClick")(f1.next)
+			if CC.tour then seen = seen + 1 end
+		end
+		check("  Next walks it to step 7 with Lock in place and Open settings", seen == 7 and CC.tour ~= nil and CC.tourFrame.lock:IsShown() and head() == "7 of 7 \194\183 Burst", head())
+		CC:EndTour()
+	end
+
+	-- the tour always has seven steps, in the window list's order, whatever is on
 	setOn({ main = true, essentials = true })
-	check("tour: two windows on, two steps", CC:StartTour(true) and #tour().steps == 2 and head() == "1 of 2 \194\183 Main panel", head())
-	CC:EndTour()
-	setOn({ main = true, essentials = true, lanes = true, dead = true })
-	CC:StartTour(true)
-	check("  the four main windows: four steps", #tour().steps == 4)
-	CC:EndTour()
-	setOn({ main = true, essentials = true, lanes = true, dead = true, externals = true, mana = true, burst = true })
-	CC:StartTour(true)
-	check("  all seven on: seven steps, in the window list's order", #tour().steps == 7 and tour().steps[1].key == "main"
-		and tour().steps[2].key == "essentials" and tour().steps[3].key == "lanes" and tour().steps[4].key == "dead"
-		and tour().steps[5].key == "externals" and tour().steps[6].key == "mana" and tour().steps[7].key == "burst")
+	check("tour: two windows on, still seven steps", CC:StartTour(true) and #tour().steps == 7 and head() == "1 of 7 \194\183 Main panel", head())
 	CC:EndTour()
 	setOn({})
 	PRINTS = {}
-	check("  none on: it does not start and says why", CC:StartTour(true) == false and CC.tour == nil and #PRINTS == 1)
+	check("  none on: it still starts, with seven steps and nothing said", CC:StartTour(true) == true and #tour().steps == 7 and #PRINTS == 0)
+	local OFFLINE = L_OFF
+	do
+		local ok = true
+		for i, w in ipairs(CC.WINDOWS) do
+			if tour().steps[i] ~= w then ok = false end
+		end
+		check("  in the window list's order", ok)
+		local f0 = CC.tourFrame
+		local help = CC.WINDOW_HELP.main.line
+		check("  an off window's bubble: its line, then the second line; the window shows its sample and stays off",
+			f0.body:GetText() == help .. "\n" .. OFFLINE and CC.sample and CC.sample.key == "main" and db.panelClosed == true, f0.body:GetText())
+		for _ = 1, 6 do CC:TourNext() end
+		check("  a window that is off stays off through the tour", db.essentialsEnabled == false and db.laneEnabled == false and db.deadListEnabled == false
+			and db.externalsEnabled == false and db.manaEnabled == false and db.burstEnabled == false and db.panelClosed == true)
+	end
+	CC:EndTour()
+	setOn({ main = true, essentials = true })
+	CC:StartTour(true)
+	check("  a window that is on has just its one line", CC.tourFrame.body:GetText() == CC.WINDOW_HELP.main.line)
+	CC:TourNext(); CC:TourNext()
+	check("  and the third (off) has two", CC.tourFrame.body:GetText() == CC.WINDOW_HELP.lanes.line .. "\n" .. OFFLINE and db.laneEnabled == false)
+	CC:EndTour()
 
 	-- each step: the window shows (its sample, solo), the gold edge, the bubble, its one sentence, Next
 	setOn({ main = true, essentials = true, lanes = true, dead = true, externals = true, mana = true, burst = true })
@@ -1341,7 +1375,7 @@ do
 	CC.inCombat = false
 	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
 	check("  in a group with the windows showing, it starts, with the real windows (no sample)",
-		CC.tour ~= nil and CC.db.tourDone == true and CC.sample == nil and CC.frame:IsShown() and head() == "1 of 3 \194\183 Main panel", head())
+		CC.tour ~= nil and CC.db.tourDone == true and CC.sample == nil and CC.frame:IsShown() and head() == "1 of 7 \194\183 Main panel", head())
 	CC:EndTour()
 	GROUP = {}
 	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)

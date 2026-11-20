@@ -476,8 +476,8 @@ L["Next"] = true
 L["Open settings"] = true
 L["Lock in place"] = true
 L["%d of %d \194\183 %s"] = true
+L["It's off now. Switch it on in Settings \226\128\186 Getting Started."] = true
 L["The tour waits until you are out of combat."] = true
-L["Every window is off. Switch one on in Settings, then take the tour."] = true
 
 -- Setups.lua
 L["%d default spell ticked or unticked (%d unticked afterwards)"] = true

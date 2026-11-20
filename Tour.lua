@@ -307,7 +307,7 @@ do
 end
 
 -------------------------------------------------------------------------------
--- The tour: one step for each window that is on, in the window list's order. The window shows (the real
+-- The tour: one step for each of the seven windows, in the window list's order. The window shows (the real
 -- one in a group when it is showing, else its sample), gets a gold edge, and a bubble next to it says in
 -- one sentence what it is for. The last step offers Lock in place and Open settings. It starts by itself
 -- once per account, the first time you are in a group with the windows showing (db.tourDone, not part of
@@ -324,9 +324,10 @@ local function InCombat()
 end
 
 local function TourSteps()
+    -- all seven, in the window list's order, whether on or off
     local steps = {}
     for _, w in ipairs(CC.WINDOWS) do
-        if CC:WindowIsOn(w) and CC[w.frame] then steps[#steps + 1] = w end
+        if CC[w.frame] then steps[#steps + 1] = w end
     end
     return steps
 end
@@ -334,7 +335,7 @@ end
 -- Is the window up for real: in a group and showing?
 local function ShowsForReal(w)
     local frame = CC[w.frame]
-    return IsInGroup() and frame and frame:IsShown() and true or false
+    return IsInGroup() and not CC.sample and frame and frame:IsShown() and CC:WindowIsOn(w) and true or false
 end
 
 local function FitButton(b, minW)
@@ -359,6 +360,8 @@ function CC:BuildTourFrame()
     f:EnableMouse(true)
     -- Escape closes it, as it closes Settings
     tinsert(UISpecialFrames, "CCTourFrame")
+    -- hidden before the script is set: the build's own Hide must not end the tour that is building it
+    f:Hide()
     f:SetScript("OnHide", function() if CC.tour then CC:EndTour() end end)
 
     f.head = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -409,7 +412,6 @@ function CC:BuildTourFrame()
     edge:Hide()
     f.edge = edge
 
-    f:Hide()
     self.tourFrame = f
     return f
 end
@@ -464,14 +466,17 @@ function CC:TourStep(i)
     local total = #tour.steps
     local help = CC.WINDOW_HELP[w.key]
     f.head:SetText(string.format(L["%d of %d \194\183 %s"], i, total, w.label))
-    f.body:SetText(help and help.line or "")
+    local text = help and help.line or ""
+    local off = not CC:WindowIsOn(w)
+    if off then text = text .. "\n" .. L["It's off now. Switch it on in Settings \226\128\186 Getting Started."] end
+    f.body:SetText(text)
     local last = i == total
     f.next:SetShown(not last)
     f.lock:SetShown(last)
     f.settings:SetShown(last)
     -- the bubble is as tall as its sentence (13 pixels a line at 7.4 pixels a character is what the font needs, or more)
-    local text = help and help.line or ""
-    local lines = math.max(1, math.ceil(#text * 7.4 / (BUBBLE_W - 24)))
+    local lines = math.max(1, math.ceil(#(help and help.line or "") * 7.4 / (BUBBLE_W - 24)))
+    if off then lines = lines + math.max(1, math.ceil(#L["It's off now. Switch it on in Settings \226\128\186 Getting Started."] * 7.4 / (BUBBLE_W - 24))) end
     f:SetHeight(32 + math.max(f.body:GetStringHeight() or 0, lines * 15) + 12 + 22 + 12)
     f:Show()
     f.edge:SetFrameLevel((frame:GetFrameLevel() or 1) + 5)
@@ -505,10 +510,6 @@ function CC:StartTour(manual)
         return false
     end
     local steps = TourSteps()
-    if #steps == 0 then
-        if manual then print("|cFF54a3ffCDC|r " .. L["Every window is off. Switch one on in Settings, then take the tour."]) end
-        return false
-    end
     -- Settings would sit over the windows; Open settings at the end brings it back
     if self.optionsFrame and self.optionsFrame:IsShown() then self.optionsFrame:Hide() end
     self.db.tourDone = true
