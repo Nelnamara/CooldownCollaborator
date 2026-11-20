@@ -143,9 +143,9 @@ do
 	end
 end
 CC:OpenOptions()
-check("Settings opens on Getting Started with a card per window and the CooldownTimeline3 card",
+check("Settings opens on Getting Started with the window list, the picked window and the CooldownTimeline3 card",
 	#ERRORS == e0 and CC.optionsFrame.page == 1 and CC.startPage ~= nil and CC.startPage:IsShown()
-	and CC.startPage.cdtl3Card ~= nil)
+	and CC.startPage.cdtl3Card ~= nil and #CC.startPage.rows == #CC.WINDOWS)
 CC.startPage.refresh()
 CC:OpenAlertOptions(rez, nil)
 CC:SetAlertEnabled(rez, true)
@@ -159,6 +159,101 @@ check("the alert box, kind grouping and the skip list build with no Lua error", 
 CC:SetRezSkip("Someone", nil)
 CC:SetAlertEnabled(rez, false)
 check("  a CooldownTimeline3 button asks for it only when loaded", CC:OpenCDTL3GroupSettings() == false)
+
+---------------------------------------------------------------- Getting Started: pick and see
+do
+	local eg = #ERRORS
+	local sp = CC.startPage
+	local function est(fs) local t = fs:GetText() or "" return math.max(1, math.ceil(#t * 6.5 / fs:GetWidth())) * 13 end
+	check("Getting Started opens with the Main panel picked, its name, one line and numbered notes",
+		sp.picked and sp.picked.key == "main" and sp.nameFS:GetText() == "Main panel"
+		and sp.lineFS:GetText() == CC.WINDOW_HELP.main.line and sp.noteFS[1]:GetText():sub(1, 3) == "1. "
+		and sp.noteFS[4]:IsShown() and not sp.rows[1].pick:IsEnabled())
+	check("  every window has its line and two to four notes", (function()
+		for _, w in ipairs(CC.WINDOWS) do
+			local h = CC.WINDOW_HELP[w.key]
+			if not (h and type(h.line) == "string" and h.line ~= "" and #h.notes >= 2 and #h.notes <= 4) then return false end
+		end
+		return true
+	end)())
+	-- the page's own rectangle, in screen units; everything in it must stay inside it
+	local pr = STUB_RECT(sp)
+	local function inside(r, what)
+		if r[1] < pr[1] - 0.5 or r[3] > pr[3] + 0.5 or r[4] > pr[4] + 0.5 or r[2] < pr[2] - 0.5 then
+			return what .. string.format(" [%.0f %.0f %.0f %.0f] outside [%.0f %.0f %.0f %.0f]", r[1], r[2], r[3], r[4], pr[1], pr[2], pr[3], pr[4])
+		end
+	end
+	local function overlap(a, b) return a[1] < b[3] - 0.5 and b[1] < a[3] - 0.5 and a[2] < b[4] - 0.5 and b[2] < a[4] - 0.5 end
+	local card = sp.cdtl3Card
+	local cardR = STUB_RECT(card)
+	for i, w in ipairs(CC.WINDOWS) do
+		sp.rows[i].pick:GetScript("OnClick")(sp.rows[i].pick)
+		local h = CC.WINDOW_HELP[w.key]
+		local bad
+		-- right column, top down: name, line, notes, then Lock / Reset / Show it now; each below the one before
+		local seq, prevBottom = {}, nil
+		local nr = STUB_RECT(sp.nameFS)
+		local function textRect(fs) local r = STUB_RECT(fs); return { r[1], r[4] - est(fs), r[3], r[4] } end
+		seq[#seq + 1] = textRect(sp.lineFS)
+		for _, n in ipairs(sp.noteFS) do if n:IsShown() then seq[#seq + 1] = textRect(n) end end
+		seq[#seq + 1] = STUB_RECT(sp.lockCB); seq[#seq + 1] = STUB_RECT(sp.resetBtn); seq[#seq + 1] = STUB_RECT(sp.showBtn)
+		for k, r in ipairs(seq) do
+			bad = bad or inside(r, w.key .. " item " .. k)
+			if k <= #seq - 3 and k > 1 and seq[k - 1][2] < r[4] - 0.5 then bad = bad or (w.key .. " note " .. k .. " runs into the one above") end
+		end
+		-- the controls sit in one row under the last note, clear of the card
+		bad = bad or (seq[#seq][2] < cardR[4] + 4 and (w.key .. " buttons run into the CooldownTimeline3 card"))
+		bad = bad or (overlap(seq[#seq - 2], seq[#seq - 1]) and (w.key .. " Lock on Reset")) or (overlap(seq[#seq - 1], seq[#seq]) and (w.key .. " Reset on Show it now"))
+		if bad == false then bad = nil end
+		check("  " .. w.label .. ": name '" .. sp.nameFS:GetText() .. "', its line, " .. #h.notes .. " notes; all fit the page", sp.picked == w
+			and sp.nameFS:GetText() == w.label and sp.lineFS:GetText() == h.line and sp.noteFS[#h.notes]:IsShown()
+			and (#h.notes == 4 or not sp.noteFS[4]:IsShown()) and bad == nil, bad)
+		-- the list: tick, name button, left of the right column
+		local row = sp.rows[i]
+		local lr = STUB_RECT(row.pick)
+		bad = inside(STUB_RECT(row.on), "tick") or inside(lr, "pick")
+		check("  its list row fits and is left of the right column", bad == nil and lr[3] < STUB_RECT(sp.nameFS)[1] - 4, bad)
+	end
+	-- the foot
+	local tr, rr = STUB_RECT(sp.tourBtn), STUB_RECT(sp.reportBtn)
+	local fb = inside(tr, "tour") or inside(rr, "report") or inside(cardR, "card") or inside(STUB_RECT(card.button), "card button")
+	check("the foot: Take the tour, Report a problem and the CooldownTimeline3 card fit and don't overlap",
+		fb == nil and not overlap(tr, rr) and tr[4] <= cardR[2] + 0.5 and rr[4] <= cardR[2] + 0.5 and sp.tourBtn:GetWidth() >= #sp.tourBtn.__text * 6 + 12
+		and sp.reportBtn:GetWidth() >= #sp.reportBtn.__text * 6 + 12, fb)
+	check("  the card's button text fits its button", card.button:GetWidth() >= #card.button.__text * 6 + 12, card.button:GetWidth())
+	-- the on ticks and Lock follow the settings
+	db.deadListEnabled = true; sp.refresh()
+	local deadRow
+	for _, row in ipairs(sp.rows) do if row.window.key == "dead" then deadRow = row end end
+	check("a window's On tick shows its setting and sets it", deadRow.on:GetChecked() == true)
+	deadRow.on:SetChecked(false); deadRow.on:GetScript("OnClick")(deadRow.on)
+	check("  unticking turns the window off", db.deadListEnabled == false)
+	sp.rows[2].pick:GetScript("OnClick")(sp.rows[2].pick)
+	sp.lockCB:SetChecked(true); sp.lockCB:GetScript("OnClick")(sp.lockCB)
+	check("Lock locks the picked window", db.essentialsLocked == true and sp.picked.key == "essentials")
+	sp.lockCB:SetChecked(false); sp.lockCB:GetScript("OnClick")(sp.lockCB)
+	check("  and unlocks it", db.essentialsLocked == false)
+	db.essentialsX = 999
+	sp.resetBtn:GetScript("OnClick")(sp.resetBtn)
+	check("Reset sends the picked window back to where it starts", db.essentialsX ~= 999)
+	-- Show it now: the real window, with its sample, even solo
+	local frame = CC[sp.picked.frame]
+	frame:Hide()
+	sp.showBtn:GetScript("OnClick")(sp.showBtn)
+	check("Show it now shows the picked window with its sample", CC.sample and CC.sample.key == "essentials" and frame:IsShown())
+	CC.optionsFrame:Hide()
+	check("  and closing Settings ends it", CC.sample == nil and not frame:IsShown())
+	CC.optionsFrame:Show()
+	check("  reopening Settings picks the Main panel again", sp.picked.key == "main")
+	-- Report a problem opens the report
+	local asked
+	local realReport = CC.ShowReport
+	CC.ShowReport = function() asked = true end
+	sp.reportBtn:GetScript("OnClick")(sp.reportBtn)
+	CC.ShowReport = realReport
+	check("Report a problem opens the report box", asked == true)
+	check("Getting Started raises no Lua error", #ERRORS == eg, ERRORS[eg + 1])
+end
 
 do
 	local tight = {}

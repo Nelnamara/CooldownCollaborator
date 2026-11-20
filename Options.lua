@@ -67,6 +67,72 @@ CC.WINDOWS = {
       onKey = "burstEnabled",      refresh = "RefreshBurstLine", lockKey = "burstLocked" },
 }
 
+-- What each window is for, one line each (Getting Started and the tour use the same line), and short
+-- notes on its parts (Getting Started). Each is written from what the window does in the code.
+CC.WINDOW_HELP = {
+    main = {
+        line = L["Every tracked cooldown in your group: who used what, and when it's back. Click a row to ask that player for it."],
+        notes = {
+            L["The title says how many of your group run CooldownCollaborator, and where your game has Bloodlust, who has it next."],
+            L["Cooldowns still counting down come first, the soonest back at the top."],
+            L["Ready ones fold into one line per spell with their owners' names; a ? means ready as far as we know."],
+            L["Click a ready line to whisper its owner for it; Shift-click asks the whole group."],
+        },
+    },
+    essentials = {
+        line = L["Who can Battle Rez right now (and Bloodlust, where your game has it), with a Rez button, and the group's flask and food."],
+        notes = {
+            L["Each heading counts the players who can do it now; Battle Rez also shows the raid's rez charges where your game has them."],
+            L["Under it, the players who can: the ready ones first."],
+            L["Rez asks in group chat for a ready rezzer to raise your dead target, or the top of the Dead list. In a raid, the leader and assists have it."],
+            L["The line at the bottom counts how many in the group have a flask and food."],
+        },
+    },
+    lanes = {
+        line = L["A lane for Battle Rez (and one for Bloodlust where your game has it): used ones count down along it, ready players sit under it."],
+        notes = {
+            L["Each lane is one cooldown the whole group shares."],
+            L["A used one slides along the lane to the right; the nearer the end, the sooner it is back."],
+            L["Players who are ready wait in the Ready row under the lane."],
+            L["/cdc nexthit 2:00, or a pull countdown, rings in gold the ones that will be back before the hit."],
+        },
+    },
+    dead = {
+        line = L["Opens when someone dies in a fight: the dead in rez order, each with a Call button that asks a living rezzer."],
+        notes = {
+            L["Healers come first, then tanks, then damage; the longest dead first inside each."],
+            L["The time after a name is how long they have been dead."],
+            L["Call asks in group chat for the rezzer named at the bottom. In a raid, the leader and assists can call."],
+            L["The bottom line says who would answer: the first living player with a Battle Rez ready."],
+        },
+    },
+    externals = {
+        line = L["The cooldowns your group can put on one player about to take a big hit: ready ones first, the owner's name under each."],
+        notes = {
+            L["One icon for each external cooldown another player in your group has."],
+            L["Ready ones come first; the ones cooling down are dimmed with the time left."],
+            L["The name under an icon is its owner; a ? means ready as far as we know."],
+            L["An owner who is dead or offline has the icon greyed with a mark."],
+        },
+    },
+    mana = {
+        line = L["The mana cooldowns your group has, how many are ready and who would answer, with an Ask button that whispers them."],
+        notes = {
+            L["One icon for each mana cooldown someone in your group has."],
+            L["Under it: how many are ready, and the player who would answer."],
+            L["Ask whispers that player \"<spell> on me please\". Anyone may press it."],
+        },
+    },
+    burst = {
+        line = L["Your big cooldowns above a two-minute line, the group's Bloodlust and Power Infusion below it, and a gold band where they line up."],
+        notes = {
+            L["The top row is your own big cooldowns, placed by how long until they are back: now on the left, 2:00 on the right."],
+            L["The bottom row is the group's next Bloodlust and Power Infusion, where your game has them."],
+            L["The gold band is the earliest time they are all back and one of yours is too; its time is above it."],
+        },
+    },
+}
+
 function CC:WindowIsOn(w)
     if not w.onKey then return not self.db.panelClosed end
     return self.db[w.onKey] and true or false
@@ -1215,89 +1281,146 @@ function CC:OpenOptions()
     end
 
     -- ══ Page 1: Getting Started ═══════════════════════════════════════════
-    -- A small drawing of each window with its On, Lock and Reset under it (P14), and a
-    -- CooldownTimeline3 card beside them (P23).
+    -- Pick and see: the seven windows as a list with each one's On tick; the picked one's name, its line and
+    -- notes on its parts, with Lock, Reset and Show it now (a sample on the real window, Tour.lua). Under
+    -- them the CooldownTimeline3 card, Take the tour and Report a problem.
 
     local startPage = NewPage(false)
     pages[1] = startPage
-    NewNote(startPage, 4, -2, CAW - 16,
-        L["Each window with its switches. Windows open by themselves in a group; drag one to move it."])
-
-    local CARD_W, CARD_H = 168, 124
-    local cards = {}
-    local function Card(i, w)
-        local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
-        local card = CreateFrame("Frame", nil, startPage)
-        card:SetSize(CARD_W, CARD_H)
-        card:SetPoint("TOPLEFT", startPage, "TOPLEFT", 2 + col * CARD_W, -34 - row * CARD_H)
-
-        -- the drawing: the window's border, its dark body, a blue title strip and a few lines
-        local pic = CreateFrame("Frame", nil, card)
-        pic:SetSize(w.w, w.h)
-        pic:SetPoint("TOP", card, "TOP", 0, -4)
-        local edge = pic:CreateTexture(nil, "BACKGROUND")
-        edge:SetAllPoints()
-        edge:SetColorTexture(0.35, 0.35, 0.55, 1)
-        local body = pic:CreateTexture(nil, "BORDER")
-        body:SetPoint("TOPLEFT", pic, "TOPLEFT", 1, -1)
-        body:SetPoint("BOTTOMRIGHT", pic, "BOTTOMRIGHT", -1, 1)
-        body:SetColorTexture(0.06, 0.06, 0.10, 1)
-        local strip = pic:CreateTexture(nil, "ARTWORK")
-        strip:SetPoint("TOPLEFT", pic, "TOPLEFT", 3, -3)
-        strip:SetSize(math.max(8, w.w * 0.4), 3)
-        strip:SetColorTexture(0.33, 0.64, 1, 1)
-        local lines = math.max(0, math.min(4, math.floor((w.h - 12) / 7)))
-        for n = 1, lines do
-            local ln = pic:CreateTexture(nil, "ARTWORK")
-            ln:SetPoint("TOPLEFT", pic, "TOPLEFT", 3, -(8 + (n - 1) * 7))
-            ln:SetSize((w.w - 6) * (n % 2 == 0 and 0.7 or 0.95), 3)
-            ln:SetColorTexture(0.55, 0.55, 0.62, 0.8)
-        end
-
-        local name = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        name:SetPoint("TOP", pic, "BOTTOM", 0, -(52 - w.h) - 4)
-        name:SetText(w.label)
-
-        local on = CreateFrame("CheckButton", nil, card, "UICheckButtonTemplate")
-        on:SetSize(20, 20)
-        on:SetPoint("TOPLEFT", card, "TOPLEFT", 6, -76)
-        local onLbl = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        onLbl:SetPoint("LEFT", on, "RIGHT", 0, 0)
-        onLbl:SetText(L["On"])
-        on:SetScript("OnClick", function(widget) CC:SetWindowOn(w, widget:GetChecked() and true or false) end)
-
-        local lock = CreateFrame("CheckButton", nil, card, "UICheckButtonTemplate")
-        lock:SetSize(20, 20)
-        lock:SetPoint("LEFT", onLbl, "RIGHT", 6, 0)
-        local lockLbl = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        lockLbl:SetPoint("LEFT", lock, "RIGHT", 0, 0)
-        lockLbl:SetText(L["Lock"])
-        lock:SetScript("OnClick", function(widget) CC:SetOneWindowLocked(w, widget:GetChecked() and true or false) end)
-
-        local reset = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
-        reset:SetSize(46, 18)
-        reset:SetPoint("LEFT", lockLbl, "RIGHT", 6, 0)
-        reset:SetText(L["Reset"])
-        reset:SetScript("OnClick", function() CC:ResetWindow(w) end)
-        reset:SetScript("OnEnter", function(widget)
-            GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
-            GameTooltip:SetText(string.format(L["Reset %s"], w.label))
-            GameTooltip:AddLine(L["Moves the window back to where it starts."], 1, 1, 1, true)
-            GameTooltip:Show()
-        end)
-        reset:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        cards[#cards + 1] = { window = w, on = on, lock = lock }
-    end
-    for i, w in ipairs(CC.WINDOWS) do Card(i, w) end
-
-    -- the CooldownTimeline3 card: two cells wide, after the last window
     do
-        local i = #CC.WINDOWS + 1
-        local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
+    local LIST_X, RIGHT_X = 4, 176
+    local RIGHT_W = CAW - RIGHT_X - 8
+    -- the wrapped height of a text: what the game says, or at least what its characters need (6.5 pixels each,
+    -- 13 a line), so a long line never runs into the next
+    local function TextHeight(fs, text, width, perChar, lineH)
+        local lines = math.max(1, math.ceil(#text * perChar / width))
+        return math.max(fs:GetStringHeight() or 0, lines * lineH)
+    end
+
+    local intro = NewNote(startPage, 4, -2, CAW - 16,
+        L["Everyone in your group who runs CooldownCollaborator shares their cooldowns. Pick a window to see what it shows."])
+    local INTRO_H = TextHeight(intro, L["Everyone in your group who runs CooldownCollaborator shares their cooldowns. Pick a window to see what it shows."], CAW - 16, 6.5, 13)
+    local TOP_Y = -(INTRO_H + 12)
+
+    -- left: the windows, each with its On tick
+    local rows = {}
+    local picked
+    local RenderPick
+    for i, w in ipairs(CC.WINDOWS) do
+        local row = {}
+        local y = TOP_Y - (i - 1) * 28
+        row.on = CreateFrame("CheckButton", nil, startPage, "UICheckButtonTemplate")
+        row.on:SetSize(22, 22)
+        row.on:SetPoint("TOPLEFT", startPage, "TOPLEFT", LIST_X, y)
+        row.on:SetScript("OnClick", function(widget) CC:SetWindowOn(w, widget:GetChecked() and true or false) end)
+        row.pick = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+        row.pick:SetText(w.label)
+        row.pick:SetSize(FitWidth(row.pick, 110), 22)
+        row.pick:SetPoint("TOPLEFT", startPage, "TOPLEFT", LIST_X + 26, y)
+        row.pick:SetScript("OnClick", function() RenderPick(w) end)
+        row.window = w
+        rows[i] = row
+    end
+
+    -- right: the picked window
+    local nameFS = startPage:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    nameFS:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, TOP_Y)
+    local lineFS = startPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lineFS:SetWidth(RIGHT_W)
+    lineFS:SetJustifyH("LEFT")
+    local noteFS = {}
+    for i = 1, 4 do
+        local n = startPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        n:SetWidth(RIGHT_W)
+        n:SetJustifyH("LEFT")
+        noteFS[i] = n
+    end
+    local lockCB = CreateFrame("CheckButton", nil, startPage, "UICheckButtonTemplate")
+    lockCB:SetSize(22, 22)
+    local lockLbl = startPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lockLbl:SetPoint("LEFT", lockCB, "RIGHT", 2, 0)
+    lockLbl:SetText(L["Lock"])
+    lockCB:SetScript("OnClick", function(widget)
+        if picked then CC:SetOneWindowLocked(picked, widget:GetChecked() and true or false) end
+    end)
+    local resetBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    resetBtn:SetText(L["Reset"])
+    resetBtn:SetSize(FitWidth(resetBtn, 60), 22)
+    resetBtn:SetScript("OnClick", function() if picked then CC:ResetWindow(picked) end end)
+    resetBtn:SetScript("OnEnter", function(widget)
+        if not picked then return end
+        GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
+        GameTooltip:SetText(string.format(L["Reset %s"], picked.label))
+        GameTooltip:AddLine(L["Moves the window back to where it starts."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    resetBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local showBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    showBtn:SetText(L["Show it now"])
+    showBtn:SetSize(FitWidth(showBtn, 90), 22)
+    showBtn:SetScript("OnClick", function() if picked then CC:ShowSample(picked.key) end end)
+    showBtn:SetScript("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Show it now"])
+        GameTooltip:AddLine(L["Shows the window with made-up players for 20 seconds, even on your own. Nothing is sent to your group."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    showBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    RenderPick = function(w)
+        picked = w
+        startPage.picked = w
+        local help = CC.WINDOW_HELP[w.key] or { line = "", notes = {} }
+        nameFS:SetText(w.label)
+        lineFS:SetText(help.line)
+        lineFS:ClearAllPoints()
+        lineFS:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, TOP_Y - 28)
+        local y = TOP_Y - 28 - TextHeight(lineFS, help.line, RIGHT_W, 7.4, 15) - 8
+        for i, n in ipairs(noteFS) do
+            local text = help.notes[i]
+            if text then
+                local numbered = string.format(L["%d. %s"], i, text)
+                n:SetText(numbered)
+                n:ClearAllPoints()
+                n:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, y)
+                y = y - TextHeight(n, numbered, RIGHT_W, 6.5, 13) - 5
+                n:Show()
+            else
+                n:SetText("")
+                n:Hide()
+            end
+        end
+        y = y - 6
+        lockCB:ClearAllPoints()
+        lockCB:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X, y)
+        resetBtn:ClearAllPoints()
+        resetBtn:SetPoint("TOPLEFT", startPage, "TOPLEFT", RIGHT_X + 80, y)
+        showBtn:ClearAllPoints()
+        showBtn:SetPoint("LEFT", resetBtn, "RIGHT", 6, 0)
+        startPage.rightBottom = y - 22
+        lockCB:SetChecked(CC.db and CC.db[w.lockKey] and true or false)
+        for _, row in ipairs(rows) do row.pick:SetEnabled(row.window ~= w) end
+    end
+
+    -- the foot: the CooldownTimeline3 card, then Take the tour and Report a problem
+    local FOOT_H = 22
+    local tourBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    tourBtn:SetText(L["Take the tour"])
+    tourBtn:SetSize(FitWidth(tourBtn, 110), FOOT_H)
+    tourBtn:SetPoint("BOTTOMLEFT", startPage, "BOTTOMLEFT", 4, 6)
+    tourBtn:SetScript("OnClick", function() CC:StartTour(true) end)
+    local reportBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
+    reportBtn:SetText(L["Report a problem"])
+    reportBtn:SetSize(FitWidth(reportBtn, 130), FOOT_H)
+    reportBtn:SetPoint("LEFT", tourBtn, "RIGHT", 8, 0)
+    reportBtn:SetScript("OnClick", function() CC:ShowReport() end)
+    startPage.tourBtn, startPage.reportBtn = tourBtn, reportBtn
+
+    do
+        local CARD_H = 84
         local card = CreateFrame("Frame", nil, startPage, CC.BackdropTemplate)
-        card:SetSize(CARD_W * 2 - 6, CARD_H - 6)
-        card:SetPoint("TOPLEFT", startPage, "TOPLEFT", 2 + col * CARD_W, -34 - row * CARD_H)
+        card:SetSize(CAW - 12, CARD_H)
+        card:SetPoint("BOTTOMLEFT", startPage, "BOTTOMLEFT", 2, 6 + FOOT_H + 8)
         card:SetBackdrop({
             bgFile  = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1311,12 +1434,12 @@ function CC:OpenOptions()
         head:SetText("CooldownTimeline3")
         local text = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         text:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -6)
-        text:SetWidth(CARD_W * 2 - 30)
+        text:SetWidth(CAW - 12 - 20)
         text:SetJustifyH("LEFT")
         local btn = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
-        btn:SetSize(190, 22)
-        btn:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 10)
         btn:SetText(L["Open Group cooldowns settings"])
+        btn:SetSize(FitWidth(btn, 190), 22)
+        btn:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 10)
         btn:SetScript("OnClick", function() CC:OpenCDTL3GroupSettings() end)
         local where = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         where:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 12)
@@ -1329,15 +1452,21 @@ function CC:OpenOptions()
                 and L["Adds your group's cooldowns to its lanes as icons with a countdown. It decides which lane they go on."]
                 or L["Adds your group's cooldowns to its timeline lanes as icons with a countdown, beside your own."])
         end
+        card.button = btn
         startPage.cdtl3Card = card
     end
 
     startPage.refresh = function()
-        for _, c in ipairs(cards) do
-            c.on:SetChecked(CC:WindowIsOn(c.window))
-            c.lock:SetChecked(CC.db[c.window.lockKey] and true or false)
+        for _, row in ipairs(rows) do
+            row.on:SetChecked(CC:WindowIsOn(row.window))
         end
+        if picked then lockCB:SetChecked(CC.db[picked.lockKey] and true or false) end
         startPage.cdtl3Card.Refresh()
+    end
+    startPage.rows, startPage.noteFS, startPage.nameFS, startPage.lineFS = rows, noteFS, nameFS, lineFS
+    startPage.lockCB, startPage.resetBtn, startPage.showBtn = lockCB, resetBtn, showBtn
+    startPage.pick = RenderPick
+    RenderPick(CC.WINDOWS[1])
     end
     CC.startPage = startPage
 
@@ -1357,7 +1486,13 @@ function CC:OpenOptions()
     CC.lockCheck = cbLock
     -- /cdc lock and /cdc unlock may have changed it while this window was closed
     -- (the window shows what is set now: /cdc lock, a profile switch or guild sharing may have changed it)
-    f:SetScript("OnShow", function() f.RefreshAll() end)
+    f:SetScript("OnShow", function()
+        f.RefreshAll()
+        -- Getting Started opens with the main panel picked
+        if CC.startPage and CC.startPage.pick then CC.startPage.pick(CC.WINDOWS[1]) end
+    end)
+    -- a sample window (Tour.lua) ends with Settings
+    f:HookScript("OnHide", function() CC:HideSample() end)
     y = y - 26
 
     NewCheck(d, 4, y, L["Hide minimap button"], function() return CC.db.minimapHide end, function(v)
