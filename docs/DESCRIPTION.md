@@ -19,16 +19,17 @@ One download covers Retail 12.1.5, MoP Classic 5.5.4, TBC Anniversary 2.5.6, Cla
 - **Request Rez.** The raid leader or an assist (or the party leader, or anyone in a 5-man) targets a dead player, and it announces which Battle Rez is ready, by name. When the raid's rez charges are gone it says so, and when the next one is back.
 - **Dead list.** A window that opens when someone dies in combat. It lists the dead in the leader's order, with a Call button each and who would answer.
 - **Externals strip, mana strip and burst line.** Externals show with their owner and time left. Mana spells show how many are ready, with an Ask button anyone can press. The burst line puts your big cooldowns above the group's lust and Power Infusion, with a gold band where they meet.
-- **Ready alerts.** A sound, a flash on the row, an icon mid screen, or a warning a few seconds before, set per spell.
+- **Ready alerts.** A sound (thirty of the game's own to pick from, plus any your other addons add), a flash on the row, an icon mid screen, or a warning a few seconds before, set per spell with its speaker button.
+- **Windows that stay together.** The panel, the Essentials Bar and the Lane View start as one block that moves as one. Pull a window loose if you'd rather, and drop it back to rejoin.
 - **Plans and rotations.** A leader writes a raid plan (a spell used at a boss timer or a time into the fight) and shares it with the group. You get a prompt bar on your own planned uses from BigWigs or DBM timers. A rotation order (who goes first for a spell) shows as numbers on the rows.
-- **Show presets.** Everything, Simple, Healer, Tank or DPS, so the list only shows what you want. Everything is the default.
-- **Profiles and officer setups.** Save your whole setup under a name, export and import it, and let a character follow a profile. A guild officer can send a setup, and members see a box and choose Accept, Not now or Never.
+- **Your role.** Everything, Basics, Healer, Tank or DPS, each saying what it tracks, so the list only shows what you want. Or tick whole kinds of spells yourself. Everything is the default.
+- **Profiles and officer setups.** Profiles work like every Ace addon's: a Default profile every character starts on, plus New, Copy from, Delete and Reset. Export and import a setup as text. A guild officer can send a setup, and members see a box and choose Accept, Not now or Never.
 - **Guild sharing.** Off by default. Turn it on and your cooldowns go out on the guild channel, and the panel gets a Guild tab.
 - **Pulls and keys.** `/cdc lastpull` shows the last pull's log and `/cdc post` posts who is ready to the raid. When a key starts, it can ask the group for its cooldowns again.
 - **Ready-now announcements.** When your own spell comes off cooldown, your client tells the group, so talent-shortened cooldowns don't show long on everyone else's screen.
 - **Cauldrons and Feasts.** Register a shared buff once with `/cdc consumable` and it's tracked like everything else.
 - **Your own spells.** Untick any default spell, or add your own in Settings.
-- **Its own settings window.** It never gets in the way of your spellbook. It has six tabs: Getting Started, Display, Lists, Spells, Plans and Profiles. You can switch each window on or off, show them only in combat or at a boss, skip certain rezzers, and turn on a lighter mode that refreshes less often.
+- **Its own settings window.** It never gets in the way of your spellbook. It has six tabs: Getting Started, Display, Lists, Spells, Plans and Profiles. Getting Started says what each window is for and can show it with sample players, even solo, and a short tour walks through each window the first time you're in a group (`/cdc tour` runs it again). You can switch each window on or off, show them only in combat or at a boss, skip certain rezzers, and turn on a lighter mode that refreshes less often.
 - **Translations.** Every word in the addon goes through a phrase table, ready for German, Spanish, Latin American Spanish, French, Italian, Korean, Portuguese, Russian and Chinese. A language shows in English until someone translates it, and that is done on CurseForge.
 - **For other addons.** A small public feed lets other addons read who has which cooldown and when it's back.
 
@@ -116,19 +117,23 @@ Found a bug, or want a spell added? Open an issue at https://github.com/Nelnamar
 - Lane View: ready providers line up under each lane, and `/cdc nexthit` rings what will be back
 - Ready alerts per spell: a sound, a flash, an icon mid screen or an early warning
 - Raid plans and rotation order a leader can share, with prompts from BigWigs or DBM timers
-- Show presets (Everything, Simple, Healer, Tank, DPS), plus profiles, export and import, and setups an officer can send
+- Your role (Everything, Basics, Healer, Tank, DPS) or kinds of spells you tick, profiles like every Ace addon's with a Default, export and import, and setups an officer can send
 - Guild sharing, off by default, with a Guild tab
-- Settings has six tabs and a Getting Started page. Windows can show only in combat or at a boss, you can skip rezzers, and there's a lighter mode
+- Settings has six tabs and a Getting Started page that says what each window is for and shows it with sample players, plus a short tour. Windows can show only in combat or at a boss, you can skip rezzers, and there's a lighter mode
+- The panel, Essentials Bar and Lane View start joined as one block
+- Ready alert sounds from a list of thirty, with a speaker button on each spell
 - Warlocks count as Battle Rez providers on Retail and MoP (Soulstone). Paladins and Marksmanship hunters count too, and Retail tracks Intercession
 - Request Rez says when the raid's rez charges are gone and when the next one is back. Soulstones you place are shared
 - Many more tracked spells on every client. Retail's older cooldowns and icons match 12.1.5, and Demonic Gateway is no longer tracked
 - Group sync is gentler and fills in joiners and /reloads. Old copies of the addon still work
-- New commands: `/cdc lastpull`, `/cdc post`, `/cdc support` and `/cdc nexthit`
+- New commands: `/cdc lastpull`, `/cdc post`, `/cdc report`, `/cdc tour` and `/cdc nexthit`. `/cdc roster` speaks plain words
 - Translation support, with a phrase table for ten languages besides English
 - A public feed for other addons
 - Fixed: windows close when you leave the group
 - Fixed: Request Rez uses the group's own channel and only names a dead friendly player
 - Fixed: the flask and food count no longer counts you twice in a raid
+- Fixed: on WoW: Forever, messages from groupmates whose names carry a surname were ignored, so nobody else seemed to run the addon
+- Fixed: a ranked spell's tooltip (Rebirth and the like) shows your own rank, not the top one
 
 ### 1.1.1
 - Fixed: you don't show as a ready Battle Rez or Bloodlust before you've learned it. Groupmates who haven't hit the level for it yet don't show either, and they pop in once they ding

@@ -116,6 +116,24 @@ lighter mode (P31), profiles and export (P15), officer setups (P42), the support
 last pull log (P33), post to raid chat (P38), key-start reset (P45), the public feed (P34), and the Sapper row.
 Then translations (P36), docs, the walk.
 
+## Settings pass picks (19 Nov, after his walk "Not impressed.")
+
+Board: Collaborator Settings Looks https://claude.ai/artifact/4ra62cPHKZjGbMcwxnpk98 (`tools/look-board/settings.html`,
+picks in its db collection `picks`). His notes in quotes.
+- Getting Started: Pick and see, plus the tour: "Pick and see + 3 step tour (Or more steps since there are multiple windows)".
+- Choosing spells: Role cards, headed "Your role" (Simple renamed Basics): "Role cards + ticks by kind if desired".
+- Alert sound: Dropdown and Test: "More sound options" (CDTL3's checked Blizzard sound list, Media.lua).
+- Profiles: like every Ace addon (Reset, Current profile, New, Copy from, Delete; every character starts on Default).
+- Button rows: buttons sized to their words, wrapping.
+- Bell: Speaker icon (opens the spell's alert box, which holds the sound dropdown: "Sound picker?").
+- /cdc support: Report a problem (`/cdc report`, plain sentences, where to paste it, button on Getting Started).
+- Window places: the main panel, Essentials bar and Lane view start joined and move together.
+Plain fixes in the same lane: Rebirth tooltip shows the rank the player has, plain words in /cdc roster, no Guild tab
+with guild sharing off, and why the Lane view landed on the main panel.
+
 ## Then
 
 One walk of everything, a review pass, and the release on his boop.
+
+Built on review-build (19 to 20 Nov, on the Mac): the plain fixes, the Settings controls, the joined windows and
+Getting Started with the tour, in four lanes; then one full suite and a re-walk on his Forever install.

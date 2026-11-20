@@ -20,7 +20,8 @@ CooldownCollaborator gives your group a live shared view of every major defensiv
 - **Ready alerts** — per spell: sound, row and bar flash, optional icon mid screen, optional warning N seconds before
 - **Raid plans and rotation order** — a leader shares a plan over the group channel; a prompt bar shows your planned uses from BigWigs or DBM timers or a time into the fight; rotation order shows as numbers on the rows
 - **Teams** — a tab on the panel for the players you pick
-- **Show presets** — Everything (default), Simple, Healer, Tank, DPS
+- **Your role** — Everything (default), Basics, Healer, Tank, DPS, each saying what it tracks; or tick whole kinds of spells
+- **Joined windows** — the panel, Essentials Bar and Lane View start as one block that moves together; pull one loose, drop it back to rejoin
 - **Profiles and officer setups** — named profiles, export and import, per-character window places; an officer can send a setup, and members Accept, Not now or Never
 - **Guild sharing** — off by default; adds a Guild tab and sends hello, state requests and states on the guild channel
 - **Pulls and keys** — last pull log, post who is ready to raid chat, ask the group again when a key starts
@@ -101,7 +102,7 @@ CooldownCollaborator works together with the addon **CooldownTimeline3** (CDTL3)
 
 ### Settings
 
-Open with `/cdc settings`, or right-click the minimap button. Six tabs: **Getting Started** (pick a window to read what it is for and see it with made-up players, Take the tour, Report a problem, the CooldownTimeline3 link), **Display** (windows on or off, lock and reset, opacity and scale, lighter mode, windows only in combat or at a boss, guild sharing), **Lists** (Essentials bar and burst line choices, rezzers to skip), **Spells** (show presets, Default Spells, Custom Spells), **Plans** (the raid cooldown plan, rotation order, teams) and **Profiles** (named profiles, export and import, officer setups, layouts, last pull). Settings > Spells opens with **Your role** cards.
+Open with `/cdc settings`, or right-click the minimap button. Six tabs: **Getting Started** (pick a window to read what it is for and see it with made-up players, Take the tour, Report a problem, the CooldownTimeline3 link), **Display** (windows on or off, lock and reset, opacity and scale, lighter mode, windows only in combat or at a boss, guild sharing), **Lists** (Essentials bar and burst line choices, rezzers to skip), **Spells** (Your role, kinds of spells, Default Spells, Custom Spells), **Plans** (the raid cooldown plan, rotation order, teams) and **Profiles** (Default, New, Copy from, Delete and Reset like every Ace addon, export and import, officer setups, layouts, last pull). Settings > Spells opens with **Your role** cards.
 
 Any other text after `/cdc` toggles the panel.
 
@@ -127,12 +128,14 @@ Every rank of a spell counts on Classic Era, TBC Anniversary and WoW: Forever. E
 
 ### Next version (number to be chosen)
 - New main panel, dead list, externals strip, mana strip, burst line, Essentials Bar and Lane View looks (see Features)
-- Ready alerts, raid plans, rotation order, teams, show presets, profiles, officer setups, guild sharing
+- Ready alerts (thirty sounds, a speaker on each spell), raid plans, rotation order, teams, Your role cards, Ace-style profiles with a Default, officer setups, guild sharing
+- Getting Started says what each window is for and shows it with sample players; a first-run tour; the panel, Essentials Bar and Lane View start joined
 - Settings: six tabs with a Getting Started page, window on/off, combat or boss only, rezzers to skip, lighter mode
 - Warlocks (Soulstone) are Battle Rez providers on Retail and MoP; Retail tracks Intercession; Request Rez knows when the raid's charges are gone
 - Many more tracked spells on every client; Retail data matches 12.1.5 and Demonic Gateway is dropped
 - Group sync format 2: hello, state request, shared charges and Soulstones; late joiners filled in; old copies still understood
-- New commands: lastpull, post, support, nexthit
+- New commands: lastpull, post, report, tour, nexthit; `/cdc roster` in plain words
+- Fixed: on WoW: Forever, groupmates whose names carry a surname were ignored; a ranked spell's tooltip shows your own rank
 - Translation support (phrase table, ten languages); public feed for other addons
 - Fixed: Essentials Bar overflow in raids, windows staying up after leaving the group, minimap drag scale, flask/food double count
 
