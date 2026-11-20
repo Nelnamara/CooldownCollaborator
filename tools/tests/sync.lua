@@ -243,7 +243,7 @@ local function RosterLine(c, who)
 	local p0 = #c.PRINTS
 	c.SlashCmdList["COOLDOWNCOLLABORATOR"]("roster")
 	for i = p0 + 1, #c.PRINTS do
-		if c.PRINTS[i]:find("    " .. who .. " [", 1, true) then return c.PRINTS[i] end
+		if c.PRINTS[i]:find("    " .. who .. " (", 1, true) then return c.PRINTS[i] end
 	end
 	return ""
 end
@@ -534,12 +534,18 @@ check("P44: guessed only for a provider with no copy and no cast seen",
 	sq ~= nil and sq.guessed == true and so.guessed == false and sb.guessed == false
 	and Status(A, "BATTLEREZ", "Ayla").guessed == false)
 local lb, lo, lq, lc = RosterLine(C, "Bram"), RosterLine(C, "Olde"), RosterLine(C, "Quiet"), RosterLine(C, "Cyr")
-check("P13: /cdc roster says who runs it: a version, an old 1.x copy, no hello, you",
-	lb:find(B.CC.version, 1, true) and not lb:find("old", 1, true) and lo:find("1.x (old version", 1, true)
-	and lq:find("no hello", 1, true) and lc:find("you, " .. C.CC.version, 1, true) and true or false,
+check("P13: /cdc roster says who runs it in plain words: a version, an old 1.x copy, no answer, you",
+	lb:find("runs " .. B.CC.version, 1, true) and not lb:find("old", 1, true) and lo:find("runs an old 1.x copy", 1, true)
+	and lq:find("hasn't answered from CooldownCollaborator", 1, true) and lc:find(", you): runs " .. C.CC.version, 1, true)
+	and not (lb .. lo .. lq .. lc):find("[", 1, true) and not (lb .. lo .. lq .. lc):find("BATTLEREZ", 1, true) and true or false,
 	lo .. " | " .. lq)
+local function Says(line) return line:find("\194\183 can ", 1, true) or line:find("\194\183 can't ", 1, true)
+	or line:find("\194\183 has no ", 1, true) end
+check("  and says what they can do (Battle Rez, Bloodlust), never the code words",
+	Says(lb) and Says(lo) and Says(lq) and Says(lc) and not (lb .. lo .. lq .. lc):find("capabilities", 1, true) and true or false,
+	lb .. " | " .. lq)
 Inject("H:2:0.9.0:" .. A.CC:ClientTag(), "PARTY", "Olde", C)
-check("  an older version's hello is marked old", RosterLine(C, "Olde"):find("0.9.0 (old version)", 1, true) ~= nil,
+check("  an older version's hello is marked old", RosterLine(C, "Olde"):find("runs 0.9.0, an old version", 1, true) ~= nil,
 	RosterLine(C, "Olde"))
 SetGroup({ "Ayla", "Bram", "Cyr" })
 Run(1)
@@ -766,7 +772,7 @@ if FLAVOR == "retail" then
 	check("  one inspect at a time, group members only, each once (the others' specs were read before)",
 		only and maxInFlight == 1 and #units == 1,
 		table.concat(units, ",") .. " in flight " .. maxInFlight)
-	check("  /cdc roster shows the groupmate's spec", RosterLine(A3, "Hunt"):find("Marksmanship HUNTER", 1, true) ~= nil,
+	check("  /cdc roster shows the groupmate's spec", RosterLine(A3, "Hunt"):find("(Marksmanship Hunter)", 1, true) ~= nil,
 		RosterLine(A3, "Hunt"))
 else
 	check("no inspects off Retail", #A3.INSPECTED == 0 and #B.INSPECTED == 0)

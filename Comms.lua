@@ -73,9 +73,8 @@ function CC:ClientTag()
     return "era"
 end
 
--- Who runs it, for /cdc roster (P13): a member's version from their hello, "old
--- version" for an older one or a 1.x copy (heard, but no hello), "no hello" for
--- a member no copy was heard from.
+-- Who runs it, for /cdc roster (P13; the words are CC:PeerRunsText in Roster.lua): a member's
+-- version from their hello, an old version, or a 1.x copy (heard, but no hello), or no answer.
 local function VersionParts(v)
     local a, b, c = tostring(v):match("^(%d+)%.?(%d*)%.?(%d*)")
     return tonumber(a) or 0, tonumber(b) or 0, tonumber(c) or 0
@@ -89,13 +88,6 @@ function CC:IsOlderVersion(version)
     return c1 < c2
 end
 
-function CC:PeerNote(name)   -- the /cdc roster dump only: English on purpose
-    if name == self:FullName("player") then return "you, " .. self.version end
-    local peer = self.peers[name]
-    if not peer then return "no hello" end
-    if peer.proto == 1 then return "1.x (old version, no hello)" end
-    return tostring(peer.version) .. (self:IsOlderVersion(peer.version) and " (old version)" or "")
-end
 
 -------------------------------------------------------------------------------
 -- The send queue. Every CDCOLLAB and CDCBUFF send goes through it: one message

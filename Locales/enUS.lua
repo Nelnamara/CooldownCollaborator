@@ -30,6 +30,7 @@ L["(it shows when you're in a group)"] = true
 L["Lane view: %s"] = true
 L["Support: copy this into your report"] = true
 L["usage: /cdc consumable <spellID> <seconds> <flask|food|other> <name>  |  /cdc consumable remove <spellID>"] = true
+L["roster:"] = true
 
 -- Bridge.lua
 L["Group cooldowns"] = true
@@ -99,6 +100,17 @@ L["%s in %ds"] = true
 
 -- Roster.lua
 L["Bloodlust/Heroism"] = true
+L["runs %s"] = true
+L["hasn't answered from CooldownCollaborator"] = true
+L["runs an old 1.x copy"] = true
+L["runs %s, an old version"] = true
+L["%s %s"] = true
+L["%s (%s, you)"] = true
+L["%s (%s)"] = true
+L["can %s"] = true
+L["can't %s yet"] = true
+L["has no Battle Rez or Bloodlust to offer"] = true
+L["%s: %s \194\183 %s"] = true
 
 -- Essentials.lua
 L["lust"] = true

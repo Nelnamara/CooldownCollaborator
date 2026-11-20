@@ -1242,18 +1242,13 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
             end
         end
     elseif cmd == "roster" then
-        -- debug begin: the roster and debug dumps stay in English
         CC:ScanRoster()
-        print("|cFF54a3ffCooldownCollaborator|r roster" .. (CC.isRetail and " (spec refinement queued)" or "") .. ":")
+        print("|cFF54a3ffCooldownCollaborator|r " .. L["roster:"])
         for name, info in pairs(CC.roster or {}) do
-            local caps = {}
-            for key in pairs(info.capabilities) do caps[#caps + 1] = key end
-            local specName = CC:GetSpecName(name)
-            local classStr = specName and (specName .. " " .. info.class) or info.class
-            print(string.format("    %s [%s] capabilities: %s; %s",
-                CC:ShortName(name), classStr, #caps > 0 and table.concat(caps, ", ") or "none", CC:PeerNote(name)))
+            print("    " .. CC:RosterLine(name, info))
         end
     elseif cmd == "debug" then
+        -- debug begin: the debug dump stays in English
         print("|cFF54a3ffCooldownCollaborator|r " .. CC.version)
         print("  In group:", tostring(IsInGroup()), " In raid:", tostring(IsInRaid()))
         print("  In encounter:", tostring(CC.inEncounter))

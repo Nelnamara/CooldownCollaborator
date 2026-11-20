@@ -477,3 +477,47 @@ function CC:GetSpecName(name)
     if ok and type(specName) == "string" and specName ~= "" then return specName end
     return nil
 end
+
+-- /cdc roster, in plain words (P13): who runs the addon, as a sentence part.
+function CC:PeerRunsText(name)
+    if name == self:FullName("player") then return string.format(L["runs %s"], self.version) end
+    local peer = self.peers[name]
+    if not peer then return L["hasn't answered from CooldownCollaborator"] end
+    if peer.proto == 1 then return L["runs an old 1.x copy"] end
+    local version = tostring(peer.version)
+    if self:IsOlderVersion(peer.version) then return string.format(L["runs %s, an old version"], version) end
+    return string.format(L["runs %s"], version)
+end
+
+-- One /cdc roster line: "Name (Druid, you): runs 1.1.1 \194\183 can Battle Rez".
+function CC:RosterLine(name, info)
+    local class = info.class
+    local className = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class])
+        or (type(class) == "string" and class:sub(1, 1):upper() .. class:sub(2):lower()) or "?"
+    local specName = self:GetSpecName(name)
+    if specName then className = string.format(L["%s %s"], specName, className) end
+    local who
+    if name == self:FullName("player") then
+        who = string.format(L["%s (%s, you)"], self:ShortName(name), className)
+    else
+        who = string.format(L["%s (%s)"], self:ShortName(name), className)
+    end
+    local can, could = {}, {}
+    for _, key in ipairs(self.CAPABILITY_ORDER) do
+        local cap = self.CAPABILITIES[key]
+        if info.capabilities and info.capabilities[key] then
+            can[#can + 1] = cap.label
+        elseif cap.classes[class] then
+            could[#could + 1] = cap.label
+        end
+    end
+    local ability
+    if #can > 0 then
+        ability = string.format(L["can %s"], table.concat(can, ", "))
+    elseif #could > 0 then
+        ability = string.format(L["can't %s yet"], table.concat(could, ", "))
+    else
+        ability = L["has no Battle Rez or Bloodlust to offer"]
+    end
+    return string.format(L["%s: %s \194\183 %s"], who, self:PeerRunsText(name), ability)
+end
