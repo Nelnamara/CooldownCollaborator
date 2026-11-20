@@ -149,7 +149,15 @@ function CC:ResolveBareName(bare)
     return self:NormalizeSender(bare)
 end
 
+-- Window places. The Essentials bar, the main panel and the Lane view start joined, one block edge to
+-- edge in that order (Setups.lua, "Joined windows"): blockX / blockY is the block's top-left, in UIParent
+-- units from UIParent's top centre (left edge 65% across, top 16% down at UI scale 1). db.blockOrder,
+-- the joined windows top down, has no default on purpose: a save without it (1.1.1, the review build)
+-- joins only the windows still at the start places below. Those x / y pairs (each window's centre from
+-- the screen centre, in its own scale) are where a loose window sits; they keep their old values.
 local DEFAULTS = {
+    blockX         = 200,
+    blockY         = -120,
     x              = 0,
     y              = 200,
     scale          = 1.0,
@@ -1189,9 +1197,8 @@ SlashCmdList["COOLDOWNCOLLABORATOR"] = function(msg)
         CC:SetWindowsLocked(false)
         print("|cFF54a3ffCooldownCollaborator|r " .. L["windows unlocked."])
     elseif cmd == "reset" then
-        CC.db.x, CC.db.y = 0, 200
-        CC.frame:ClearAllPoints()
-        CC.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
+        -- the main panel back in its slot of the joined windows (Options.lua ResetWindow)
+        CC:ResetWindow(CC.WINDOWS[1])
         print("|cFF54a3ffCooldownCollaborator|r " .. L["position reset."])
     elseif cmd == "settings" then
         CC:OpenOptions()

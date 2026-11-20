@@ -8,7 +8,8 @@
 --   P19  /cdc report: a box with what to paste into a new issue
 --   P34  CC.API, a small public feed for other addons (docs/API.md)
 -- A setup is { disabled = { spellID, ... }, custom = { [id] = { name, duration, icon } },
--- alerts = { [id] = { sound, flash, midscreen, warn } }, places = { [windowKey] = { x, y } } }.
+-- alerts = { [id] = { sound, flash, midscreen, warn } }, places = { [windowKey] = { x, y [, slot] }, block = { x, y } } }
+-- (slot: a joined window's place in the block, 0 = loose; see Joined windows below).
 
 local L = CC.L
 
@@ -19,7 +20,7 @@ local MAX_PARTS = 64
 -------------------------------------------------------------------------------
 -- Text form: a version, then key=value pairs (";" between); the values' ":" ";"
 -- "," "=" "%" and line breaks are written %XX.
---   1;k=setup;n=<name>;d=<id>,<id>;c=<id>,<name>,<seconds>,<icon>;a=<id>,<sound>,<flash>,<mid>,<warn>;w=<key>,<x>,<y>
+--   1;k=setup;n=<name>;d=<id>,<id>;c=<id>,<name>,<seconds>,<icon>;a=<id>,<sound>,<flash>,<mid>,<warn>;w=<key>,<x>,<y>[,<slot>]
 -------------------------------------------------------------------------------
 
 local function Quote(s)
@@ -43,29 +44,384 @@ local function SortedKeys(t)
     return keys
 end
 
+-------------------------------------------------------------------------------
+-- Joined windows (settings pass pick "Joined together", 19 Nov): the Essentials bar, the main panel
+-- and the Lane view start as one block, edge to edge, top down in that order. Each joined window
+-- hangs from the bottom of the shown one above it, so a window that grows or shrinks moves the ones
+-- under it, and a hidden one (off, solo, combat-only) is skipped. Unlocked, dragging the block's top
+-- shown window moves the block; dragging another joined window pulls it loose, a free window where it
+-- is dropped. A loose window dropped within SNAP of the block's top or bottom edge, or onto a block
+-- window, joins the block at that edge; no window of the three lands on another. Reset puts a window
+-- back in its slot. The other four windows stay free windows (their places as before).
+-- db.blockOrder = the joined windows' keys, top down; db.blockX / blockY = the block's top-left in
+-- UIParent units from UIParent's top centre. A loose window's place is db[xKey] / db[yKey] as before:
+-- its centre from UIParent's centre, in the window's own scale (what SetPoint takes).
+-- In a places table (layouts, profiles, setups) a joined window's entry carries its slot as a third
+-- number (0 = loose) and places.block = { blockX, blockY }; an entry without the third number comes
+-- from before joined windows and joins only if it is still at the start place.
+-------------------------------------------------------------------------------
+
+CC.BLOCK_KEYS = { "essentials", "main", "lanes" }
+local SNAP = 12   -- UIParent units: a loose window dropped this close to the block's top or bottom joins it
+
+local function WindowByKey(key)
+    for _, w in ipairs(CC.WINDOWS or {}) do
+        if w.key == key then return w end
+    end
+end
+
+local function HomeSlot(key)
+    for i, k in ipairs(CC.BLOCK_KEYS) do
+        if k == key then return i end
+    end
+end
+
+-- UIParent units per unit of f's own scale
+local function UIScaleOf(f)
+    return f:GetEffectiveScale() / UIParent:GetEffectiveScale()
+end
+
+-- f's rect in UIParent units { left, bottom, right, top }, or nil while it has none
+local function RectOf(f)
+    local l, b, w, h = f:GetRect()
+    if not (l and b and w and h) then return nil end
+    local s = UIScaleOf(f)
+    return { l * s, b * s, (l + w) * s, (b + h) * s }
+end
+
+local function Overlap(a, b)
+    return a[1] < b[3] - 0.5 and b[1] < a[3] - 0.5 and a[2] < b[4] - 0.5 and b[2] < a[4] - 0.5
+end
+
+local function SideBySide(a, b)
+    return a[1] < b[3] and b[1] < a[3]
+end
+
+-- a saved x / y still at the window's start place (never moved by the player; GetCenter rounding allowed)
+function CC:AtStartPlace(w, x, y)
+    local dx, dy = CC.DEFAULTS[w.xKey], CC.DEFAULTS[w.yKey]
+    return type(x) == "number" and type(y) == "number" and dx ~= nil and dy ~= nil
+        and math.abs(x - dx) <= 2 and math.abs(y - dy) <= 2
+end
+
+-- The joined windows, top down. A save from before joined windows has none: the windows still at their
+-- start places join, a window the player moved stays loose where it was.
+function CC:BlockOrder()
+    local db = self.db
+    if type(db.blockOrder) ~= "table" then
+        local order = {}
+        for _, key in ipairs(CC.BLOCK_KEYS) do
+            local w = WindowByKey(key)
+            if w and self:AtStartPlace(w, db[w.xKey], db[w.yKey]) then order[#order + 1] = key end
+        end
+        db.blockOrder = order
+    end
+    return db.blockOrder
+end
+
+function CC:IsJoined(key)
+    for _, k in ipairs(self:BlockOrder()) do
+        if k == key then return true end
+    end
+    return false
+end
+
+local function Unjoin(order, key)
+    for i = #order, 1, -1 do
+        if order[i] == key then table.remove(order, i) end
+    end
+end
+
+local function BlockFrames(self)
+    local list = {}
+    for _, key in ipairs(self:BlockOrder()) do
+        local w = WindowByKey(key)
+        local f = w and self[w.frame]
+        if f and f:IsShown() then list[#list + 1] = { key = key, w = w, f = f } end
+    end
+    return list
+end
+
+-- the key of the block's top shown window
+function CC:BlockTop()
+    local list = BlockFrames(self)
+    return list[1] and list[1].key or nil
+end
+
+-- Layout runs again when one of the three shows, hides or changes size (the block's fit on screen).
+local function Watch(self, f)
+    if f.ccBlockWatched then return end
+    f.ccBlockWatched = true
+    local function again() CC:LayoutBlock() end
+    f:HookScript("OnShow", again)
+    f:HookScript("OnHide", again)
+    f:HookScript("OnSizeChanged", again)
+end
+
+-- Anchor the three windows: the joined ones hanging one from another, the loose ones at their places.
+-- The block keeps on the screen: it moves left or up (for now, not in its saved place) when its widest
+-- window or its height would pass the screen's edge.
+function CC:LayoutBlock()
+    local db = self.db
+    if not db or self.layingOutBlock then return end
+    self.layingOutBlock = true
+    local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
+    local left = uw / 2 + (tonumber(db.blockX) or CC.DEFAULTS.blockX)
+    local top = uh + (tonumber(db.blockY) or CC.DEFAULTS.blockY)
+    local widest, tall = 0, 0
+    for _, item in ipairs(BlockFrames(self)) do
+        local s = UIScaleOf(item.f)
+        widest = math.max(widest, (item.f:GetWidth() or 0) * s)
+        tall = tall + (item.f:GetHeight() or 0) * s
+    end
+    if uw and uw > 0 then left = math.max(0, math.min(left, uw - widest)) end
+    if uh and uh > 0 then top = math.min(uh, math.max(top, math.min(uh, tall))) end
+
+    local joined, prev = {}, nil
+    for _, key in ipairs(self:BlockOrder()) do
+        local w = WindowByKey(key)
+        local f = w and self[w.frame]
+        if f then
+            joined[key] = true
+            Watch(self, f)
+            f:ClearAllPoints()
+            if prev then
+                f:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, 0)
+            else
+                local k = 1 / UIScaleOf(f)
+                f:SetPoint("TOPLEFT", UIParent, "TOP", (left - uw / 2) * k, (top - uh) * k)
+            end
+            -- a hanging window is never pushed onto the one above it by the screen's edge
+            f:SetClampedToScreen(prev == nil)
+            if f:IsShown() then prev = f end
+        end
+    end
+    for _, key in ipairs(CC.BLOCK_KEYS) do
+        local w = WindowByKey(key)
+        local f = w and self[w.frame]
+        if f and not joined[key] then
+            Watch(self, f)
+            f:ClearAllPoints()
+            f:SetPoint("CENTER", UIParent, "CENTER", db[w.xKey] or 0, db[w.yKey] or 0)
+            f:SetClampedToScreen(true)
+        end
+    end
+    self.layingOutBlock = nil
+end
+
+-- A loose window's place from where its frame is now: its centre from UIParent's centre, in its own scale.
+function CC:SaveWindowPlace(key)
+    local w = WindowByKey(key)
+    local f = w and self[w.frame]
+    if not f or (HomeSlot(key) and self:IsJoined(key)) then return end
+    local x, y = f:GetCenter()
+    local ux, uy = UIParent:GetCenter()
+    if x and y and ux and uy then
+        local k = 1 / UIScaleOf(f)
+        self.db[w.xKey], self.db[w.yKey] = x - ux * k, y - uy * k
+    end
+end
+
+-- Put a window in the block at its top or bottom; joining at the top keeps the block where it is
+-- (the window goes above it).
+function CC:JoinBlock(key, edge)
+    local order = self:BlockOrder()
+    local list = BlockFrames(self)
+    Unjoin(order, key)
+    if edge == "top" then
+        local w = WindowByKey(key)
+        local f = w and self[w.frame]
+        local first = list[1] and list[1].key ~= key and RectOf(list[1].f)
+        if first and f then
+            local h = (f:GetHeight() or 0) * UIScaleOf(f)
+            self.db.blockX = first[1] - UIParent:GetWidth() / 2
+            self.db.blockY = math.min(0, first[4] + h - UIParent:GetHeight())
+        end
+        table.insert(order, 1, key)
+    else
+        order[#order + 1] = key
+    end
+end
+
+-- After a drop: a loose window on a block window (or the dropped one near the block's top or bottom
+-- edge) joins the block at the nearer edge (for the dropped one, the edge nearer its top); the dropped window on another loose one goes edge to edge
+-- with it. Until nothing of the three lies on another.
+function CC:SettleWindows(dropped)
+    for _ = 1, 4 do
+        local changed = false
+        local list = BlockFrames(self)
+        local firstR = list[1] and RectOf(list[1].f)
+        local lastR = list[#list] and RectOf(list[#list].f)
+        for _, key in ipairs(CC.BLOCK_KEYS) do
+            local w = WindowByKey(key)
+            local f = w and self[w.frame]
+            local r = f and f:IsShown() and not self:IsJoined(key) and RectOf(f)
+            if r and firstR and lastR then
+                local edge
+                for _, item in ipairs(list) do
+                    local br = RectOf(item.f)
+                    if br and Overlap(r, br) then
+                        -- the dropped window goes by where its top lands (it is held by its top part),
+                        -- one the block landed on by its middle
+                        local y = key == dropped and r[4] or (r[2] + r[4]) / 2
+                        edge = y > (firstR[4] + lastR[2]) / 2 and "top" or "bottom"
+                    end
+                end
+                if not edge and key == dropped then
+                    if SideBySide(r, firstR) and math.abs(r[2] - firstR[4]) <= SNAP then edge = "top"
+                    elseif SideBySide(r, lastR) and math.abs(r[4] - lastR[2]) <= SNAP then edge = "bottom" end
+                end
+                if edge then
+                    self:JoinBlock(key, edge)
+                    self:LayoutBlock()
+                    changed = true
+                    break
+                end
+            end
+        end
+        if not changed and dropped and not self:IsJoined(dropped) then
+            local w = WindowByKey(dropped)
+            local f = w and self[w.frame]
+            local r = f and RectOf(f)
+            for _, key in ipairs(CC.BLOCK_KEYS) do
+                local ow = WindowByKey(key)
+                local o = key ~= dropped and ow and self[ow.frame]
+                local orr = o and o:IsShown() and RectOf(o)
+                if r and orr and Overlap(r, orr) then
+                    -- under it, or over it when there is no room under
+                    local h = r[4] - r[2]
+                    local cy = orr[2] - h / 2
+                    if orr[2] - h < 0 then cy = orr[4] + h / 2 end
+                    local cx = orr[1] + (r[3] - r[1]) / 2
+                    local k = 1 / UIScaleOf(f)
+                    self.db[w.xKey] = (cx - UIParent:GetWidth() / 2) * k
+                    self.db[w.yKey] = (cy - UIParent:GetHeight() / 2) * k
+                    self:LayoutBlock()
+                    changed = true
+                    break
+                end
+            end
+        end
+        if not changed then return end
+    end
+end
+
+-- Dragging one of the three (its frame, or a line on it that passes the drag on). The block's top
+-- window takes the block; another joined window comes loose first and the ones under it close up.
+function CC:StartWindowDrag(key)
+    local w = WindowByKey(key)
+    local f = w and self[w.frame]
+    if not f or self.db[w.lockKey] then return end
+    -- a drag that never heard its end (its window hidden mid-drag) ends here
+    if self.windowDrag then self:StopWindowDrag(self.windowDrag) end
+    if self:IsJoined(key) and self:BlockTop() ~= key then
+        local x, y = f:GetCenter()
+        local ux, uy = UIParent:GetCenter()
+        if x and ux then
+            local k = 1 / UIScaleOf(f)
+            self.db[w.xKey], self.db[w.yKey] = x - ux * k, y - uy * k
+        end
+        Unjoin(self:BlockOrder(), key)
+        self:LayoutBlock()
+    end
+    self.windowDrag = key
+    f:StartMoving()
+end
+
+function CC:StopWindowDrag(key)
+    if self.windowDrag ~= key then return end
+    self.windowDrag = nil
+    local w = WindowByKey(key)
+    local f = w and self[w.frame]
+    if not f then return end
+    f:StopMovingOrSizing()
+    -- the addon keeps this place; the game's own layout cache stays out of it
+    f:SetUserPlaced(false)
+    if self:IsJoined(key) then
+        local r = RectOf(f)
+        if r then
+            self.db.blockX = r[1] - UIParent:GetWidth() / 2
+            self.db.blockY = r[4] - UIParent:GetHeight()
+        end
+    else
+        self:SaveWindowPlace(key)
+    end
+    self:LayoutBlock()
+    self:SettleWindows(key)
+end
+
+-- Reset: a joined window back into the block in its own slot.
+function CC:RejoinWindow(key)
+    local home = HomeSlot(key)
+    if not home then return end
+    local order = self:BlockOrder()
+    Unjoin(order, key)
+    local at = #order + 1
+    for i, k in ipairs(order) do
+        if (HomeSlot(k) or 0) > home then at = i; break end
+    end
+    table.insert(order, at, key)
+    self:LayoutBlock()
+    self:SettleWindows(nil)
+end
+
 function CC:SnapshotPlaces()
     local places = {}
+    local order = self:BlockOrder()
     for _, w in ipairs(CC.WINDOWS or {}) do
         local x, y = self.db[w.xKey], self.db[w.yKey]
-        if type(x) == "number" and type(y) == "number" then places[w.key] = { x, y } end
+        if type(x) == "number" and type(y) == "number" then
+            local p = { x, y }
+            if HomeSlot(w.key) then
+                p[3] = 0
+                for i, k in ipairs(order) do
+                    if k == w.key then p[3] = i end
+                end
+            end
+            places[w.key] = p
+        end
     end
+    places.block = { tonumber(self.db.blockX) or CC.DEFAULTS.blockX, tonumber(self.db.blockY) or CC.DEFAULTS.blockY }
     return places
 end
 
 -- Put windows where a places table says (only the windows it names), moving the live frames too.
 function CC:ApplyPlaces(places)
+    if type(places) ~= "table" then return end
+    local rank = {}
+    for i, key in ipairs(self:BlockOrder()) do rank[key] = i end
     for _, w in ipairs(CC.WINDOWS or {}) do
-        local p = places and places[w.key]
+        local p = places[w.key]
         if type(p) == "table" and tonumber(p[1]) and tonumber(p[2]) then
             local x, y = tonumber(p[1]), tonumber(p[2])
             self.db[w.xKey], self.db[w.yKey] = x, y
-            local f = self[w.frame]
-            if f then
-                f:ClearAllPoints()
-                f:SetPoint("CENTER", UIParent, "CENTER", x, y)
+            if HomeSlot(w.key) then
+                local slot = tonumber(p[3])
+                if not slot then slot = self:AtStartPlace(w, x, y) and HomeSlot(w.key) or 0 end
+                rank[w.key] = slot > 0 and slot or nil
+            else
+                local f = self[w.frame]
+                if f then
+                    f:ClearAllPoints()
+                    f:SetPoint("CENTER", UIParent, "CENTER", x, y)
+                end
             end
         end
     end
+    local order = {}
+    for _, key in ipairs(CC.BLOCK_KEYS) do
+        if rank[key] then order[#order + 1] = key end
+    end
+    table.sort(order, function(a, b)
+        if rank[a] ~= rank[b] then return rank[a] < rank[b] end
+        return HomeSlot(a) < HomeSlot(b)
+    end)
+    self.db.blockOrder = order
+    local b = places.block
+    if type(b) == "table" and tonumber(b[1]) and tonumber(b[2]) then
+        self.db.blockX, self.db.blockY = tonumber(b[1]), tonumber(b[2])
+    end
+    self:LayoutBlock()
 end
 
 function CC:SnapshotSetup(skipPlaces)
@@ -116,7 +472,8 @@ function CC:EncodeSetup(setup, name)
     end
     for _, key in ipairs(SortedKeys(setup.places or {})) do
         local p = setup.places[key]
-        parts[#parts + 1] = string.format("w=%s,%d,%d", Quote(key), math.floor(p[1] + 0.5), math.floor(p[2] + 0.5))
+        local slot = tonumber(p[3]) and string.format(",%d", p[3]) or ""   -- a joined window's slot, 0 = loose
+        parts[#parts + 1] = string.format("w=%s,%d,%d", Quote(key), math.floor(p[1] + 0.5), math.floor(p[2] + 0.5)) .. slot
     end
     return table.concat(parts, ";")
 end
@@ -162,7 +519,9 @@ function CC:DecodeSetup(text)
                 local f = Split(value)
                 local x, y = tonumber(f[2]), tonumber(f[3])
                 if f[1] and x and y and math.abs(x) <= 4000 and math.abs(y) <= 4000 then
-                    setup.places[f[1]] = { x, y }
+                    local slot = tonumber(f[4])
+                    if slot and (slot < 0 or slot > #CC.BLOCK_KEYS or slot ~= math.floor(slot)) then slot = nil end
+                    setup.places[f[1]] = { x, y, slot }
                 end
             end
         end
@@ -199,7 +558,7 @@ function CC:DescribeSetup(setup)
     local moved = 0
     for key, p in pairs(setup.places) do
         local q = now.places[key]
-        if not q or q[1] ~= p[1] or q[2] ~= p[2] then moved = moved + 1 end
+        if not q or q[1] ~= p[1] or q[2] ~= p[2] or (p[3] ~= nil and q[3] ~= p[3]) then moved = moved + 1 end
     end
     if moved > 0 then lines[#lines + 1] = string.format(moved == 1 and L["%d window moved"] or L["%d windows moved"], moved) end
     if #lines == 0 then lines[1] = L["Nothing changes: this is what you have now."] end
@@ -306,8 +665,9 @@ function CC:DefaultProfile()
     end
     for _, w in ipairs(CC.WINDOWS or {}) do
         local x, y = CC.DEFAULTS[w.xKey], CC.DEFAULTS[w.yKey]
-        if x and y then snap.places[w.key] = { x, y } end
+        if x and y then snap.places[w.key] = { x, y, HomeSlot(w.key) } end
     end
+    snap.places.block = { CC.DEFAULTS.blockX, CC.DEFAULTS.blockY }
     return snap
 end
 
@@ -333,6 +693,7 @@ function CC:ApplyProfile(snap)
         self.frame:SetScale(db.scale or 1.0)
         self.frame:SetAlpha(db.alpha or 0.9)
     end
+    self:LayoutBlock()   -- the panel's scale may have changed under the block's place
     if db.showOnCDTL3 ~= showOnCDTL3 and self.SetShowOnCDTL3 then self:SetShowOnCDTL3(db.showOnCDTL3) end
     for _, update in ipairs({ "UpdateLock", "UpdateEssentialsLock", "UpdateLaneLock" }) do
         if self[update] then self:RefreshView(update) end
@@ -703,6 +1064,8 @@ function CC:CheckLayoutChange()
 end
 
 function CC:ResetAllWindows()
+    self.db.blockOrder = {}
+    self.db.blockX, self.db.blockY = CC.DEFAULTS.blockX, CC.DEFAULTS.blockY
     for _, w in ipairs(CC.WINDOWS or {}) do self:ResetWindow(w) end
     self.db.layouts = {}
 end
@@ -1028,6 +1391,7 @@ ev:SetScript("OnEvent", function(_, event, ...)
         CC:CheckLayoutChange()
     elseif event == "PLAYER_ENTERING_WORLD" then
         CC:CheckLayoutChange()
+        CC:LayoutBlock()
     elseif event == "CHALLENGE_MODE_START" then
         if db.resetOnNewRun ~= false then CC:OnKeyStart() end
     elseif event == "PLAYER_LOGOUT" then

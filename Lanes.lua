@@ -334,6 +334,12 @@ function CC:BuildLaneView()
         end,
     })
     f:SetScale(db.laneScale or 1.0)
+    -- dragged as one of the joined windows (Setups.lua), not as the free windows below
+    f:SetScript("OnMouseDown", nil)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", function() CC:StartWindowDrag("lanes") end)
+    f:SetScript("OnDragStop", function() CC:StopWindowDrag("lanes") end)
+    f:SetScript("OnMouseUp", function() CC:StopWindowDrag("lanes") end)
     self.laneFrame = f
 
     self.lanes = {}
@@ -344,6 +350,7 @@ function CC:BuildLaneView()
     end
     self:LayoutLanes(heights)
     self:UpdateLaneLock()
+    self:LayoutBlock()
 
     C_Timer.NewTicker(CC.TICK_RATES.lanes[1], function()
         if CC.laneFrame and CC.laneFrame:IsShown() and CC:TickDue("lanes") then
@@ -500,11 +507,5 @@ function CC:UpdateLaneLock()
 end
 
 function CC:SaveLanePosition()
-    if not self.laneFrame then return end
-    local x, y   = self.laneFrame:GetCenter()
-    local ux, uy = UIParent:GetCenter()
-    if x and y and ux and uy then
-        self.db.laneX = x - ux
-        self.db.laneY = y - uy
-    end
+    self:SaveWindowPlace("lanes")
 end

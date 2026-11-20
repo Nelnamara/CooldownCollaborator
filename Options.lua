@@ -48,14 +48,15 @@ end
 -- ── Windows: one list for Getting Started, lock, reset and on/off ────────────
 -- Each entry names the saved setting and the frame, so a control and a slash command
 -- always agree. `onKey` nil means the main panel: its On is "not closed by the player".
+-- `joins`: the window is one of the joined block (Setups.lua, Joined windows).
 
 CC.WINDOWS = {
     { key = "main",       label = L["Main panel"],     frame = "frame",           w = 64, h = 46, xKey = "x",           yKey = "y",
-      lockKey = "locked",          lockUpdate = "UpdateLock" },
+      lockKey = "locked",          lockUpdate = "UpdateLock", joins = true },
     { key = "essentials", label = L["Essentials bar"], frame = "essentialsFrame", w = 40, h = 46, xKey = "essentialsX", yKey = "essentialsY",
-      onKey = "essentialsEnabled", refresh = "RefreshEssentials", lockKey = "essentialsLocked", lockUpdate = "UpdateEssentialsLock" },
+      onKey = "essentialsEnabled", refresh = "RefreshEssentials", lockKey = "essentialsLocked", lockUpdate = "UpdateEssentialsLock", joins = true },
     { key = "lanes",      label = L["Lane view"],      frame = "laneFrame",       w = 70, h = 30, xKey = "laneX",       yKey = "laneY",
-      onKey = "laneEnabled",       refresh = "RefreshLanes", lockKey = "laneLocked", lockUpdate = "UpdateLaneLock" },
+      onKey = "laneEnabled",       refresh = "RefreshLanes", lockKey = "laneLocked", lockUpdate = "UpdateLaneLock", joins = true },
     { key = "dead",       label = L["Dead list"],      frame = "deadFrame",       w = 46, h = 36, xKey = "deadListX",   yKey = "deadListY",
       onKey = "deadListEnabled",   refresh = "RefreshDeadList", lockKey = "deadListLocked" },
     { key = "externals",  label = L["Externals"],      frame = "externalsFrame",  w = 58, h = 20, xKey = "externalsX",  yKey = "externalsY",
@@ -87,11 +88,16 @@ function CC:SetOneWindowLocked(w, locked)
     if self.lockCheck then self.lockCheck:SetChecked(self:AreWindowsLocked()) end
 end
 
--- Back to where the window starts: the saved position's default, and the frame moves there now.
+-- Back to where the window starts: the saved position's default, and the frame moves there now. The
+-- Essentials bar, the main panel and the Lane view go back into the joined block, each in its slot (Setups.lua).
 function CC:ResetWindow(w)
     local defaults = self.DEFAULTS or {}
     local x, y = defaults[w.xKey] or 0, defaults[w.yKey] or 0
     self.db[w.xKey], self.db[w.yKey] = x, y
+    if w.joins then
+        self:RejoinWindow(w.key)
+        return
+    end
     local f = self[w.frame]
     if f then
         f:ClearAllPoints()

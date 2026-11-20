@@ -563,22 +563,18 @@ end
 -- Building the window
 -------------------------------------------------------------------------------
 
--- A panel line drags the panel and, on a click (the cursor hardly moved), asks.
+-- A panel line drags the panel (as the panel's own drag: Setups.lua, Joined windows) and, on a click
+-- (the cursor hardly moved), asks.
 local function HookDragAndClick(widget)
     widget:EnableMouse(true)
-    widget:SetScript("OnMouseDown", function(w, btn)
+    widget:RegisterForDrag("LeftButton")
+    widget:SetScript("OnDragStart", function() CC:StartWindowDrag("main") end)
+    widget:SetScript("OnDragStop", function() CC:StopWindowDrag("main") end)
+    widget:SetScript("OnMouseDown", function(w)
         w.downX, w.downY = GetCursorPosition()
-        if btn == "LeftButton" and not CC.db.locked then
-            CC.frame:StartMoving()
-            w.moving = true
-        end
     end)
     widget:SetScript("OnMouseUp", function(w, btn)
-        if w.moving then
-            CC.frame:StopMovingOrSizing()
-            CC:SavePosition()
-            w.moving = false
-        end
+        CC:StopWindowDrag("main")
         local x, y = GetCursorPosition()
         if btn == "LeftButton" and w.downX and math.abs((x or 0) - w.downX) + math.abs((y or 0) - (w.downY or 0)) < 5 then
             CC:AskForCooldown(w.info, IsShiftKeyDown and IsShiftKeyDown())
@@ -772,15 +768,11 @@ function CC:BuildUI()
     frame:SetBackdropColor(0.05, 0.05, 0.08, 0.88)
     frame:SetBackdropBorderColor(0.35, 0.35, 0.55, 0.85)
 
-    frame:SetScript("OnMouseDown", function(widget, btn)
-        if btn == "LeftButton" and not CC.db.locked then
-            widget:StartMoving()
-        end
-    end)
-    frame:SetScript("OnMouseUp", function(widget)
-        widget:StopMovingOrSizing()
-        CC:SavePosition()
-    end)
+    -- dragged as one of the joined windows (Setups.lua): the block's top one moves the block
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() CC:StartWindowDrag("main") end)
+    frame:SetScript("OnDragStop", function() CC:StopWindowDrag("main") end)
+    frame:SetScript("OnMouseUp", function() CC:StopWindowDrag("main") end)
 
     -- Title bar: who runs it at the left, the name in the middle, the next lust
     -- at the right, then the close button
@@ -877,6 +869,7 @@ function CC:BuildUI()
     end)
 
     self:UpdateLock()
+    self:LayoutBlock()
 end
 
 -------------------------------------------------------------------------------
@@ -1527,12 +1520,7 @@ function CC:UpdateLock()
     end
 end
 
+-- Keeps the panel's place while it is loose (a joined panel's place is the block's: Setups.lua).
 function CC:SavePosition()
-    if not self.frame then return end
-    local x, y   = self.frame:GetCenter()
-    local ux, uy = UIParent:GetCenter()
-    if x and y and ux and uy then
-        self.db.x = x - ux
-        self.db.y = y - uy
-    end
+    self:SaveWindowPlace("main")
 end

@@ -20,9 +20,46 @@ for id, d in pairs(CC.SpellData) do
 	SPELLINFO[id] = { d.name, d.icon }
 	for _, r in ipairs(d.ranks or {}) do SPELLINFO[r] = { d.name, d.icon } end
 end
+-- 1.1.1's saved variables from a copy whose windows were never moved (the main panel's place goes through
+-- GetCenter at each logout), as the owner's review install found them on 19 Nov
+CooldownCollaboratorDB = { x = 0.0, y = 200.0, scale = 1, essentialsX = 220, essentialsY = 200, essentialsScale = 1,
+	laneX = 0, laneY = -200, laneScale = 1, laneEnabled = false, customSpells = {}, disabledSpells = {}, consumableBuffs = {} }
 Login()
 check("load and login: no Lua errors", #ERRORS == 0, ERRORS[1])
 local db = CC.db
+
+---------------------------------------------------------------- the three main windows over a 1.1.1 save
+-- Screen rects in UIParent units at UI scale 1 (the stub's geometry: tools/tests/wow.lua).
+local BLOCK = { "essentialsFrame", "frame", "laneFrame" }
+local function rect(f) return STUB_RECT(f) end
+local function overlaps(a, b) return a[1] < b[3] - 0.5 and b[1] < a[3] - 0.5 and a[2] < b[4] - 0.5 and b[2] < a[4] - 0.5 end
+-- the first pair of the shown three that lie on each other, as text, or nil
+local function onEachOther()
+	for i = 1, #BLOCK do
+		for j = i + 1, #BLOCK do
+			local a, b = CC[BLOCK[i]], CC[BLOCK[j]]
+			if a:IsShown() and b:IsShown() and overlaps(rect(a), rect(b)) then
+				local ra, rb = rect(a), rect(b)
+				return string.format("%s [%.0f %.0f %.0f %.0f] on %s [%.0f %.0f %.0f %.0f]", BLOCK[i], ra[1], ra[2], ra[3], ra[4],
+					BLOCK[j], rb[1], rb[2], rb[3], rb[4])
+			end
+		end
+	end
+end
+do
+	GROUP = { { unit = "party1", name = "Tania", realm = "Realm", class = "PRIEST", guid = "Player-1-0000009" } }
+	db.laneEnabled = true
+	FireEvent("GROUP_ROSTER_UPDATE")
+	Advance(1)
+	check("1.1.1 save, party of two: the panel, the Essentials bar and the Lane view all show",
+		CC.frame:IsShown() and CC.essentialsFrame:IsShown() and CC.laneFrame:IsShown())
+	local hit = onEachOther()
+	check("  and none of them lies on another (was: the Essentials bar over the panel's title bar)", hit == nil, hit)
+	db.laneEnabled = false
+	GROUP = {}
+	FireEvent("GROUP_ROSTER_UPDATE")
+	Advance(1)
+end
 
 ---------------------------------------------------------------- defaults, Sapper
 check("new settings have defaults", db.showPreset == "everything" and db.showWindows == "always"
@@ -732,6 +769,268 @@ do
 	Advance(6)
 	CC:RecordCooldownFromComm("Aaa-Realm", rb, GetTime() - dur + 100, "DRUID")
 	check("  unregistered, it hears nothing more", #starts == 1)
+end
+
+---------------------------------------------------------------- joined windows
+do
+	local e1 = #ERRORS
+	local W = {}
+	for _, w in ipairs(CC.WINDOWS) do W[w.key] = w end
+	local F = { essentials = "essentialsFrame", main = "frame", lanes = "laneFrame" }
+	local function fr(key) return CC[F[key]] end
+	local function order() return table.concat(CC:BlockOrder(), ",") end
+	local function near(a, b) return math.abs(a - b) < 0.01 end
+	-- the shown joined windows hang one under the other, left edges in line, all on the screen
+	local function edgeToEdge()
+		local prev
+		for _, key in ipairs(CC:BlockOrder()) do
+			local f = fr(key)
+			if f:IsShown() then
+				local r = rect(f)
+				if r[1] < -0.01 or r[3] > SCREEN_W + 0.01 or r[4] > SCREEN_H + 0.01 then return false, key .. " off the screen" end
+				if prev and not (near(r[4], prev[2]) and near(r[1], prev[1])) then
+					return false, string.format("%s top %.1f left %.1f, the one above: bottom %.1f left %.1f", key, r[4], r[1], prev[2], prev[1])
+				end
+				prev = r
+			end
+		end
+		return true
+	end
+	local function blockOK()
+		local ok, why = edgeToEdge()
+		local hit = onEachOther()
+		return ok and hit == nil, why or hit
+	end
+	local rb = CC.SpellByName["Rebirth"] or next(CC.SpellData)
+	local CLASSES = { "DRUID", "PRIEST", "PALADIN", "WARRIOR", "MAGE", "SHAMAN", "ROGUE", "HUNTER", "WARLOCK" }
+	-- a group of n with a spell running for up to six of them (every one of their spells when full), so the
+	-- panel has rows
+	local function group(n, full)
+		GROUP = {}
+		STUB_IN_RAID = n > 5
+		for i = 1, n - 1 do
+			GROUP[i] = { unit = (n > 5 and "raid" or "party") .. i, name = "M" .. i, realm = "Realm",
+				class = CLASSES[(i - 1) % #CLASSES + 1], guid = "Player-1-30" .. i }
+		end
+		FireEvent("GROUP_ROSTER_UPDATE")
+		Advance(1)
+		for i = 1, full and n - 1 or math.min(n - 1, 6) do
+			for id, d in pairs(CC.SpellData) do
+				if d.class == GROUP[i].class and (d.duration or 0) >= 60 and (full or not CC.state["M" .. i .. "-Realm"]) then
+					CC:RecordCooldownFromComm("M" .. i .. "-Realm", id, GetTime() - 5, d.class)
+				end
+			end
+		end
+		CC:RefreshAllViews()
+		Advance(1)
+	end
+
+	CC:ResetAllWindows()
+	db.laneEnabled, db.essentialsEnabled, db.panelClosed = true, true, false
+	check("joined windows: Reset all windows puts the three in one block, Essentials bar, main panel, Lane view",
+		order() == "essentials,main,lanes" and db.blockX == CC.DEFAULTS.blockX and db.blockY == CC.DEFAULTS.blockY)
+	for _, n in ipairs({ 5, 20, 40 }) do
+		group(n)
+		local ok, why = blockOK()
+		local top = rect(CC.essentialsFrame)
+		local bottom = rect(CC.laneFrame)[2]
+		check(string.format("  %d players: all three show, edge to edge top down, none on another, on the screen", n),
+			ok and CC.frame:IsShown() and CC.essentialsFrame:IsShown() and CC.laneFrame:IsShown() and bottom >= -0.01,
+			why or string.format("block %.0f tall, top %.0f", top[4] - bottom, top[4]))
+		if n == 5 then
+			check("  the block starts right of the screen centre, near the top (UI scale 1)",
+				near(top[1], SCREEN_W / 2 + CC.DEFAULTS.blockX) and near(top[4], SCREEN_H + CC.DEFAULTS.blockY),
+				string.format("%.0f%% across, %.0f%% down", top[1] / SCREEN_W * 100, (SCREEN_H - top[4]) / SCREEN_H * 100))
+		end
+	end
+	group(40, true)
+	local ok40, why40 = blockOK()
+	local r40 = rect(CC.essentialsFrame)
+	check("  40 players, every spell running (the block taller than the screen): still edge to edge, none on another, its top on the screen",
+		ok40, why40)
+	check("    the top held at the screen's top", near(r40[4], SCREEN_H) or r40[4] < SCREEN_H)
+	CC.state = {}
+	group(5)
+
+	-- growth: the panel taller, the Lane view moves down with its bottom
+	-- (the block moves up when its bottom would leave the screen: that rise counted back in)
+	local laneTop, blockTop = rect(CC.laneFrame)[4], rect(CC.essentialsFrame)[4]
+	CC.frame:SetHeight(CC.frame:GetHeight() + 60)
+	local rise = rect(CC.essentialsFrame)[4] - blockTop
+	check("  the panel growing pushes the Lane view down by as much", near(rect(CC.laneFrame)[4], laneTop - 60 + rise) and blockOK(),
+		string.format("lane top %.1f -> %.1f; block rose %.1f", laneTop, rect(CC.laneFrame)[4], rise))
+	CC:RefreshRows()
+
+	-- a hidden window is skipped: the Essentials bar off, the panel takes the top
+	db.essentialsEnabled = false
+	CC:RefreshEssentials()
+	local mainR = rect(CC.frame)
+	check("  the Essentials bar hidden: the panel moves up to the block's top, the Lane view under it",
+		not CC.essentialsFrame:IsShown() and near(mainR[4], SCREEN_H + db.blockY) and blockOK())
+	db.essentialsEnabled = true
+	CC:RefreshEssentials()
+	check("  shown again: back on top, the others under it", near(rect(CC.essentialsFrame)[4], SCREEN_H + db.blockY) and blockOK())
+	db.showWindows = "combat"
+	CC:RefreshAllViews()
+	check("  only in combat, out of it: all three hidden", not CC.frame:IsShown() and not CC.essentialsFrame:IsShown()
+		and not CC.laneFrame:IsShown())
+	db.showWindows = "always"
+	CC:RefreshAllViews()
+	check("  and back: the block as before", blockOK())
+
+	-- drag the top window: the block moves
+	local before = { rect(CC.essentialsFrame), rect(CC.frame), rect(CC.laneFrame) }
+	DragWidget(CC.essentialsFrame, -150, -40)
+	local moved = true
+	for i, key in ipairs({ "essentials", "main", "lanes" }) do
+		local r = rect(fr(key))
+		moved = moved and near(r[1], before[i][1] - 150) and near(r[4], before[i][4] - 40)
+	end
+	check("  dragging the top window moves all three, still joined", moved and order() == "essentials,main,lanes" and blockOK())
+	check("  and the block keeps its new place", near(db.blockX, CC.DEFAULTS.blockX - 150) and near(db.blockY, CC.DEFAULTS.blockY - 40))
+	DragWidget(CC.frame.rowsParent or CC.frame, 0, 0)
+	check("  a plain click on the panel changes nothing", order() == "essentials,main,lanes" and blockOK())
+
+	-- drag the middle window: it comes loose where it is dropped
+	local mr = rect(CC.frame)
+	DragWidget(CC.frame, -500, -60)
+	local nr = rect(CC.frame)
+	check("  dragging the panel pulls it loose, a free window where it is dropped", order() == "essentials,lanes"
+		and near(nr[1], mr[1] - 500) and near(nr[4], mr[4] - 60))
+	check("  the Lane view closes the gap under the Essentials bar", near(rect(CC.laneFrame)[4], rect(CC.essentialsFrame)[2]) and blockOK())
+	FireEvent("PLAYER_LOGOUT")
+	CC:LayoutBlock()
+	check("  its place is kept (a logout doesn't move it)", near(rect(CC.frame)[1], nr[1]) and near(rect(CC.frame)[4], nr[4]))
+
+	-- a loose window dropped near the block's bottom edge joins at the bottom
+	local lane = rect(CC.laneFrame)
+	nr = rect(CC.frame)
+	DragWidget(CC.frame, lane[1] + 10 - nr[1], lane[2] - 8 - nr[4])
+	check("  dropped 8 px under the block's bottom: it joins there, edge to edge",
+		order() == "essentials,lanes,main" and near(rect(CC.frame)[4], rect(CC.laneFrame)[2]) and blockOK(), order())
+
+	-- dropped onto a block window: joins at the nearer edge, never on top
+	DragWidget(CC.frame, -500, 0)
+	local er = rect(CC.essentialsFrame)
+	nr = rect(CC.frame)
+	DragWidget(CC.frame, er[1] - nr[1] + 20, er[4] + 20 - nr[4])
+	check("  dropped onto the Essentials bar's top half: it joins at the block's top, none on another",
+		order() == "main,essentials,lanes" and blockOK(), order())
+	local mt, mh, lb = rect(CC.frame)[4], rect(CC.frame)[4] - rect(CC.frame)[2], rect(CC.laneFrame)[2]
+	check("    the block stays where it was, the panel above it (as far as the screen lets it)",
+		near(mt, er[4] + mh) or near(mt, SCREEN_H) or near(lb, 0))
+	DragWidget(CC.frame, 0, 0)
+	check("    a plain click on the new top changes nothing", order() == "main,essentials,lanes")
+
+	-- loose on loose: edge to edge, not on top
+	DragWidget(CC.laneFrame, -500, -100)
+	DragWidget(CC.essentialsFrame, 0, -300)   -- not the top now: comes loose
+	local lr = rect(CC.laneFrame)
+	er = rect(CC.essentialsFrame)
+	DragWidget(CC.essentialsFrame, lr[1] - er[1] + 15, (lr[2] + lr[4]) / 2 - (er[2] + er[4]) / 2)
+	local hit = onEachOther()
+	check("  a loose window dropped on another loose one goes edge to edge with it", order() == "main" and hit == nil, hit or order())
+
+	-- reset: back in the slot
+	CC:ResetWindow(W.lanes)
+	check("  Reset puts the Lane view back in the block, in its slot", order() == "main,lanes" and blockOK(), order())
+	CC:ResetWindow(W.essentials)
+	check("  and the Essentials bar in its slot above the panel", order() == "essentials,main,lanes" and blockOK(), order())
+	DragWidget(CC.laneFrame, -400, 0)
+	SlashCmdList["COOLDOWNCOLLABORATOR"]("reset")
+	check("  /cdc reset puts the panel back in its slot too", order() == "essentials,main" and blockOK(), order())
+	CC:ResetAllWindows()
+	check("  Reset all windows: all three in their slots, the block home", order() == "essentials,main,lanes"
+		and near(rect(CC.essentialsFrame)[1], SCREEN_W / 2 + CC.DEFAULTS.blockX) and blockOK())
+
+	-- a panel line passes the drag on to the panel
+	CC:ResetAllWindows()
+	local line
+	for _, l in ipairs(CC.rows or {}) do if l:IsShown() then line = l; break end end
+	if line then
+		local before = rect(CC.frame)
+		DragWidget(line, -420, 0)
+		check("  dragging a panel line drags the panel (here: pulls it loose)", order() == "essentials,lanes"
+			and near(rect(CC.frame)[1], before[1] - 420), order())
+	end
+	CC:ResetAllWindows()
+
+	-- lock: locked windows don't drag, joined or not
+	local lr0 = rect(CC.laneFrame)
+	CC:SetOneWindowLocked(W.lanes, true)
+	DragWidget(CC.laneFrame, -300, 0)
+	check("  a locked joined window doesn't drag or come loose", order() == "essentials,main,lanes" and near(rect(CC.laneFrame)[1], lr0[1]))
+	CC:SetWindowsLocked(true)
+	local er0 = rect(CC.essentialsFrame)
+	DragWidget(CC.essentialsFrame, -300, 0)
+	check("  locked, the top window doesn't move the block", near(rect(CC.essentialsFrame)[1], er0[1]))
+	CC:SetWindowsLocked(false)
+
+	-- layouts keep joined or loose per party and raid
+	group(20)
+	group(5)
+	DragWidget(CC.laneFrame, -450, 0)
+	check("  party: the Lane view loose", order() == "essentials,main")
+	group(20)
+	check("  a raid has its own places: all three joined (the party's kept)", order() == "essentials,main,lanes"
+		and db.layouts.party and db.layouts.party.lanes[3] == 0 and blockOK(), order())
+	DragWidget(CC.essentialsFrame, 40, 0)
+	group(5)
+	check("  back in the party: the Lane view loose again where it was", order() == "essentials,main"
+		and near(db.blockX, CC.DEFAULTS.blockX) and onEachOther() == nil, order())
+	group(20)
+	check("  and the raid's moved block comes back", order() == "essentials,main,lanes" and near(db.blockX, CC.DEFAULTS.blockX + 40))
+	group(5)
+
+	-- profiles and exported setups hold it
+	local snap = CC:SnapshotProfile()
+	check("  a profile holds each window's slot and the block's place", snap.places.lanes[3] == 0 and snap.places.main[3] == 2
+		and snap.places.block and near(snap.places.block[1], db.blockX))
+	CC:ResetAllWindows()
+	CC:ApplyProfile(snap)
+	check("  and putting it back makes the Lane view loose again", order() == "essentials,main" and onEachOther() == nil, order())
+	local text = CC:ExportSetup("places")
+	check("  an exported setup writes the slots", text:find("w=lanes,[-%d]+,[-%d]+,0") ~= nil and text:find("w=main,[-%d]+,[-%d]+,2") ~= nil
+		and text:find("w=block,") ~= nil, text)
+	CC:ResetAllWindows()
+	check("  and importing it brings them back", CC:ImportSetup(text) and order() == "essentials,main" and onEachOther() == nil, order())
+	CC:UndoSetup()
+
+	-- places from before joined windows (1.1.1, this branch's layouts and profiles): start joined only if never moved
+	CC:ResetAllWindows()
+	CC:ApplyPlaces({ main = { 0, 200 }, essentials = { 220, 200 }, lanes = { -300, 50 } })
+	check("  old places without a slot: the unmoved ones join, a moved one stays loose where it was",
+		order() == "essentials,main" and near(db.laneX, -300) and near(db.laneY, 50) and onEachOther() == nil, order())
+	db.blockOrder = nil
+	db.essentialsX, db.essentialsY = 220, 200
+	db.x, db.y, db.laneX, db.laneY = 0.0, 200.0000001, 0, -200
+	check("  a save with no block at all (1.1.1): never moved, all three join", order() == "essentials,main,lanes")
+	db.blockOrder = nil
+	db.x, db.y = -310, 120
+	check("  a moved main panel stays loose", order() == "essentials,lanes")
+	CC:LayoutBlock()
+	local c = { CC.frame:GetCenter() }
+	check("    where it was", near(c[1] - UIParent:GetWidth() / 2, -310) and near(c[2] - UIParent:GetHeight() / 2, 120))
+
+	-- a scaled panel keeps its loose place across logouts (its place is in its own scale)
+	db.scale = 1.4
+	CC.frame:SetScale(1.4)
+	CC:LayoutBlock()
+	local c1 = { CC.frame:GetCenter() }
+	for _ = 1, 3 do FireEvent("PLAYER_LOGOUT"); CC:LayoutBlock() end
+	local c2 = { CC.frame:GetCenter() }
+	check("  a loose panel at scale 1.4 stays put across logouts", near(c1[1], c2[1]) and near(c1[2], c2[2]),
+		string.format("%.1f,%.1f -> %.1f,%.1f", c1[1], c1[2], c2[1], c2[2]))
+	db.scale = 1
+	CC.frame:SetScale(1)
+
+	CC:ResetAllWindows()
+	GROUP = {}
+	STUB_IN_RAID = false
+	FireEvent("GROUP_ROSTER_UPDATE")
+	Advance(1)
+	db.laneEnabled = false
+	check("joined windows code raises no Lua error", #ERRORS == e1, ERRORS[e1 + 1])
 end
 
 check("no Lua errors", #ERRORS == 0, ERRORS[1])

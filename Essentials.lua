@@ -125,16 +125,11 @@ local function Paint(texture, c)
     texture:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
 end
 
--- A line that takes the mouse still drags the bar.
+-- A line that takes the mouse still drags the bar (as one of the joined windows: Setups.lua).
 local function PassDrag(widget)
     widget:RegisterForDrag("LeftButton")
-    widget:SetScript("OnDragStart", function()
-        if not CC.db.essentialsLocked then CC.essentialsFrame:StartMoving() end
-    end)
-    widget:SetScript("OnDragStop", function()
-        CC.essentialsFrame:StopMovingOrSizing()
-        CC:SaveEssentialsPosition()
-    end)
+    widget:SetScript("OnDragStart", function() CC:StartWindowDrag("essentials") end)
+    widget:SetScript("OnDragStop", function() CC:StopWindowDrag("essentials") end)
 end
 
 -- A rounded count beside a heading: black figures on red, amber or green.
@@ -695,15 +690,11 @@ function CC:BuildEssentialsBar()
     f:SetScale(db.essentialsScale or 1.0)
     self:StylePanelFrame(f, 0.6, 0.5, 0.1)
 
-    f:SetScript("OnMouseDown", function(widget, btn)
-        if btn == "LeftButton" and not CC.db.essentialsLocked then
-            widget:StartMoving()
-        end
-    end)
-    f:SetScript("OnMouseUp", function(widget)
-        widget:StopMovingOrSizing()
-        CC:SaveEssentialsPosition()
-    end)
+    -- dragged as one of the joined windows (Setups.lua): the block's top one moves the block
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", function() CC:StartWindowDrag("essentials") end)
+    f:SetScript("OnDragStop", function() CC:StopWindowDrag("essentials") end)
+    f:SetScript("OnMouseUp", function() CC:StopWindowDrag("essentials") end)
 
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     title:SetPoint("TOP", f, "TOP", 0, -3)
@@ -730,6 +721,7 @@ function CC:BuildEssentialsBar()
 
     f:Hide()
     self:UpdateEssentialsLock()
+    self:LayoutBlock()
     self:BuildBuffMissing()
     self:WatchPullTimers()
 
@@ -1628,11 +1620,5 @@ function CC:UpdateEssentialsLock()
 end
 
 function CC:SaveEssentialsPosition()
-    if not self.essentialsFrame then return end
-    local x, y   = self.essentialsFrame:GetCenter()
-    local ux, uy = UIParent:GetCenter()
-    if x and y and ux and uy then
-        self.db.essentialsX = x - ux
-        self.db.essentialsY = y - uy
-    end
+    self:SaveWindowPlace("essentials")
 end
