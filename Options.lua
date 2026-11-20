@@ -1318,7 +1318,7 @@ function CC:OpenOptions()
         row.pick:SetText(w.label)
         row.pick:SetSize(FitWidth(row.pick, 110), 22)
         row.pick:SetPoint("TOPLEFT", startPage, "TOPLEFT", LIST_X + 26, y)
-        row.pick:SetScript("OnClick", function() RenderPick(w) end)
+        row.pick:SetScript("OnClick", function() RenderPick(w); CC:ShowWindowNow(w) end)   -- pick and see
         row.window = w
         rows[i] = row
     end
@@ -1359,7 +1359,7 @@ function CC:OpenOptions()
     local showBtn = CreateFrame("Button", nil, startPage, "UIPanelButtonTemplate")
     showBtn:SetText(L["Show it now"])
     showBtn:SetSize(FitWidth(showBtn, 90), 22)
-    showBtn:SetScript("OnClick", function() if picked then CC:ShowSample(picked.key) end end)
+    showBtn:SetScript("OnClick", function() if picked then CC:ShowWindowNow(picked) end end)
     showBtn:SetScript("OnEnter", function(widget)
         GameTooltip:SetOwner(widget, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["Show it now"])

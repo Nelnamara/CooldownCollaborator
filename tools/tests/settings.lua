@@ -245,6 +245,39 @@ do
 	check("  and closing Settings ends it", CC.sample == nil and not frame:IsShown())
 	CC.optionsFrame:Show()
 	check("  reopening Settings picks the Main panel again", sp.picked.key == "main")
+	check("  and does not pop a sample by itself", CC.sample == nil)
+	-- pick and see: a click on a window in the list shows it at once
+	local function pickRow(key)
+		for i, w in ipairs(CC.WINDOWS) do
+			if w.key == key then sp.rows[i].pick:GetScript("OnClick")(sp.rows[i].pick) end
+		end
+	end
+	db.deadListEnabled, db.externalsEnabled = true, false
+	CC:RefreshAllViews()
+	pickRow("dead")
+	check("picking the Dead list shows its sample at once", sp.picked.key == "dead" and CC.sample and CC.sample.key == "dead" and CC.deadFrame:IsShown())
+	pickRow("externals")
+	check("  picking another replaces it, and it is shown even though it is off",
+		CC.sample and CC.sample.key == "externals" and CC.externalsFrame:IsShown() and not CC.deadFrame:IsShown() and db.externalsEnabled == false)
+	Advance(21)
+	check("  a sample ends after 20 seconds, Show it now shows it again", CC.sample == nil and (function()
+		sp.showBtn:GetScript("OnClick")(sp.showBtn)
+		return CC.sample and CC.sample.key == "externals" and CC.externalsFrame:IsShown()
+	end)())
+	-- a window that is up for real is shown as it is: no sample over it
+	GROUP = { { unit = "party1", name = "Tania", realm = "Realm", class = "PRIEST", guid = "Player-1-0000009" } }
+	CC.db.tourDone = true
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	CC.optionsFrame:Show()
+	db.panelClosed = false
+	CC:RefreshAllViews()
+	pickRow("externals")
+	pickRow("main")
+	check("  picking the Main panel while it is up for real: the real window, no sample", CC.sample == nil and CC.frame:IsShown() and sp.picked.key == "main")
+	GROUP = {}
+	FireEvent("GROUP_ROSTER_UPDATE"); Advance(3)
+	CC.optionsFrame:Hide()
+	CC.optionsFrame:Show()
 	-- Report a problem opens the report
 	local asked
 	local realReport = CC.ShowReport

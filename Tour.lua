@@ -338,6 +338,14 @@ local function ShowsForReal(w)
     return IsInGroup() and not CC.sample and frame and frame:IsShown() and CC:WindowIsOn(w) and true or false
 end
 
+-- Pick and see (Getting Started): the real window when it is up, else its sample; a sample already showing is replaced.
+function CC:ShowWindowNow(w)
+    if not w then return false end
+    self:HideSample()
+    if ShowsForReal(w) then return true end
+    return self:ShowSample(w.key)
+end
+
 local function FitButton(b, minW)
     local tw = b.GetTextWidth and b:GetTextWidth() or 0
     b:SetSize(math.max(minW or 0, math.ceil(tw or 0) + 24), 22)
