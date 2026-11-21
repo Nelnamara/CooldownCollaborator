@@ -1410,7 +1410,7 @@ end
 -------------------------------------------------------------------------------
 
 function CC:AsksOn()
-    local W = _G.WhisperCastSW
+    local W = rawget(_G, "WhisperCastSW")
     if type(W) ~= "table" or self.sampling then return false end
     if type(W.GetView) ~= "function" or type(W.CreateCastButton) ~= "function" then return false end
     if type(W.IsEnabled) == "function" and not W:IsEnabled() then return false end
@@ -1419,7 +1419,7 @@ end
 
 -- Second Wind's view (count, next, groups, rest), or an empty one.
 function CC:AsksView()
-    local W = _G.WhisperCastSW
+    local W = rawget(_G, "WhisperCastSW")
     local ok, view = pcall(function() return W:GetView() end)
     if ok and type(view) == "table" then return view end
     return { count = 0, groups = {}, rest = {} }
@@ -1427,7 +1427,7 @@ end
 
 -- Redraw when the queue or the fight changes (our own table owns the callbacks).
 function CC:HookAsks()
-    local W = _G.WhisperCastSW
+    local W = rawget(_G, "WhisperCastSW")
     if self.asksCallbacks or not self:AsksOn() or type(W.RegisterCallback) ~= "function" then return end
     self.asksCallbacks = {}
     local function redraw()
@@ -1444,7 +1444,7 @@ function CC:SyncAsksButton()
     local on = self:AsksOn()
     local button = self.asksButton
     if on and not button then
-        local ok, made = pcall(function() return _G.WhisperCastSW:CreateCastButton(self.frame) end)
+        local ok, made = pcall(function() return rawget(_G, "WhisperCastSW"):CreateCastButton(self.frame) end)
         if not ok or not made then return end
         button = made
         self.asksButton = button
@@ -1470,7 +1470,7 @@ end
 function CC:LayoutAsks(top)
     self.frame:SetWidth(FRAME_WIDTH)
     local inner = FRAME_WIDTH - PADDING * 2
-    local W = _G.WhisperCastSW
+    local W = rawget(_G, "WhisperCastSW")
     local view = self:AsksView()
     local spells = (type(W) == "table" and W.spells) or {}
     local lines = self.rows
