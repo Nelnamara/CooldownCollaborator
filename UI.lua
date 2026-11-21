@@ -8,7 +8,8 @@
 -- row of spell icons instead. Flask and food live on the Essentials bar, never
 -- here (R2). The close button keeps the panel shut until /cdc or the minimap
 -- opens it again (R19). Team tabs (db.teams) narrow it to one team; with guild
--- sharing on, a Guild tab lists guildmates outside the group (Comms.lua).
+-- sharing on, a Guild tab lists guildmates outside the group (Comms.lua). With WhisperCast:
+-- Second Wind loaded, an Asks tab draws its request queue with its Cast button.
 
 local L = CC.L
 
@@ -31,6 +32,8 @@ local ICON_SIZE    = 26    -- the icon style
 local ICON_GAP     = 5
 local MAX_ICONS    = 30
 local FLASH_TIME   = 1.2   -- a ready flash: two green pulses
+local ASK_BUTTON   = 44    -- the Asks tab's Cast button (40 px) and its gap
+local ASK_PINK     = "|cffff80ff"   -- Second Wind's accent, 1, 0.5, 1
 
 local GREEN = { 0.30, 1.00, 0.30 }
 local SOON  = { 1.00, 0.80, 0.00 }
@@ -156,6 +159,7 @@ end
 function CC:PanelTab()
     local tab = self.db.panelTab
     if tab == "guild" and self:GuildTabOn() then return "guild" end
+    if tab == "asks" and self:AsksOn() then return "asks" end
     local team = type(tab) == "string" and tab:match("^team:(.+)$")
     if team and type((self.db.teams or {})[team]) == "table" then return tab end
     return "all"
@@ -899,17 +903,23 @@ end
 function CC:LayoutTabs(top)
     local list = {}
     local teams = self:TeamNames()
-    if #teams > 0 or self:GuildTabOn() then
+    local asks = self:AsksOn()
+    if #teams > 0 or self:GuildTabOn() or asks then
         list[1] = { key = "all", label = #teams > 0 and L["All"] or L["Group"] }
         for _, team in ipairs(teams) do list[#list + 1] = { key = "team:" .. team, label = team } end
         if self:GuildTabOn() then list[#list + 1] = { key = "guild", label = L["Guild"] } end
+        if asks then
+            local count = tonumber(self:AsksView().count) or 0
+            list[#list + 1] = { key = "asks", label = L["Asks"], count = count }
+        end
     end
     local current = self:PanelTab()
     local x = PADDING
     for i, item in ipairs(list) do
         local tab = TabButton(i)
         tab.key = item.key
-        tab.text:SetText(item.label)
+        tab.count = item.count
+        tab.text:SetText(item.label .. ((item.count or 0) > 0 and (" " .. ASK_PINK .. item.count .. "|r") or ""))
         local width = (tab.text:GetStringWidth() or (#item.label * 6)) + 14
         tab:SetWidth(width)
         tab:ClearAllPoints()
@@ -1393,6 +1403,156 @@ function CC:LayoutGuild(top)
 end
 
 -------------------------------------------------------------------------------
+-- The Asks tab: WhisperCast: Second Wind's queue of whispered requests, when that
+-- addon is loaded and on (WhisperCastSW, its public API: GetView, RegisterCallback,
+-- CreateCastButton). Its Cast button is a secure frame Second Wind keeps set up:
+-- made once out of combat, placed once, and only shown or hidden out of combat.
+-------------------------------------------------------------------------------
+
+function CC:AsksOn()
+    local W = _G.WhisperCastSW
+    if type(W) ~= "table" or self.sampling then return false end
+    if type(W.GetView) ~= "function" or type(W.CreateCastButton) ~= "function" then return false end
+    if type(W.IsEnabled) == "function" and not W:IsEnabled() then return false end
+    return true
+end
+
+-- Second Wind's view (count, next, groups, rest), or an empty one.
+function CC:AsksView()
+    local W = _G.WhisperCastSW
+    local ok, view = pcall(function() return W:GetView() end)
+    if ok and type(view) == "table" then return view end
+    return { count = 0, groups = {}, rest = {} }
+end
+
+-- Redraw when the queue or the fight changes (our own table owns the callbacks).
+function CC:HookAsks()
+    local W = _G.WhisperCastSW
+    if self.asksCallbacks or not self:AsksOn() or type(W.RegisterCallback) ~= "function" then return end
+    self.asksCallbacks = {}
+    local function redraw()
+        if CC.frame and CC.frame:IsShown() then CC:RefreshView("RefreshRows") end
+    end
+    pcall(W.RegisterCallback, self.asksCallbacks, "QueueChanged", redraw)
+    pcall(W.RegisterCallback, self.asksCallbacks, "CombatChanged", redraw)
+end
+
+-- The Cast button: shown while the Asks tab is the chosen one, never touched in combat (the change
+-- waits for PLAYER_REGEN_ENABLED, which calls this again).
+function CC:SyncAsksButton()
+    if not self.frame or InCombatLockdown() then return end
+    local on = self:AsksOn()
+    local button = self.asksButton
+    if on and not button then
+        local ok, made = pcall(function() return _G.WhisperCastSW:CreateCastButton(self.frame) end)
+        if not ok or not made then return end
+        button = made
+        self.asksButton = button
+        button:ClearAllPoints()
+        button:SetPoint("BOTTOM", self.frame, "BOTTOM", 0, PADDING)
+        button:Hide()
+    end
+    if not button then return end
+    local want = on and self:PanelTab() == "asks"
+    if button:IsShown() ~= want then
+        if want then button:Show() else button:Hide() end
+    end
+end
+
+-- A request's waited time: "now", "12s", "3m".
+local function Waited(req)
+    local s = math.max(0, GetTime() - (req.time or GetTime()))
+    if s < 1 then return L["now"] end
+    if s < 60 then return string.format("%ds", math.floor(s)) end
+    return string.format("%dm", math.floor(s / 60))
+end
+
+function CC:LayoutAsks(top)
+    self.frame:SetWidth(FRAME_WIDTH)
+    local inner = FRAME_WIDTH - PADDING * 2
+    local W = _G.WhisperCastSW
+    local view = self:AsksView()
+    local spells = (type(W) == "table" and W.spells) or {}
+    local lines = self.rows
+    local y, n = top, 0
+    local items = {}   -- { kind = "next" / "group" / "req", req or group }
+    if view.next then items[#items + 1] = { kind = "next", req = view.next, weight = 1 } end
+    if view.groups and #view.groups > 0 then
+        for _, g in ipairs(view.groups) do items[#items + 1] = { kind = "group", group = g, weight = g.count or #(g.askers or {}) } end
+    else
+        for _, r in ipairs(view.rest or {}) do items[#items + 1] = { kind = "req", req = r, weight = 1 } end
+    end
+    local function ShortOf(req) return req.short or self:ShortName(req.name) or "?" end
+    local function Setup(line, kind, spellKey)
+        local spell = spells[spellKey]
+        PlaceParts(line, kind, inner, false)
+        Clear(line)
+        line.asks = true
+        if spell then
+            line.icon:SetTexture(spell.icon)
+            line.icon:Show()
+        end
+        line.spellText:SetText(spell and spell.name or "?")
+        line.spellText:SetTextColor(SPELL[1], SPELL[2], SPELL[3])
+        line.spellText:Show()
+    end
+    local show = math.min(#items, MAX_LINES)
+    local hidden = 0
+    for i = 1, #items do
+        local item = items[i]
+        if i > show then
+            hidden = hidden + item.weight
+        else
+            n = n + 1
+            local line = lines[n]
+            if item.kind == "group" then
+                local g = item.group
+                Setup(line, "fold", g.spell)
+                SetBar(line, GREY)
+                local names = {}
+                for _, r in ipairs(g.askers or {}) do
+                    names[#names + 1] = Hex(ClassColor(r.class)) .. ShortOf(r) .. "|r"
+                end
+                line.ownersText:SetText(table.concat(names, Hex(MUTED) .. ", |r"))
+                line.ownersText:Show()
+                line.timeText:SetText("\195\151" .. (g.count or #(g.askers or {})))
+                line.timeText:SetTextColor(GREEN[1], GREEN[2], GREEN[3])
+                line.timeText:Show()
+                Place(line, PADDING, y, inner, FOLD_HEIGHT)
+                y = y + FOLD_HEIGHT
+            else
+                local req = item.req
+                local c = ClassColor(req.class)
+                local first = item.kind == "next"
+                Setup(line, first and "row" or "guild", req.spell)
+                SetBar(line, c)
+                line.nameText:SetText(ShortOf(req))
+                line.nameText:SetTextColor(c[1], c[2], c[3])
+                line.nameText:Show()
+                line.timeText:SetText(Waited(req))
+                line.timeText:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+                line.timeText:Show()
+                local h = first and ROW_HEIGHT or CELL_HEIGHT
+                Place(line, PADDING, y, inner, h)
+                y = y + h
+            end
+        end
+    end
+    if hidden > 0 then
+        n = n + 1
+        ShowTextLine(lines[n], "more", string.format(L["+%d more"], hidden), MUTED, inner)
+        Place(lines[n], PADDING, y, inner, MORE_HEIGHT)
+        y = y + MORE_HEIGHT
+    end
+    for i = n + 1, #lines do
+        lines[i]:Hide()
+        lines[i].info = nil
+    end
+    self.panelShown = { asks = show, hiddenAsks = hidden }
+    return y, n
+end
+
+-------------------------------------------------------------------------------
 -- Refresh
 -------------------------------------------------------------------------------
 
@@ -1409,12 +1569,16 @@ function CC:RefreshRows()
     self.runsText:SetText(self:RunsCountText())
     self.lustText:SetText(self:NextLustText())
 
+    self:HookAsks()
     local top = TITLE_HEIGHT + self:LayoutTabs(TITLE_HEIGHT + 1)
     local tab = self:PanelTab()
     local y, shown, data
     if tab == "guild" then
         HideIcons()
         y, shown = self:LayoutGuild(top)
+    elseif tab == "asks" then
+        HideIcons()
+        y, shown = self:LayoutAsks(top)
     else
         data = self:BuildPanelData()
         if self.db.panelStyle == "icons" then
@@ -1427,12 +1591,15 @@ function CC:RefreshRows()
 
     local empty = shown == 0 and tab ~= "guild"
     if empty then
-        self.emptyLabel:SetText(self:PanelEmptyText(data))
+        local why = L["No requests"]
+        if tab ~= "asks" then why = self:PanelEmptyText(data) end
+        self.emptyLabel:SetText(why)
         self.emptyLabel:ClearAllPoints()
         self.emptyLabel:SetPoint("TOP", self.frame, "TOP", 0, -(top + 8))
         y = top + EMPTY_HEIGHT
     end
     self.emptyLabel:SetShown(empty)
+    if tab == "asks" then y = y + ASK_BUTTON end   -- room for the Cast button at the foot
     self.frame:SetHeight(y + PADDING)
     self:AnimatePanel()
 
@@ -1445,6 +1612,7 @@ function CC:RefreshRows()
             self.frame:Show()
         end
     end
+    self:SyncAsksButton()
 end
 
 -------------------------------------------------------------------------------

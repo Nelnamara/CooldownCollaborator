@@ -59,6 +59,7 @@ L["Nothing used yet."] = true
 L["All"] = true
 L["Group"] = true
 L["Guild"] = true
+L["Asks"] = true
 L["NEXT"] = true
 L["+%d more running"] = true
 L["+%d more spell ready"] = true
@@ -68,6 +69,8 @@ L["%d spells ready"] = true
 L["Ready"] = true
 L["+%d more"] = true
 L["Outside your group: %d run it"] = true
+L["now"] = true
+L["No requests"] = true
 
 -- Tooltip.lua
 L["Brings a dead player back."] = true
@@ -190,7 +193,6 @@ L["Whisper %s:"] = true
 
 -- Burst.lua
 L["You"] = true
-L["now"] = true
 
 -- Plan.lua
 L["Only the group's leader or a raid assist can share a plan."] = true

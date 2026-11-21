@@ -216,7 +216,7 @@ local DEFAULTS = {
     -- look-panel lane: the main panel, its alerts and the guild channel
     panelClosed = false,   -- closed by the player: stays shut until /cdc or the minimap opens it (R19)
     panelStyle  = "text",  -- "text" rows, or "icons" (a row of spell icons, P9)
-    panelTab    = "all",   -- "all", "guild" or "team:<name>"
+    panelTab    = "all",   -- "all", "guild", "asks" (Second Wind loaded) or "team:<name>"
     teams       = {},      -- [team name] = { "Name-Realm", ... } (P43)
     rotations   = {},      -- [spellID] = { "Name-Realm", ... }: our own rotation orders (P39)
     alerts      = {},      -- [spellID] = { sound = <SoundKit ID, file or true>, flash = true, midscreen = false, warn = 0 } (P1)
@@ -1138,6 +1138,7 @@ ef:SetScript("OnEvent", function(self, event, ...)
         CC.inCombat = event == "PLAYER_REGEN_DISABLED"
         CC.panelForced = nil   -- a combat change ends a panel opened by hand under "only in combat"
         if CC.db and CC.db.showWindows == "combat" then CC:RefreshAllViews() end
+        if event == "PLAYER_REGEN_ENABLED" and CC.SyncAsksButton then CC:SyncAsksButton() end   -- the Asks tab's Cast button waited for this
     elseif event == "ENCOUNTER_START" then
         CC.inEncounter = true
         CC.panelForced = nil
