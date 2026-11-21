@@ -107,7 +107,29 @@ end
 -- 19 Nov 2026: every message was dropped as "not from a group member"), so only the
 -- word before the first space is the name. A group member with that name wins, so an
 -- odd realm part can't hide them.
+--
+-- The full name with its surname is what the server needs to deliver a whisper ("No player named
+-- 'Marykatherin' is currently playing", seen in game 20 Nov 2026), so every surname sender is remembered
+-- by the name it normalizes to; CC:WhisperName gives it back (WoW: Forever only).
+CC.chatNames = {}
 function CC:NormalizeSender(sender)
+    if type(sender) ~= "string" or sender == "" then return nil end
+    local full = self:NormalizeSenderOnly(sender)
+    if full and self.isForever and sender:find(" ", 1, true) then
+        self.chatNames[full] = sender
+        self.chatNames[self:ShortName(full)] = sender
+    end
+    return full
+end
+
+-- The name to whisper: on WoW: Forever the full "Name Surname" last seen in chat or an addon message for
+-- that player, else the name as given.
+function CC:WhisperName(name)
+    if not name or not self.isForever then return name end
+    return self.chatNames[name] or self.chatNames[self:ShortName(name)] or name
+end
+
+function CC:NormalizeSenderOnly(sender)
     if type(sender) ~= "string" or sender == "" then return nil end
     local first = sender:match("^(%S+)") or sender
     local name, realm = first:match("^([^%-]+)%-(.+)$")
@@ -120,8 +142,10 @@ function CC:NormalizeSender(sender)
     if self.GetActiveGroupNames and (IsInGroup() or IsInRaid()) then
         local names = self:GetActiveGroupNames()
         if not names[full] then
+            -- a group name may carry the surname too (Forever): compare the first words
             for member in pairs(names) do
-                if self:ShortName(member) == name then return member end
+                local short = self:ShortName(member) or member
+                if short == name or (short:match("^(%S+)") == name) then return member end
             end
         end
     end

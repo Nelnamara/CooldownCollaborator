@@ -237,7 +237,7 @@ function CC:AskForMana()
         if e then
             local data = CC.SpellData[tile.spellID]
             local spellName = data and data.name or L["Mana"]
-            local sent = pcall(C_ChatInfo.SendChatMessage, string.format(L["%s on me please"], spellName), "WHISPER", nil, e.name)
+            local sent = pcall(C_ChatInfo.SendChatMessage, string.format(L["%s on me please"], spellName), "WHISPER", nil, self:WhisperName(e.name))
             if sent then
                 print(string.format("|cFF54a3ffCDC|r " .. L["asked %s for %s."], self:ShortName(e.name), spellName))
                 return e.name, tile.spellID

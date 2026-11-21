@@ -560,7 +560,7 @@ function CC:AskForCooldown(info, toGroup)
         if not channel then return false end
         return SendChatLine(string.format(L["%s, %s on me please"], self:ShortName(owner), data.name), channel)
     end
-    return SendChatLine(string.format(L["%s on me please"], data.name), "WHISPER", owner)
+    return SendChatLine(string.format(L["%s on me please"], data.name), "WHISPER", self:WhisperName(owner))
 end
 
 -------------------------------------------------------------------------------

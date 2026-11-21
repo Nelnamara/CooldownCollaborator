@@ -9,7 +9,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 addon=${1:-$(cd "$here/../.." && pwd)}
 runner="$here/run.js"
 bad=0
-for h in checks.lua groups.lua sync.lua looks.lua essentials.lua panel.lua asks.lua settings.lua final.lua locale.lua "locale.lua pseudo"; do
+for h in checks.lua groups.lua sync.lua looks.lua essentials.lua panel.lua asks.lua surnames.lua settings.lua final.lua locale.lua "locale.lua pseudo"; do
 	hf=${h%% *}; ha=""; [ "$hf" != "$h" ] && ha=${h#* }
 	for t in CooldownCollaborator_Mainline.toc:120105 CooldownCollaborator_Mists.toc:50504 CooldownCollaborator_TBC.toc:20506 \
 		CooldownCollaborator_Vanilla.toc:11509 CooldownCollaborator_Camelot.toc:16001 CooldownCollaborator.toc:16001; do
