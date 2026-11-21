@@ -4,7 +4,7 @@
 ## IconTexture: Interface\AddOns\CooldownCollaborator\Media\icon.tga
 ## Author: Nelnamara
 ## Version: 2.0.0
-## OptionalDeps: CooldownTimeline3, WhisperCastSecondWind
+## OptionalDeps: CooldownTimeline3, WhisperCast
 ## SavedVariables: CooldownCollaboratorDB
 ## X-Curse-Project-ID: 1577127
 ## X-Wago-ID: b6XyoxKp
