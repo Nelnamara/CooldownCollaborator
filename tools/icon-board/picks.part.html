@@ -1,0 +1,155 @@
+<!-- Picks: one row of buttons per section.look (one per figure.choice, plus None of these) and a note,
+     saved to the page's db (collection "picks", one document per idea). -->
+<style>
+:root {
+	--pk-bg: #ffffff; --pk-fg: #1d2420; --pk-muted: #5c6b67; --pk-line: #cfd8d4;
+	--pk-on: #ffffff; --pk-pick: #8a2f7c; --pk-none: #7a5a12;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) { --pk-bg: #1f1a1f; --pk-fg: #eee6ee; --pk-muted: #a898a6; --pk-line: #433842; --pk-on: #1a0f19; --pk-pick: #f0a6e6; --pk-none: #e0a94a; }
+}
+:root[data-theme="dark"] { --pk-bg: #1f1a1f; --pk-fg: #eee6ee; --pk-muted: #a898a6; --pk-line: #433842; --pk-on: #1a0f19; --pk-pick: #f0a6e6; --pk-none: #e0a94a; }
+.pk { margin-top: 14px; padding: 12px; border: 1px solid var(--pk-line); border-radius: 8px; background: var(--pk-bg); color: var(--pk-fg); display: flex; flex-direction: column; gap: 10px; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.pk-label { font-weight: 600; font-size: 13px; color: var(--pk-muted); }
+.pk-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pk-row button { font: inherit; font-size: 13px; font-weight: 500; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--pk-line); background: transparent; color: var(--pk-fg); cursor: pointer; }
+.pk-row button[aria-pressed="true"] { background: var(--pk-pick); border-color: var(--pk-pick); color: var(--pk-on); }
+.pk-row button.none[aria-pressed="true"] { background: var(--pk-none); border-color: var(--pk-none); }
+.pk-row button:disabled { opacity: 0.5; cursor: default; }
+.pk-row button:focus-visible, .pk textarea:focus-visible { outline: 2px solid var(--pk-pick); outline-offset: 2px; }
+.pk textarea { font: inherit; font-size: 13.5px; min-height: 36px; resize: vertical; width: 100%; box-sizing: border-box; color: var(--pk-fg); background: transparent; border: 1px solid var(--pk-line); border-radius: 6px; padding: 7px 9px; }
+.pk-saved { font-size: 12px; color: var(--pk-muted); min-height: 1em; }
+figure.choice.pk-picked .mock { box-shadow: 0 0 0 2px var(--pk-pick); }
+.pk-status { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin: 0; padding: 8px 12px; background: var(--pk-bg); color: var(--pk-fg); border-bottom: 1px solid var(--pk-line); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+<script>
+(function () {
+	var looks = Array.prototype.slice.call(document.querySelectorAll("section.look[data-item]"));
+	var picks = {};
+	var ui = {};
+	var timers = {};
+	var queues = {};
+	var db = null, readOnly = false;
+	var status = document.createElement("p");
+	status.className = "pk-status";
+	status.textContent = "Loading saved picks…";
+	document.body.insertBefore(status, document.body.firstChild);
+	function setStatus(t) { status.textContent = t; status.hidden = !t; }
+
+	function nameOf(fig) {
+		var b = fig.querySelector("figcaption b");
+		return (b ? b.textContent : fig.getAttribute("data-choice") || "").trim();
+	}
+
+	looks.forEach(function (sec) {
+		var item = sec.getAttribute("data-item");
+		var titleEl = sec.querySelector("h2");
+		var figures = Array.prototype.slice.call(sec.querySelectorAll("figure.choice[data-choice]"));
+		var box = document.createElement("div");
+		box.className = "pk";
+		var label = document.createElement("div");
+		label.className = "pk-label";
+		label.textContent = "Your pick";
+		var row = document.createElement("div");
+		row.className = "pk-row";
+		var buttons = {};
+		figures.forEach(function (fig) {
+			var c = fig.getAttribute("data-choice");
+			var b = document.createElement("button");
+			b.type = "button";
+			b.textContent = nameOf(fig);
+			b.addEventListener("click", function () { choose(item, c); });
+			row.appendChild(b);
+			buttons[c] = b;
+		});
+		var none = document.createElement("button");
+		none.type = "button";
+		none.className = "none";
+		none.textContent = "None of these";
+		none.addEventListener("click", function () { choose(item, "none"); });
+		row.appendChild(none);
+		buttons.none = none;
+		var note = document.createElement("textarea");
+		note.rows = 1;
+		note.placeholder = "Note (what to change, or mix two choices)";
+		note.setAttribute("aria-label", "Note for " + (titleEl ? titleEl.textContent : item));
+		var saved = document.createElement("div");
+		saved.className = "pk-saved";
+		note.addEventListener("input", function () {
+			clearTimeout(timers[item]);
+			saved.textContent = "";
+			timers[item] = setTimeout(function () { saveNote(item); }, 900);
+		});
+		note.addEventListener("blur", function () { clearTimeout(timers[item]); saveNote(item); });
+		box.appendChild(label);
+		box.appendChild(row);
+		box.appendChild(note);
+		box.appendChild(saved);
+		sec.appendChild(box);
+		ui[item] = { buttons: buttons, note: note, saved: saved, figures: figures, title: titleEl ? titleEl.textContent.trim() : item };
+		paint(item);
+	});
+
+	function paint(item) {
+		var u = ui[item], p = picks[item] || {};
+		Object.keys(u.buttons).forEach(function (c) {
+			u.buttons[c].setAttribute("aria-pressed", p.choice === c ? "true" : "false");
+			u.buttons[c].disabled = readOnly || !db;
+		});
+		u.figures.forEach(function (fig) {
+			fig.classList.toggle("pk-picked", fig.getAttribute("data-choice") === p.choice);
+		});
+		u.note.readOnly = readOnly || !db;
+		if (document.activeElement !== u.note && u.note.value !== (p.note || "")) { u.note.value = p.note || ""; }
+	}
+
+	function write(item, patch) {
+		if (!db || readOnly) { return; }
+		var u = ui[item];
+		var data = Object.assign({ item: item, title: u.title, updatedAt: new Date().toISOString() }, patch);
+		var run = function () {
+			return db.collection("picks").doc(item).set(Object.assign({}, picks[item] || {}, data)).then(function () {
+				u.saved.textContent = "Saved";
+			}, function (e) {
+				if (e && (e.code === "invalid_argument" || e.code === "permission_denied" || e.code === "not_granted")) { readOnly = true; setStatus("You can see the picks but not change them."); looks.forEach(function (s) { paint(s.getAttribute("data-item")); }); }
+				else { u.saved.textContent = "Not saved. Try again."; }
+			});
+		};
+		queues[item] = (queues[item] || Promise.resolve()).then(run, run);
+	}
+
+	function choose(item, c) {
+		var p = picks[item] || (picks[item] = {});
+		p.choice = p.choice === c ? "" : c;
+		var fig = ui[item].figures.filter(function (f) { return f.getAttribute("data-choice") === p.choice; })[0];
+		p.choiceName = p.choice === "none" ? "None of these" : (fig ? nameOf(fig) : "");
+		paint(item);
+		write(item, { choice: p.choice, choiceName: p.choiceName });
+	}
+
+	function saveNote(item) {
+		var p = picks[item] || (picks[item] = {});
+		var v = ui[item].note.value;
+		if (v === (p.note || "")) { return; }
+		p.note = v;
+		write(item, { note: v });
+	}
+
+	var use = window.claude && window.claude.use;
+	if (!use) { setStatus("Picks can't be saved here. Open this board in Claude to pick."); return; }
+	var slow = setTimeout(function () { setStatus("Saved picks can't be reached yet. Still trying…"); }, 10000);
+	use("db").then(function (store) {
+		if (!store) { clearTimeout(slow); setStatus("Picks can't be saved in this view. Sign in to Claude to pick."); return; }
+		db = store;
+		db.collection("picks").onSnapshot(function (snap) {
+			snap.docs.forEach(function (doc) {
+				var d = doc.data() || {}, mine = picks[doc.id] || {};
+				picks[doc.id] = { choice: d.choice || "", choiceName: d.choiceName || "", note: d.note || "" };
+				if (ui[doc.id] && document.activeElement === ui[doc.id].note) { picks[doc.id].note = mine.note || picks[doc.id].note; }
+			});
+			if (!snap.metadata || !snap.metadata.fromCache) { clearTimeout(slow); if (!readOnly) { setStatus(""); } }
+			looks.forEach(function (s) { paint(s.getAttribute("data-item")); });
+		}, function () { clearTimeout(slow); setStatus("Saved picks stopped loading. Reopen the board to try again."); });
+	});
+})();
+</script>
